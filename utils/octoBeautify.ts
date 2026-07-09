@@ -1644,6 +1644,67 @@ const BEAUTIFY_CSS = `            :root {
                 --octo-deco:
                     linear-gradient(rgba(198,160,74,0.6), rgba(198,160,74,0.6)) no-repeat left bottom / 100% 1px;
             }
+
+            /* ================= 世界杯：聊天区背景（随所选射门风格切换，浅暖纸基底 + 可见点缀） =================
+             * 背景直接铺在 .wk-conversation-content（消息容器不滚动的包裹层）；渐变用视口比例(vw/vh/%)尺寸，
+             * 才能在真实的大聊天区可见（小盒子预览里够大、放大后被稀释是之前看不清的原因）。
+             * 同时给滚动层 .wk-conversation-messages 关掉横向滚动，杜绝底部横向滚动条。 */
+            body[data-octo-skin="worldcup"] .wk-conversation-messages {
+                overflow-x: hidden !important;   /* 消息永远不需要横向滚动 → 去掉底部横向滚动条 */
+            }
+            body[data-octo-skin="worldcup"] .wk-conversation-content {
+                background-color: #f7f3ea !important;   /* 暖纸基底兜底 */
+                background-repeat: no-repeat !important;
+            }
+
+            /* 1) 闪电：青蓝网格 + 紫青大辉光 + 两道斜电弧（视口比例，明显可见） */
+            body[data-octo-skin="worldcup"][data-octo-kick-style="lightning"] .wk-conversation-content {
+                background-image:
+                    linear-gradient(118deg, transparent 0 38%, rgba(70,160,255,.28) 39% 39.8%, transparent 41%),
+                    linear-gradient(118deg, transparent 0 60%, rgba(124,107,240,.22) 61% 61.7%, transparent 63%),
+                    radial-gradient(70vw 60vh at 8% -10%, rgba(70,160,255,.20), transparent 70%),
+                    radial-gradient(70vw 60vh at 100% 110%, rgba(124,107,240,.18), transparent 70%),
+                    linear-gradient(rgba(70,150,240,.09) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(70,150,240,.09) 1px, transparent 1px) !important;
+                background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 32px 32px, 32px 32px !important;
+            }
+            /* 2) 火焰：底部大片暖橙火光 + 上缘暖光 */
+            body[data-octo-skin="worldcup"][data-octo-kick-style="fire"] .wk-conversation-content {
+                background-image:
+                    radial-gradient(120vw 45vh at 50% 118%, rgba(255,120,20,.34), transparent 72%),
+                    radial-gradient(60vw 40vh at 15% 112%, rgba(255,70,10,.26), transparent 74%),
+                    radial-gradient(60vw 40vh at 88% 112%, rgba(255,180,60,.24), transparent 74%),
+                    radial-gradient(90vw 30vh at 50% -12%, rgba(255,190,110,.14), transparent 70%) !important;
+                background-size: 100% 100% !important;
+            }
+            /* 3) 子弹时间：冷蓝顶光 + 斜向速度线（明显） */
+            body[data-octo-skin="worldcup"][data-octo-kick-style="bullet"] .wk-conversation-content {
+                background-image:
+                    repeating-linear-gradient(108deg, rgba(70,110,160,.10) 0 2px, transparent 2px 22px),
+                    radial-gradient(90vw 55vh at 60% -10%, rgba(80,120,170,.22), transparent 72%),
+                    linear-gradient(180deg, rgba(200,215,235,.35), transparent 45%) !important;
+                background-size: 100% 100%, 100% 100%, 100% 100% !important;
+            }
+            /* 4) 彗星：紫色大辉光 + 一道明显光轨 + 星点 */
+            body[data-octo-skin="worldcup"][data-octo-kick-style="comet"] .wk-conversation-content {
+                background-image:
+                    linear-gradient(122deg, transparent 0 52%, rgba(150,110,255,.42) 53% 54%, transparent 56%),
+                    radial-gradient(3px 3px at 20% 24%, rgba(150,110,255,.6), transparent),
+                    radial-gradient(2px 2px at 42% 60%, rgba(120,90,220,.5), transparent),
+                    radial-gradient(3px 3px at 74% 30%, rgba(170,130,255,.6), transparent),
+                    radial-gradient(2px 2px at 88% 66%, rgba(150,110,255,.5), transparent),
+                    radial-gradient(80vw 60vh at 82% -8%, rgba(150,110,255,.26), transparent 70%),
+                    radial-gradient(70vw 55vh at 6% 108%, rgba(120,90,220,.20), transparent 72%) !important;
+                background-size: 100% 100%, 200px 200px, 200px 200px, 200px 200px, 200px 200px, 100% 100%, 100% 100% !important;
+            }
+            /* 5) 重炮：右下大冲击放射 + 深红大辉光 */
+            body[data-octo-skin="worldcup"][data-octo-kick-style="cannon"] .wk-conversation-content {
+                background-image:
+                    repeating-conic-gradient(from 0deg at 88% 82%, rgba(210,40,50,.10) 0 5deg, transparent 5deg 10deg),
+                    radial-gradient(40vw 40vw at 88% 82%, rgba(230,50,50,.28), transparent 55%),
+                    radial-gradient(80vw 60vh at 12% -10%, rgba(180,25,35,.16), transparent 72%) !important;
+                background-size: 100% 100% !important;
+            }
             /* 公共：近白卡 + 柔和景深(替代基础 drop-shadow) + 圆角 + 过渡(含 box-shadow)
              * 底部留一条独立地面带给足球/球门（它们已在正文下方单独一行），左右保持正常内边距 */
             body[data-octo-skin="worldcup"] .wk-msg-row:has(.ai-badge) .wk-markdown,
@@ -2216,6 +2277,8 @@ function kickStyleById(id: string): KickStyleDef {
 }
 export function setKickStyle(id: string): void {
   currentKickStyle = kickStyleById(id).id;
+  // Reflect onto <body> so the chat-area background CSS (per-style) can match.
+  if (document.body) document.body.setAttribute('data-octo-kick-style', currentKickStyle);
 }
 
 function prefersReducedMotion(): boolean {
@@ -2377,6 +2440,7 @@ export function initBeautify(initialThemeId: string): void {
   const boot = () => {
     injectStyles();
     setTheme(currentThemeId);
+    setKickStyle(currentKickStyle); // reflect default kick style onto <body> for bg CSS
     watchThemeAttr();
     bindClicks();
     bodyObserver = new MutationObserver(scheduleSync);
