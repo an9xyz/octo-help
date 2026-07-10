@@ -6,6 +6,7 @@ import {
 import {
   DEFAULT_THEME,
   initBeautify,
+  setBallCursor,
   setGlobalTheme,
   setKickStyle,
   setPlayerWatermark,
@@ -427,6 +428,8 @@ export default defineUnlistedScript(() => {
         data.playerImageUrl || data.imageUrl,
         data.ballImageUrl,
       );
+    } else if (data.type === MESSAGE_TYPE.ballCursor) {
+      setBallCursor(!!data.enabled);
     }
   });
 });

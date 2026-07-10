@@ -214,9 +214,12 @@ const STYLE_SPECS: Record<KickStyleId, KickStyleSpec> = {
 
 let playerId: ActivePlayerId | null = null;
 let currentStyle: KickStyleId = 'lightning';
+let ballCursorEnabled = true;
 let ballImageUrl = '';
 let ballTexture: Texture | null = null;
 let ballAspect = 1;
+let ballTexWidth = 1;
+let ballTexHeight = 1;
 
 let app: Application | null = null;
 let initializing = false;
@@ -296,8 +299,19 @@ function installCursorStyle(): void {
     `;
     (document.head || document.documentElement).appendChild(style);
   }
-  if (supportsFinePointer()) {
+  updateCursorMode();
+}
+
+/**
+ * The football cursor is now an independent setting: it only hijacks the
+ * native cursor when the ball-cursor toggle is on, a player is active, and the
+ * device has a fine pointer. Clicking to shoot still works when it's off.
+ */
+function updateCursorMode(): void {
+  if (ballCursorEnabled && playerId && supportsFinePointer()) {
     document.documentElement.setAttribute(BALL_CURSOR_ATTR, 'true');
+  } else {
+    document.documentElement.removeAttribute(BALL_CURSOR_ATTR);
   }
 }
 
@@ -390,6 +404,11 @@ function ensureApp(): void {
         return;
       }
       app = instance;
+      // We never use Pixi interaction (the canvas is pointer-events:none and
+      // input is handled via window listeners), so disable the event system's
+      // per-frame hit-testing overhead.
+      instance.stage.eventMode = 'none';
+      instance.stage.interactiveChildren = false;
       const canvas = instance.canvas;
       canvas.id = CANVAS_ID;
       canvas.setAttribute('aria-hidden', 'true');
@@ -424,7 +443,10 @@ function ensureApp(): void {
         bloomScale: 1.1,
         brightness: 1.1,
         blur: 8,
-        quality: 4,
+        quality: 3,
+        // Downsample the blur passes — roughly halves the bloom cost per frame
+        // with a barely-perceptible softening of the glow.
+        pixelSize: { x: 2, y: 2 },
       });
       shockwaveFilter = new ShockwaveFilter({
         amplitude: 24,
@@ -567,7 +589,7 @@ function cursorSize(): number {
 
 function refreshCursor(now = performance.now()): void {
   if (!cursorSprite) return;
-  if (!playerId || !cursorPoint || !ballTexture || !supportsFinePointer()) {
+  if (!ballCursorEnabled || !playerId || !cursorPoint || !ballTexture || !supportsFinePointer()) {
     cursorSprite.alpha = 0;
     return;
   }
@@ -758,10 +780,14 @@ function tick(): void {
       const impactPulse = progress > 0.93 ? Math.sin(((progress - 0.93) / 0.07) * Math.PI) : 0;
       const drawn = shot.size * perspectiveScale;
       shot.node.position.set(point.x, point.y);
-      shot.ball.width = drawn;
-      shot.ball.height = drawn / ballAspect;
-      shot.ball.scale.x *= 1 + launchPulse * 0.18 - impactPulse * 0.18;
-      shot.ball.scale.y *= 1 - launchPulse * 0.12 + impactPulse * 0.24;
+      // Scale directly from cached texture dims (avoids the width/height ->
+      // scale recompute Pixi does on every setter call each frame).
+      const baseScaleX = drawn / ballTexWidth;
+      const baseScaleY = drawn / ballAspect / ballTexHeight;
+      shot.ball.scale.set(
+        baseScaleX * (1 + launchPulse * 0.18 - impactPulse * 0.18),
+        baseScaleY * (1 - launchPulse * 0.12 + impactPulse * 0.24),
+      );
       shot.ball.rotation = shot.spin * (elapsed / 1000);
       const glowSize = drawn * 2.1;
       shot.glow.width = glowSize;
@@ -1065,6 +1091,13 @@ export function setFullscreenKickStyle(styleId: string): void {
   currentStyle = normalizeStyle(styleId);
 }
 
+/** Independent toggle: replace the OS cursor with a football (default on). */
+export function setFullscreenKickBallCursor(enabled: boolean): void {
+  ballCursorEnabled = enabled;
+  updateCursorMode();
+  refreshCursor();
+}
+
 export function setFullscreenKickPlayer(
   nextPlayerId: PlayerWatermarkId,
   nextBallImageUrl: string,
@@ -1093,6 +1126,8 @@ export function setFullscreenKickPlayer(
     ballTexture?.destroy(true);
     ballTexture = Texture.from(image);
     ballAspect = image.naturalWidth / Math.max(1, image.naturalHeight);
+    ballTexWidth = Math.max(1, image.naturalWidth);
+    ballTexHeight = Math.max(1, image.naturalHeight);
     if (cursorSprite) cursorSprite.texture = ballTexture;
     refreshCursor();
   };

@@ -1,5 +1,6 @@
 import type { PlayerWatermarkId } from './octoRecall';
 import {
+  setFullscreenKickBallCursor,
   setFullscreenKickPlayer,
   setFullscreenKickStyle,
 } from './octoFullscreenKickPixi';
@@ -2657,6 +2658,11 @@ export function setKickStyle(id: string): void {
   // Reflect onto <body> so the chat-area background CSS (per-style) can match.
   if (document.body) document.body.setAttribute('data-octo-kick-style', currentKickStyle);
   setFullscreenKickStyle(currentKickStyle);
+}
+
+/** Toggle the football-cursor replacement (independent of the kick/watermark). */
+export function setBallCursor(enabled: boolean): void {
+  setFullscreenKickBallCursor(enabled);
 }
 
 function prefersReducedMotion(): boolean {

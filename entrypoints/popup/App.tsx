@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  BALL_CURSOR_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
   MESSI_WATERMARK_STORAGE_KEY,
@@ -30,6 +31,7 @@ function App() {
   const [globalThemeId, setGlobalThemeId] = useState(DEFAULT_GLOBAL_THEME);
   const [kickStyle, setKick] = useState(DEFAULT_KICK_STYLE);
   const [playerWatermark, setPlayerWatermark] = useState<PlayerWatermarkId>('none');
+  const [ballCursor, setBallCursor] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,6 +44,7 @@ function App() {
         KICK_STYLE_STORAGE_KEY,
         PLAYER_WATERMARK_STORAGE_KEY,
         MESSI_WATERMARK_STORAGE_KEY,
+        BALL_CURSOR_STORAGE_KEY,
       ])
       .then((res) => {
         if (!mounted) return;
@@ -57,6 +60,8 @@ function App() {
         } else if (res[MESSI_WATERMARK_STORAGE_KEY] === true) {
           setPlayerWatermark('messi');
         }
+        // Default ON (missing key => enabled).
+        setBallCursor(res[BALL_CURSOR_STORAGE_KEY] !== false);
         setLoading(false);
       });
     return () => {
@@ -90,10 +95,17 @@ function App() {
     await browser.storage.local.set({ [PLAYER_WATERMARK_STORAGE_KEY]: id });
   };
 
+  const toggleBallCursor = async () => {
+    const next = !ballCursor;
+    setBallCursor(next);
+    await browser.storage.local.set({ [BALL_CURSOR_STORAGE_KEY]: next });
+  };
+
   return (
     <main className="panel">
       <h1 className="title">Octo 聊天增强</h1>
 
+      <div className="grid">
       <section className="group">
         <div className="group-title">消息主题（美化换肤）</div>
         <div className="theme-list" aria-busy={loading}>
@@ -174,7 +186,26 @@ function App() {
         </div>
       </section>
 
-      <section className="group">
+      <section className="group span-2">
+        <label className="row">
+          <div className="row-copy">
+            <span className="row-title">鼠标变足球</span>
+            <span className="row-desc">
+              开启后把鼠标指针替换为足球（需先选择球星）；关闭则保留系统光标，点击仍可射门。
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={ballCursor}
+            className={`switch${ballCursor ? ' switch-on' : ''}`}
+            disabled={loading}
+            onClick={toggleBallCursor}
+          >
+            <span className="switch-knob" />
+          </button>
+        </label>
+
         <label className="row">
           <div className="row-copy">
             <span className="row-title">显示已撤回的消息</span>
@@ -194,6 +225,7 @@ function App() {
           </button>
         </label>
       </section>
+      </div>
 
       <p className="footnote">
         仅在 im.deepminer.com.cn 生效。所有处理在本地完成，插件不发送任何数据。

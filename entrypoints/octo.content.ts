@@ -1,4 +1,5 @@
 import {
+  BALL_CURSOR_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
   MESSI_WATERMARK_STORAGE_KEY,
@@ -7,6 +8,7 @@ import {
   PLAYER_WATERMARK_STORAGE_KEY,
   STORAGE_KEY,
   THEME_STORAGE_KEY,
+  type BallCursorMessage,
   type GlobalThemeMessage,
   type KickStyleMessage,
   type PlayerWatermarkId,
@@ -60,6 +62,13 @@ export default defineContentScript({
       );
     }
 
+    function postBallCursor(enabled: boolean) {
+      window.postMessage(
+        { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.ballCursor, enabled } satisfies BallCursorMessage,
+        '*',
+      );
+    }
+
     function postPlayerWatermark(playerId: PlayerWatermarkId) {
       const imageUrl =
         playerId === 'none' ? '' : browser.runtime.getURL(`/${playerId}-watermark.png`);
@@ -94,6 +103,7 @@ export default defineContentScript({
       KICK_STYLE_STORAGE_KEY,
       PLAYER_WATERMARK_STORAGE_KEY,
       MESSI_WATERMARK_STORAGE_KEY,
+      BALL_CURSOR_STORAGE_KEY,
     ]);
     const initialEnabled = stored[STORAGE_KEY] === true;
     const initialTheme =
@@ -115,12 +125,15 @@ export default defineContentScript({
         : stored[MESSI_WATERMARK_STORAGE_KEY] === true
           ? 'messi'
           : 'none';
+    // Default ON so existing users keep the football cursor.
+    const initialBallCursor = stored[BALL_CURSOR_STORAGE_KEY] !== false;
 
     const pushAll = () => {
       postKickStyle(initialKick);
       postGlobalTheme(initialGlobalTheme);
       postTheme(initialTheme);
       postPlayerWatermark(initialPlayerWatermark);
+      postBallCursor(initialBallCursor);
       postToggle(initialEnabled);
     };
     pushAll();
@@ -145,6 +158,9 @@ export default defineContentScript({
       if (PLAYER_WATERMARK_STORAGE_KEY in changes) {
         const next = changes[PLAYER_WATERMARK_STORAGE_KEY].newValue;
         postPlayerWatermark(next === 'messi' || next === 'mbappe' ? next : 'none');
+      }
+      if (BALL_CURSOR_STORAGE_KEY in changes) {
+        postBallCursor(changes[BALL_CURSOR_STORAGE_KEY].newValue !== false);
       }
     });
   },

@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-10
+
+### 新增
+
+- 新增「鼠标变足球」独立开关：可单独开关足球光标，关闭后保留系统光标、点击仍可射门。
+
+### 优化
+
+- 优化射门特效渲染性能（关闭无用的交互命中测试、降低全局辉光开销、球体缩放直算），点击射门时更省资源。
+- 设置弹窗改为多列布局，容纳更多配置项。
+
 ## [0.2.0] - 2026-07-10
 
 ### 变更
@@ -43,7 +54,8 @@
 
 - 还原撤回消息时正确显示原发送者姓名和头像。
 
-[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/botshen/octo-help/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/botshen/octo-help/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/botshen/octo-help/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/botshen/octo-help/releases/tag/v0.1.0

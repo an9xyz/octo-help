@@ -19,6 +19,9 @@ export const MESSI_WATERMARK_STORAGE_KEY = 'octoMessiWatermarkEnabled';
 export const PLAYER_WATERMARK_STORAGE_KEY = 'octoPlayerWatermark';
 export type PlayerWatermarkId = 'none' | 'messi' | 'mbappe';
 
+/** storage.local key holding the "replace cursor with a football" on/off state. Default ON. */
+export const BALL_CURSOR_STORAGE_KEY = 'octoBallCursorEnabled';
+
 /** window.postMessage envelope source, so we ignore unrelated messages. */
 export const MESSAGE_SOURCE = 'octo-recall';
 
@@ -29,6 +32,7 @@ export const MESSAGE_TYPE = {
   globalTheme: 'globalTheme',
   kickStyle: 'kickStyle',
   playerWatermark: 'playerWatermark',
+  ballCursor: 'ballCursor',
 } as const;
 
 export interface ToggleMessage {
@@ -67,9 +71,16 @@ export interface PlayerWatermarkMessage {
   ballImageUrl: string;
 }
 
+export interface BallCursorMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.ballCursor;
+  enabled: boolean;
+}
+
 export type OctoMessage =
   | ToggleMessage
   | ThemeMessage
   | GlobalThemeMessage
   | KickStyleMessage
-  | PlayerWatermarkMessage;
+  | PlayerWatermarkMessage
+  | BallCursorMessage;
