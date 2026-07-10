@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-10
+
+### 新增
+
+- 新增姆巴佩主题水印，可与梅西水印互斥单选并显示在聊天区域右下角。
+
 ## [0.1.0] - 2026-07-10
 
 ### 新增
@@ -22,5 +28,6 @@
 
 - 还原撤回消息时正确显示原发送者姓名和头像。
 
-[Unreleased]: https://github.com/botshen/octo-help/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/botshen/octo-help/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/botshen/octo-help/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/botshen/octo-help/releases/tag/v0.1.0

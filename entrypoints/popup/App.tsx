@@ -3,8 +3,10 @@ import {
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
   MESSI_WATERMARK_STORAGE_KEY,
+  PLAYER_WATERMARK_STORAGE_KEY,
   STORAGE_KEY,
   THEME_STORAGE_KEY,
+  type PlayerWatermarkId,
 } from '@/utils/octoRecall';
 import {
   GLOBAL_THEMES,
@@ -16,12 +18,18 @@ import {
 } from '@/utils/octoBeautify';
 import './App.css';
 
+const PLAYER_WATERMARKS: Array<{ id: PlayerWatermarkId; label: string; icon: string }> = [
+  { id: 'none', label: '不显示', icon: '▫️' },
+  { id: 'messi', label: '梅西', icon: '🇦🇷' },
+  { id: 'mbappe', label: '姆巴佩', icon: '🇫🇷' },
+];
+
 function App() {
   const [enabled, setEnabled] = useState(false);
   const [themeId, setThemeId] = useState(DEFAULT_THEME);
   const [globalThemeId, setGlobalThemeId] = useState(DEFAULT_GLOBAL_THEME);
   const [kickStyle, setKick] = useState(DEFAULT_KICK_STYLE);
-  const [messiWatermark, setMessiWatermark] = useState(false);
+  const [playerWatermark, setPlayerWatermark] = useState<PlayerWatermarkId>('none');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,6 +40,7 @@ function App() {
         THEME_STORAGE_KEY,
         GLOBAL_THEME_STORAGE_KEY,
         KICK_STYLE_STORAGE_KEY,
+        PLAYER_WATERMARK_STORAGE_KEY,
         MESSI_WATERMARK_STORAGE_KEY,
       ])
       .then((res) => {
@@ -42,7 +51,12 @@ function App() {
           setGlobalThemeId(res[GLOBAL_THEME_STORAGE_KEY] as string);
         }
         if (typeof res[KICK_STYLE_STORAGE_KEY] === 'string') setKick(res[KICK_STYLE_STORAGE_KEY] as string);
-        setMessiWatermark(res[MESSI_WATERMARK_STORAGE_KEY] === true);
+        const storedPlayer = res[PLAYER_WATERMARK_STORAGE_KEY];
+        if (storedPlayer === 'none' || storedPlayer === 'messi' || storedPlayer === 'mbappe') {
+          setPlayerWatermark(storedPlayer);
+        } else if (res[MESSI_WATERMARK_STORAGE_KEY] === true) {
+          setPlayerWatermark('messi');
+        }
         setLoading(false);
       });
     return () => {
@@ -71,10 +85,9 @@ function App() {
     await browser.storage.local.set({ [KICK_STYLE_STORAGE_KEY]: id });
   };
 
-  const toggleMessiWatermark = async () => {
-    const next = !messiWatermark;
-    setMessiWatermark(next);
-    await browser.storage.local.set({ [MESSI_WATERMARK_STORAGE_KEY]: next });
+  const choosePlayerWatermark = async (id: PlayerWatermarkId) => {
+    setPlayerWatermark(id);
+    await browser.storage.local.set({ [PLAYER_WATERMARK_STORAGE_KEY]: id });
   };
 
   return (
@@ -142,22 +155,23 @@ function App() {
       </section>
 
       <section className="group">
-        <label className="row">
-          <div className="row-copy">
-            <span className="row-title">显示梅西水印</span>
-            <span className="row-desc">在聊天区域显示梅西主题水印。</span>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={messiWatermark}
-            className={`switch${messiWatermark ? ' switch-on' : ''}`}
-            disabled={loading}
-            onClick={toggleMessiWatermark}
-          >
-            <span className="switch-knob" />
-          </button>
-        </label>
+        <div className="group-title">球星水印（右下角）</div>
+        <div className="player-selector" role="radiogroup" aria-label="球星水印" aria-busy={loading}>
+          {PLAYER_WATERMARKS.map((player) => (
+            <button
+              key={player.id}
+              type="button"
+              role="radio"
+              className={`player-option${playerWatermark === player.id ? ' is-active' : ''}`}
+              aria-checked={playerWatermark === player.id}
+              disabled={loading}
+              onClick={() => choosePlayerWatermark(player.id)}
+            >
+              <span aria-hidden="true">{player.icon}</span>
+              <span>{player.label}</span>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="group">

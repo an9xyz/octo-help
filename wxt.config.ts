@@ -8,13 +8,13 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
     name: 'Octo 聊天增强',
-    description: '增强 Octo 网页聊天：还原已撤回消息，提供消息美化、全站主题、世界杯特效和梅西水印。',
+    description: '增强 Octo 网页聊天：还原已撤回消息，提供消息美化、全站主题、世界杯特效和球星水印。',
     permissions: ['storage'],
     host_permissions: OCTO_MATCHES,
     web_accessible_resources: [
       {
         // MAIN-world script plus assets referenced from the page context.
-        resources: ['octo-main-world.js', 'messi-watermark.png'],
+        resources: ['octo-main-world.js', 'messi-watermark.png', 'mbappe-watermark.png'],
         matches: OCTO_MATCHES,
       },
     ],

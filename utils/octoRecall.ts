@@ -12,8 +12,12 @@ export const GLOBAL_THEME_STORAGE_KEY = 'octoGlobalThemeId';
 /** storage.local key holding the selected soccer-kick style id (worldcup skin). */
 export const KICK_STYLE_STORAGE_KEY = 'octoKickStyle';
 
-/** storage.local key controlling the Messi watermark in the chat panel. */
+/** Legacy boolean key kept so existing Messi selections migrate cleanly. */
 export const MESSI_WATERMARK_STORAGE_KEY = 'octoMessiWatermarkEnabled';
+
+/** storage.local key holding the single selected player watermark. */
+export const PLAYER_WATERMARK_STORAGE_KEY = 'octoPlayerWatermark';
+export type PlayerWatermarkId = 'none' | 'messi' | 'mbappe';
 
 /** window.postMessage envelope source, so we ignore unrelated messages. */
 export const MESSAGE_SOURCE = 'octo-recall';
@@ -24,7 +28,7 @@ export const MESSAGE_TYPE = {
   theme: 'theme',
   globalTheme: 'globalTheme',
   kickStyle: 'kickStyle',
-  messiWatermark: 'messiWatermark',
+  playerWatermark: 'playerWatermark',
 } as const;
 
 export interface ToggleMessage {
@@ -51,10 +55,10 @@ export interface KickStyleMessage {
   styleId: string;
 }
 
-export interface MessiWatermarkMessage {
+export interface PlayerWatermarkMessage {
   source: typeof MESSAGE_SOURCE;
-  type: typeof MESSAGE_TYPE.messiWatermark;
-  enabled: boolean;
+  type: typeof MESSAGE_TYPE.playerWatermark;
+  playerId: PlayerWatermarkId;
   imageUrl: string;
 }
 
@@ -63,4 +67,4 @@ export type OctoMessage =
   | ThemeMessage
   | GlobalThemeMessage
   | KickStyleMessage
-  | MessiWatermarkMessage;
+  | PlayerWatermarkMessage;

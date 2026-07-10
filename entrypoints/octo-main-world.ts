@@ -8,7 +8,7 @@ import {
   initBeautify,
   setGlobalTheme,
   setKickStyle,
-  setMessiWatermark,
+  setPlayerWatermark,
   setTheme,
 } from '@/utils/octoBeautify';
 
@@ -389,8 +389,8 @@ export default defineUnlistedScript(() => {
       setGlobalTheme(data.themeId);
     } else if (data.type === MESSAGE_TYPE.kickStyle) {
       setKickStyle(data.styleId);
-    } else if (data.type === MESSAGE_TYPE.messiWatermark) {
-      setMessiWatermark(data.enabled, data.imageUrl);
+    } else if (data.type === MESSAGE_TYPE.playerWatermark) {
+      setPlayerWatermark(data.playerId, data.imageUrl);
     }
   });
 });

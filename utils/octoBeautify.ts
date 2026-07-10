@@ -1,3 +1,5 @@
+import type { PlayerWatermarkId } from './octoRecall';
+
 // Message beautify + theme (skin) engine, ported from an9xyz/octo-script
 // (Tampermonkey userscript) into our extension. Pure CSS/DOM overrides in the
 // page MAIN world — no app source changes.
@@ -2092,18 +2094,26 @@ const BEAUTIFY_CSS = `            :root {
                 body[data-octo-skin="worldcup"] .wk-markdown:hover .wk-message-text-reply { animation: none !important; }
             }
 
-            body[data-octo-messi-watermark="true"] .wk-conversation-content::after {
+            body[data-octo-player-watermark] .wk-conversation-content::after {
                 content: "";
                 position: absolute;
                 right: clamp(20px, 2.4vw, 40px);
                 bottom: 22px;
-                width: clamp(96px, 8vw, 140px);
-                aspect-ratio: 374 / 900;
-                background: var(--octo-messi-watermark-image) center bottom / contain no-repeat;
+                background: var(--octo-player-watermark-image) center bottom / contain no-repeat;
                 filter: drop-shadow(0 8px 12px rgba(19, 41, 75, 0.18));
                 opacity: 1;
                 pointer-events: none;
                 z-index: 3;
+            }
+
+            body[data-octo-player-watermark="messi"] .wk-conversation-content::after {
+                width: clamp(96px, 8vw, 140px);
+                aspect-ratio: 374 / 900;
+            }
+
+            body[data-octo-player-watermark="mbappe"] .wk-conversation-content::after {
+                width: clamp(174px, 14vw, 240px);
+                aspect-ratio: 681 / 900;
             }
 
             /* =====================================================================
@@ -2429,30 +2439,32 @@ export function setGlobalTheme(id: string): void {
   reflectGlobalTheme(currentGlobalThemeId);
 }
 
-export function setMessiWatermark(enabled: boolean, imageUrl: string): void {
+export function setPlayerWatermark(playerId: PlayerWatermarkId, imageUrl: string): void {
   const body = document.body;
   if (!body) return;
+
+  body.removeAttribute('data-octo-player-watermark');
+  body.style.removeProperty('--octo-player-watermark-image');
+  if (playerId === 'none') {
+    return;
+  }
+  if (playerId !== 'messi' && playerId !== 'mbappe') return;
 
   let url: URL;
   try {
     url = new URL(imageUrl);
   } catch {
-    enabled = false;
-    url = new URL('about:blank');
+    return;
   }
 
   const validAsset =
     (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') &&
-    url.pathname === '/messi-watermark.png';
+    url.pathname === `/${playerId}-watermark.png`;
 
-  if (!enabled || !validAsset) {
-    body.removeAttribute('data-octo-messi-watermark');
-    body.style.removeProperty('--octo-messi-watermark-image');
-    return;
-  }
+  if (!validAsset) return;
 
-  body.setAttribute('data-octo-messi-watermark', 'true');
-  body.style.setProperty('--octo-messi-watermark-image', `url(${JSON.stringify(url.href)})`);
+  body.setAttribute('data-octo-player-watermark', playerId);
+  body.style.setProperty('--octo-player-watermark-image', `url(${JSON.stringify(url.href)})`);
 }
 
 let themeObserverBound = false;

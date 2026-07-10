@@ -4,11 +4,13 @@ import {
   MESSI_WATERMARK_STORAGE_KEY,
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
+  PLAYER_WATERMARK_STORAGE_KEY,
   STORAGE_KEY,
   THEME_STORAGE_KEY,
   type GlobalThemeMessage,
   type KickStyleMessage,
-  type MessiWatermarkMessage,
+  type PlayerWatermarkId,
+  type PlayerWatermarkMessage,
   type ThemeMessage,
   type ToggleMessage,
 } from '@/utils/octoRecall';
@@ -58,14 +60,16 @@ export default defineContentScript({
       );
     }
 
-    function postMessiWatermark(enabled: boolean, imageUrl: string) {
+    function postPlayerWatermark(playerId: PlayerWatermarkId) {
+      const imageUrl =
+        playerId === 'none' ? '' : browser.runtime.getURL(`/${playerId}-watermark.png`);
       window.postMessage(
         {
           source: MESSAGE_SOURCE,
-          type: MESSAGE_TYPE.messiWatermark,
-          enabled,
+          type: MESSAGE_TYPE.playerWatermark,
+          playerId,
           imageUrl,
-        } satisfies MessiWatermarkMessage,
+        } satisfies PlayerWatermarkMessage,
         '*',
       );
     }
@@ -78,6 +82,7 @@ export default defineContentScript({
       THEME_STORAGE_KEY,
       GLOBAL_THEME_STORAGE_KEY,
       KICK_STYLE_STORAGE_KEY,
+      PLAYER_WATERMARK_STORAGE_KEY,
       MESSI_WATERMARK_STORAGE_KEY,
     ]);
     const initialEnabled = stored[STORAGE_KEY] === true;
@@ -93,14 +98,19 @@ export default defineContentScript({
       typeof stored[KICK_STYLE_STORAGE_KEY] === 'string'
         ? (stored[KICK_STYLE_STORAGE_KEY] as string)
         : DEFAULT_KICK_STYLE;
-    const initialMessiWatermark = stored[MESSI_WATERMARK_STORAGE_KEY] === true;
-    const messiWatermarkUrl = browser.runtime.getURL('/messi-watermark.png');
+    const storedPlayer = stored[PLAYER_WATERMARK_STORAGE_KEY];
+    const initialPlayerWatermark: PlayerWatermarkId =
+      storedPlayer === 'messi' || storedPlayer === 'mbappe' || storedPlayer === 'none'
+        ? storedPlayer
+        : stored[MESSI_WATERMARK_STORAGE_KEY] === true
+          ? 'messi'
+          : 'none';
 
     const pushAll = () => {
       postKickStyle(initialKick);
       postGlobalTheme(initialGlobalTheme);
       postTheme(initialTheme);
-      postMessiWatermark(initialMessiWatermark, messiWatermarkUrl);
+      postPlayerWatermark(initialPlayerWatermark);
       postToggle(initialEnabled);
     };
     pushAll();
@@ -122,8 +132,9 @@ export default defineContentScript({
         const next = changes[KICK_STYLE_STORAGE_KEY].newValue;
         postKickStyle(typeof next === 'string' ? next : DEFAULT_KICK_STYLE);
       }
-      if (MESSI_WATERMARK_STORAGE_KEY in changes) {
-        postMessiWatermark(changes[MESSI_WATERMARK_STORAGE_KEY].newValue === true, messiWatermarkUrl);
+      if (PLAYER_WATERMARK_STORAGE_KEY in changes) {
+        const next = changes[PLAYER_WATERMARK_STORAGE_KEY].newValue;
+        postPlayerWatermark(next === 'messi' || next === 'mbappe' ? next : 'none');
       }
     });
   },
