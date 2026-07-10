@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>引用 UI · 赛博紫暗色皮肤</title>
+  <!--
+    Assumptions:
+    - 这是插件「赛博紫·暗」消息皮肤的引用 UI，不是 Octo Web 源码改版。
+    - 引用作为消息组头部，与正文共享唯一外轮廓；AI、自己、他人仅替换 token。
+    - 生产实现覆盖新版和 legacy 引用 class，不增加数据字段。
+  -->
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --ink: #1f2329;
+      --secondary: #555b61;
+      --tertiary: #6b7075;
+      --accent: #7f3bf5;
+      --accent-soft: rgba(127, 59, 245, 0.08);
+      --canvas: #edf0f4;
+      --surface: #ffffff;
+      --surface-soft: #f5f6f7;
+      --surface-elevated: #fafbfc;
+      --line: rgba(28, 28, 35, 0.08);
+      --line-strong: rgba(28, 28, 35, 0.14);
+      --hover: rgba(28, 28, 35, 0.035);
+      --shadow: 0 18px 44px rgba(31, 35, 41, 0.13);
+      --message: #ffffff;
+    }
+    body[data-theme="dark"] {
+      --ink: #e4e6ed;
+      --secondary: #a8acb8;
+      --tertiary: #7a7f96;
+      --accent: #a87af8;
+      --accent-soft: rgba(168, 122, 248, 0.12);
+      --canvas: #111216;
+      --surface: #1b1c21;
+      --surface-soft: #23252b;
+      --surface-elevated: #202127;
+      --line: rgba(255, 255, 255, 0.07);
+      --line-strong: rgba(255, 255, 255, 0.12);
+      --hover: rgba(255, 255, 255, 0.045);
+      --shadow: 0 18px 54px rgba(0, 0, 0, 0.4);
+      --message: #22242a;
+    }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      min-height: 100vh;
+      overflow: hidden;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      transition: background 180ms ease, color 180ms ease;
+    }
+    button { font: inherit; }
+    .review-bar {
+      height: 64px;
+      padding: 0 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface) 92%, transparent);
+    }
+    .review-title { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+    .review-title strong { font-size: 18px; font-weight: 680; }
+    .review-title span { font-size: 12px; color: var(--tertiary); white-space: nowrap; }
+    .review-actions { display: flex; align-items: center; gap: 14px; }
+    .tags { display: flex; gap: 6px; }
+    .tag {
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      color: var(--secondary);
+      background: var(--surface-elevated);
+      font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .mode-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 3px;
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .mode-switch button {
+      border: 0;
+      background: transparent;
+      color: var(--tertiary);
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .mode-switch button[aria-pressed="true"] {
+      color: var(--ink);
+      background: var(--surface);
+      box-shadow: 0 1px 3px rgba(31, 35, 41, 0.12);
+    }
+    .stage { height: calc(100vh - 64px); padding: 26px 30px 30px; }
+    .app {
+      width: min(1320px, 100%);
+      height: 100%;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 58px 238px minmax(0, 1fr);
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .rail {
+      background: #f0eff7;
+      border-right: 1px solid var(--line);
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    body[data-theme="dark"] .rail { background: #18181e; }
+    .logo { width: 34px; height: 34px; border-radius: 6px; display: block; margin-bottom: 10px; }
+    .rail-item {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--tertiary);
+      display: grid;
+      place-items: center;
+      cursor: default;
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .rail-item.active { color: var(--accent); background: var(--accent-soft); }
+    .rail-spacer { flex: 1; }
+    .conversation-panel { background: var(--surface-soft); border-right: 1px solid var(--line); min-width: 0; }
+    .conversation-head { height: 56px; padding: 0 16px; display: flex; align-items: center; border-bottom: 1px solid var(--line); font-weight: 650; font-size: 14px; }
+    .conversation-search { margin: 12px; height: 32px; padding: 0 10px; display: flex; align-items: center; color: var(--tertiary); border: 1px solid var(--line); border-radius: 5px; background: var(--surface); font-size: 12px; }
+    .conversation { margin: 3px 8px; padding: 10px; display: grid; grid-template-columns: 32px 1fr; gap: 9px; border-radius: 6px; }
+    .conversation.active { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+    .mini-avatar, .avatar { display: grid; place-items: center; font-weight: 700; color: #fff; }
+    .mini-avatar { width: 32px; height: 32px; border-radius: 50%; font-size: 11px; background: #70778a; }
+    .conversation.active .mini-avatar { background: #7f3bf5; }
+    .conversation-copy { min-width: 0; }
+    .conversation-name { font-size: 13px; font-weight: 620; margin-bottom: 4px; }
+    .conversation-digest { color: var(--tertiary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chat { min-width: 0; display: grid; grid-template-rows: 58px minmax(0, 1fr) 72px; background: var(--surface); }
+    .chat-head { padding: 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+    .chat-name { font-size: 15px; font-weight: 680; }
+    .chat-meta { margin-top: 3px; color: var(--tertiary); font-size: 11px; }
+    .head-tools { display: flex; gap: 8px; }
+    .tool { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; color: var(--tertiary); font-size: 14px; }
+    .message-list { overflow: hidden; padding: 22px 24px 30px; background: var(--surface); }
+    .day-divider { display: flex; align-items: center; gap: 12px; margin: 2px 0 22px; color: var(--tertiary); font-size: 11px; }
+    .day-divider::before, .day-divider::after { content: ""; height: 1px; background: var(--line); flex: 1; }
+    .message-row { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; margin: 0 0 22px; }
+    .message-row.ai { --quote-accent: #9b8af8; --bubble-bg: #1b1830; --bubble-border: rgba(155, 138, 248, 0.2); --bubble-rail: #9b8af8; }
+    .message-row.self { --quote-accent: #63c995; --bubble-bg: #17261f; --bubble-border: rgba(99, 201, 149, 0.18); --bubble-rail: #63c995; }
+    .message-row.other { --quote-accent: #aeb4cf; --bubble-bg: #1d2029; --bubble-border: rgba(174, 180, 207, 0.16); --bubble-rail: #8991ad; }
+    .message-row.continue { grid-template-columns: 36px minmax(0, 1fr); margin-top: -12px; }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; font-size: 12px; background: #157a60; }
+    .avatar.purple { background: #7250c8; }
+    .avatar.gray { background: #667085; }
+    .message-content { min-width: 0; max-width: 760px; }
+    .message-head { height: 22px; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .sender { font-size: 15px; font-weight: 650; }
+    .time { font-size: 12px; color: var(--tertiary); }
+    .message-group {
+      display: grid;
+      width: fit-content;
+      max-width: min(100%, 700px);
+      overflow: hidden;
+      border: 1px solid var(--bubble-border, var(--line));
+      border-left: 3px solid var(--bubble-rail, var(--line-strong));
+      border-radius: 9px;
+      background: var(--bubble-bg, var(--message));
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+      transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .message-group:hover {
+      border-color: color-mix(in srgb, var(--quote-accent) 34%, var(--bubble-border));
+      box-shadow: 0 7px 20px rgba(0, 0, 0, 0.24);
+    }
+    .reply-preview {
+      width: 100%;
+      max-width: none;
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 9px minmax(0, 1fr) 16px;
+      align-items: stretch;
+      gap: 8px;
+      padding: 6px 8px 6px 9px;
+      margin: 0;
+      overflow: hidden;
+      border: 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--quote-accent) 18%, rgba(255, 255, 255, 0.08));
+      border-radius: 0;
+      background: color-mix(in srgb, var(--quote-accent) 7%, #211e35);
+      cursor: pointer;
+      transition: background 150ms ease;
+    }
+    .reply-preview::after {
+      content: "↵";
+      align-self: center;
+      color: var(--quote-accent);
+      font: 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      opacity: 0.42;
+      transition: opacity 150ms ease;
+    }
+    .reply-preview:hover {
+      background: color-mix(in srgb, var(--quote-accent) 12%, #211e35);
+    }
+    .reply-preview:hover::after { opacity: 1; }
+    .reply-bar {
+      width: 9px;
+      min-height: 30px;
+      background:
+        linear-gradient(var(--quote-accent), var(--quote-accent)) left top / 8px 2px no-repeat,
+        linear-gradient(var(--quote-accent), var(--quote-accent)) left center / 2px 100% no-repeat,
+        linear-gradient(var(--quote-accent), var(--quote-accent)) left bottom / 8px 2px no-repeat;
+      opacity: 0.72;
+      transition: opacity 150ms ease;
+    }
+    .reply-preview:hover .reply-bar { opacity: 1; }
+    .reply-copy { min-width: 0; display: grid; gap: 1px; }
+    .reply-name-row { min-width: 0; display: flex; align-items: baseline; gap: 4px; font-size: 12px; line-height: 16px; }
+    .reply-name { font-weight: 680; color: color-mix(in srgb, var(--quote-accent) 48%, #d7d9e5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .reply-space { color: #858a9d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+    .reply-digest { min-width: 0; color: #9ca0b3; font-size: 12px; line-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bubble {
+      width: 100%;
+      max-width: none;
+      padding: 11px 13px 12px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.55;
+      box-shadow: none;
+    }
+    .ai-badge { padding: 2px 7px; border-radius: 8px; background: #6d5ce7; color: #fff; font-size: 9px; font-weight: 700; }
+    .mention { color: var(--accent); background: var(--accent-soft); padding: 1px 4px; border-radius: 3px; }
+    .composer { margin: 10px 20px 14px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); color: var(--tertiary); padding: 12px 14px; font-size: 12px; }
+    .toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 12px); opacity: 0; padding: 8px 12px; border-radius: 5px; background: #1f2329; color: #fff; font-size: 12px; transition: 160ms ease; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    @media (max-width: 1050px) {
+      .stage { padding: 18px; }
+      .app { grid-template-columns: 52px 190px minmax(0, 1fr); }
+      .tags { display: none; }
+      .message-list { padding-inline: 18px; }
+    }
+  </style>
+</head>
+<body data-theme="dark">
+  <header class="review-bar">
+    <div class="review-title">
+      <strong>赛博紫 · 暗 / 引用 UI</strong>
+      <span>引用头部与正文共享外轮廓，形成单一消息组</span>
+    </div>
+    <div class="review-actions">
+      <div class="tags"><span class="tag">plugin skin</span><span class="tag">single group</span><span class="tag">cyber-dark</span></div>
+    </div>
+  </header>
+  <main class="stage">
+    <section class="app" aria-label="Octo 引用卡片设计稿">
+      <nav class="rail">
+        <img class="logo" src="assets/octo-logo.png" alt="Octo" />
+        <div class="rail-item active">聊</div><div class="rail-item">联</div><div class="rail-item">搜</div>
+        <div class="rail-spacer"></div><div class="rail-item">我</div>
+      </nav>
+      <aside class="conversation-panel">
+        <div class="conversation-head">会话</div>
+        <div class="conversation-search">搜索会话</div>
+        <div class="conversation active"><div class="mini-avatar">项</div><div class="conversation-copy"><div class="conversation-name">项目协作群</div><div class="conversation-digest">王宜林：哥，这个补充在哪里了？</div></div></div>
+        <div class="conversation"><div class="mini-avatar">产</div><div class="conversation-copy"><div class="conversation-name">产品反馈</div><div class="conversation-digest">周羽枫：测试环境可以再看下</div></div></div>
+        <div class="conversation"><div class="mini-avatar">AI</div><div class="conversation-copy"><div class="conversation-name">Octo AI</div><div class="conversation-digest">已经整理了代码变更摘要</div></div></div>
+      </aside>
+      <section class="chat">
+        <header class="chat-head"><div><div class="chat-name">项目协作群</div><div class="chat-meta">12 位成员 · 3 个智能体</div></div><div class="head-tools"><span class="tool">⌕</span><span class="tool">···</span></div></header>
+        <div class="message-list">
+          <div class="day-divider">今天</div>
+          <article class="message-row ai">
+            <div class="avatar purple">沈</div>
+            <div class="message-content"><div class="message-head"><span class="sender">Octo AI</span><span class="ai-badge">AI</span><span class="time">10:45</span></div><div class="message-group"><div class="reply-preview" tabindex="0"><span class="reply-bar"></span><span class="reply-copy"><span class="reply-name-row"><span class="reply-name">王宜林</span><span class="reply-space">@产品研发空间</span></span><span class="reply-digest">哥，这个补充在哪里了？这是一个很长的摘要，用于验证单行截断是否稳定</span></span></div><div class="bubble">我检查了部署记录，测试环境确实有一段内容被重新生成，可以从这次提交开始对比。</div></div></div>
+          </article>
+          <article class="message-row self">
+            <div class="avatar">王</div>
+            <div class="message-content">
+              <div class="message-head"><span class="sender">王宜林</span><span class="time">10:48</span></div>
+              <div class="message-group"><div class="reply-preview" tabindex="0"><span class="reply-bar"></span><span class="reply-copy"><span class="reply-name-row"><span class="reply-name">沈鑫</span></span><span class="reply-digest">我把测试环境和本地环境的差异整理在文档里了</span></span></div>
+              <div class="bubble"><span class="mention">@沈鑫</span> 我文件丢羽枫了，他再细化一下可以</div></div>
+            </div>
+          </article>
+          <article class="message-row other">
+            <div class="avatar gray">周</div>
+            <div class="message-content">
+              <div class="message-head"><span class="sender">周羽枫</span><span class="time">10:52</span></div>
+              <div class="message-group"><div class="reply-preview" tabindex="0"><span class="reply-bar"></span><span class="reply-copy"><span class="reply-name-row"><span class="reply-name">王宜林</span><span class="reply-space">@产品研发空间</span></span><span class="reply-digest">哥，这个补充在哪里了？这是一个很长的摘要，用于验证单行截断在窄窗口下是否稳定</span></span></div>
+              <div class="bubble"><span class="mention">@王宜林</span> test 环境可以再看下，打开一个无痕窗口可以看到 board</div></div>
+            </div>
+          </article>
+        </div>
+        <div class="composer">发送消息到「项目协作群」</div>
+      </section>
+    </section>
+  </main>
+  <div class="toast" role="status">已定位到原消息</div>
+  <script>
+    const body = document.body;
+    const themeButtons = [...document.querySelectorAll('[data-theme-value]')];
+    themeButtons.forEach((button) => button.addEventListener('click', () => {
+      body.dataset.theme = button.dataset.themeValue;
+      themeButtons.forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+    }));
+    const toast = document.querySelector('.toast');
+    document.querySelectorAll('.reply-preview').forEach((preview) => preview.addEventListener('click', () => {
+      toast.classList.add('show');
+      window.clearTimeout(window.__toastTimer);
+      window.__toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1200);
+    }));
+  </script>
+</body>
+</html>

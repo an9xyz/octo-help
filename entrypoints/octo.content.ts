@@ -63,12 +63,22 @@ export default defineContentScript({
     function postPlayerWatermark(playerId: PlayerWatermarkId) {
       const imageUrl =
         playerId === 'none' ? '' : browser.runtime.getURL(`/${playerId}-watermark.png`);
+      const playerImageUrl =
+        playerId === 'none'
+          ? ''
+          : browser.runtime.getURL(`/player-animation/${playerId}-player.png`);
+      const ballImageUrl =
+        playerId === 'none'
+          ? ''
+          : browser.runtime.getURL(`/player-animation/${playerId}-ball.png`);
       window.postMessage(
         {
           source: MESSAGE_SOURCE,
           type: MESSAGE_TYPE.playerWatermark,
           playerId,
           imageUrl,
+          playerImageUrl,
+          ballImageUrl,
         } satisfies PlayerWatermarkMessage,
         '*',
       );

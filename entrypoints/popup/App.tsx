@@ -134,8 +134,8 @@ function App() {
 
       <section className="group">
         <div className="group-title">
-          足球射门动画
-          {themeId !== 'worldcup' && <span className="group-note">（仅「美加墨世界杯」主题生效）</span>}
+          足球射门特效
+          {themeId !== 'worldcup' && <span className="group-note">（气泡动画需世界杯主题）</span>}
         </div>
         <div className="theme-list">
           {KICK_STYLES.map((s) => (
@@ -155,7 +155,7 @@ function App() {
       </section>
 
       <section className="group">
-        <div className="group-title">球星水印（右下角）</div>
+        <div className="group-title">球星射手（右下角 / 全屏射门）</div>
         <div className="player-selector" role="radiogroup" aria-label="球星水印" aria-busy={loading}>
           {PLAYER_WATERMARKS.map((player) => (
             <button

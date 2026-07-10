@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>插件消息皮肤 · 引用 UI 适配稿</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body { background: #eceff3; color: #1f2329; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    header { min-height: 92px; padding: 20px 30px; display: flex; align-items: center; justify-content: space-between; gap: 24px; background: #fff; border-bottom: 1px solid rgba(28, 28, 35, .09); }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand img { width: 44px; height: 44px; border-radius: 8px; }
+    h1 { margin: 0 0 5px; font-size: 20px; font-weight: 720; }
+    .subtitle { color: #6b7075; font-size: 12px; }
+    .scope { color: #555b61; font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
+    main { padding: 25px 30px 34px; }
+    .principle { max-width: 920px; margin-bottom: 19px; color: #555b61; font-size: 13px; line-height: 1.7; }
+    .principle strong { color: #1f2329; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    article { min-width: 0; overflow: hidden; background: #fff; border: 1px solid rgba(28, 28, 35, .1); border-radius: 7px; }
+    .preview { position: relative; height: 268px; overflow: hidden; border-bottom: 1px solid rgba(28, 28, 35, .08); background: #f2f3f6; }
+    iframe { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; border: 0; transform: scale(.3); transform-origin: 0 0; pointer-events: none; }
+    .body { padding: 15px 16px 16px; }
+    .kicker { margin-bottom: 7px; color: #7c6bf0; font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    article.dark .kicker { color: #6754d9; }
+    article.worldcup .kicker { color: #8c6921; }
+    h2 { margin: 0 0 7px; font-size: 16px; font-weight: 680; }
+    p { min-height: 42px; margin: 0 0 13px; color: #6b7075; font-size: 12px; line-height: 1.65; }
+    .tokens { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 14px; }
+    .tokens span { padding: 3px 6px; border-radius: 3px; background: #f2f0ff; color: #5f4bc2; font-size: 10px; }
+    article.worldcup .tokens span { background: #f7f0df; color: #76571b; }
+    a { height: 34px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(28, 28, 35, .13); border-radius: 5px; color: #1f2329; text-decoration: none; font-size: 12px; font-weight: 620; }
+    a:hover { border-color: rgba(124, 107, 240, .42); color: #6754d9; background: rgba(124, 107, 240, .05); }
+    footer { padding: 0 30px 24px; color: #6b7075; font-size: 11px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } .preview { height: 300px; } iframe { transform: scale(.42); } .scope { display: none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><img src="assets/octo-logo.png" alt="Octo" /><div><h1>插件消息皮肤 · 引用 UI 适配稿</h1><div class="subtitle">一个引用组件结构，三套消息主题 token；只改插件皮肤，不改 Octo Web</div></div></div>
+    <div class="scope">target: utils/octoBeautify.ts<br />new + legacy reply selectors</div>
+  </header>
+  <main>
+    <div class="principle"><strong>共同结构：</strong>引用是消息组的上下文头部，回复是同一消息组的正文。两者共享唯一外框、身份色轨道、宽度、圆角和阴影，中间只保留一条发丝分隔线；引用仍支持两行信息、单行摘要截断和整块点击定位。每版同时展示 AI、自己、他人三档身份色。</div>
+    <section class="grid">
+      <article>
+        <div class="preview"><iframe src="cyber-light.html" title="赛博紫亮色引用 UI"></iframe></div>
+        <div class="body"><div class="kicker">MESSAGE SKIN / CYBER LIGHT</div><h2>赛博紫 · 亮</h2><p>冷白单体消息组，紫、绿、灰蓝身份轨道贯穿引用与正文；引用只保留一处 HUD 规则线。</p><div class="tokens"><span>AI #7C6BF0</span><span>自己 #46A877</span><span>他人 #9AA0C2</span></div><a href="cyber-light.html">打开完整设计稿</a></div>
+      </article>
+      <article class="dark">
+        <div class="preview"><iframe src="cyber-dark.html" title="赛博紫暗色引用 UI"></iframe></div>
+        <div class="body"><div class="kicker">MESSAGE SKIN / CYBER DARK</div><h2>赛博紫 · 暗</h2><p>引用与正文合并在深紫灰单体消息组中，身份色提亮，但不采用简单反色或大面积霓虹。</p><div class="tokens"><span>深紫灰表面</span><span>提亮身份色</span><span>无 glow</span></div><a href="cyber-dark.html">打开完整设计稿</a></div>
+      </article>
+      <article class="worldcup">
+        <div class="preview"><iframe src="worldcup.html" title="世界杯引用 UI"></iframe></div>
+        <div class="body"><div class="kicker">MESSAGE SKIN / WORLDCUP</div><h2>美加墨世界杯</h2><p>暖纸单体消息组搭配藏蓝、深红、松绿身份轨道，金色仅用于细分隔和底部收边。</p><div class="tokens"><span>暖纸</span><span>主办国色</span><span>金色 trim</span></div><a href="worldcup.html">打开完整设计稿</a></div>
+      </article>
+    </section>
+  </main>
+  <footer>当前仅为设计稿。确认后再替换插件中的基础引用规则、暗色覆盖和 `body[data-octo-skin="worldcup"]` 引用覆盖。</footer>
+</body>
+</html>

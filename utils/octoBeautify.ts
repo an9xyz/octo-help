@@ -1,4 +1,8 @@
 import type { PlayerWatermarkId } from './octoRecall';
+import {
+  setFullscreenKickPlayer,
+  setFullscreenKickStyle,
+} from './octoFullscreenKickPixi';
 
 // Message beautify + theme (skin) engine, ported from an9xyz/octo-script
 // (Tampermonkey userscript) into our extension. Pure CSS/DOM overrides in the
@@ -2104,6 +2108,18 @@ const BEAUTIFY_CSS = `            :root {
                 opacity: 1;
                 pointer-events: none;
                 z-index: 3;
+                transform-origin: 50% 92%;
+            }
+
+            body[data-octo-player-kicking="true"][data-octo-player-watermark] .wk-conversation-content::after {
+                animation: octo-player-kick-recoil .38s cubic-bezier(.2,.8,.2,1) !important;
+            }
+
+            @keyframes octo-player-kick-recoil {
+                0%   { transform: translate(0, 0) rotate(0deg); }
+                20%  { transform: translate(3px, 1px) rotate(1.6deg); }
+                48%  { transform: translate(-5px, -2px) rotate(-2.2deg); }
+                100% { transform: translate(0, 0) rotate(0deg); }
             }
 
             body[data-octo-player-watermark="messi"] .wk-conversation-content::after {
@@ -2114,6 +2130,12 @@ const BEAUTIFY_CSS = `            :root {
             body[data-octo-player-watermark="mbappe"] .wk-conversation-content::after {
                 width: clamp(174px, 14vw, 240px);
                 aspect-ratio: 681 / 900;
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                body[data-octo-player-kicking="true"][data-octo-player-watermark] .wk-conversation-content::after {
+                    animation: none !important;
+                }
             }
 
             /* =====================================================================
@@ -2439,32 +2461,53 @@ export function setGlobalTheme(id: string): void {
   reflectGlobalTheme(currentGlobalThemeId);
 }
 
-export function setPlayerWatermark(playerId: PlayerWatermarkId, imageUrl: string): void {
+function extensionAssetUrl(value: string, expectedPath: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  const validProtocol =
+    url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:';
+  return validProtocol && url.pathname === expectedPath ? url : null;
+}
+
+export function setPlayerWatermark(
+  playerId: PlayerWatermarkId,
+  playerImageUrl: string,
+  ballImageUrl: string,
+): void {
   const body = document.body;
   if (!body) return;
 
   body.removeAttribute('data-octo-player-watermark');
   body.style.removeProperty('--octo-player-watermark-image');
   if (playerId === 'none') {
+    setFullscreenKickPlayer('none', '');
     return;
   }
   if (playerId !== 'messi' && playerId !== 'mbappe') return;
 
-  let url: URL;
-  try {
-    url = new URL(imageUrl);
-  } catch {
+  const playerUrl = extensionAssetUrl(
+    playerImageUrl,
+    `/player-animation/${playerId}-player.png`,
+  );
+  const ballUrl = extensionAssetUrl(
+    ballImageUrl,
+    `/player-animation/${playerId}-ball.png`,
+  );
+  if (!playerUrl || !ballUrl) {
+    setFullscreenKickPlayer('none', '');
     return;
   }
 
-  const validAsset =
-    (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') &&
-    url.pathname === `/${playerId}-watermark.png`;
-
-  if (!validAsset) return;
-
   body.setAttribute('data-octo-player-watermark', playerId);
-  body.style.setProperty('--octo-player-watermark-image', `url(${JSON.stringify(url.href)})`);
+  body.style.setProperty(
+    '--octo-player-watermark-image',
+    `url(${JSON.stringify(playerUrl.href)})`,
+  );
+  setFullscreenKickPlayer(playerId, ballUrl.href);
 }
 
 let themeObserverBound = false;
@@ -2613,6 +2656,7 @@ export function setKickStyle(id: string): void {
   currentKickStyle = kickStyleById(id).id;
   // Reflect onto <body> so the chat-area background CSS (per-style) can match.
   if (document.body) document.body.setAttribute('data-octo-kick-style', currentKickStyle);
+  setFullscreenKickStyle(currentKickStyle);
 }
 
 function prefersReducedMotion(): boolean {

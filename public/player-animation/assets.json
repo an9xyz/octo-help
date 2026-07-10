@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "players": {
+    "messi": {
+      "source": "/messi-watermark.png",
+      "player": "/player-animation/messi-player.png",
+      "ball": "/player-animation/messi-ball.png",
+      "ballSpinStrip": "/player-animation/messi-ball-spin-strip.png",
+      "canvas": {
+        "width": 374,
+        "height": 900
+      },
+      "ballSourceBox": {
+        "x": 46,
+        "y": 801,
+        "width": 101,
+        "height": 99
+      },
+      "ballCenter": {
+        "x": 96.5,
+        "y": 850.5
+      },
+      "ballCenterNormalized": {
+        "x": 0.258021,
+        "y": 0.945
+      },
+      "spinFrames": 8,
+      "spinFrameSize": 160
+    },
+    "mbappe": {
+      "source": "/mbappe-watermark.png",
+      "player": "/player-animation/mbappe-player.png",
+      "ball": "/player-animation/mbappe-ball.png",
+      "ballSpinStrip": "/player-animation/mbappe-ball-spin-strip.png",
+      "canvas": {
+        "width": 681,
+        "height": 900
+      },
+      "ballSourceBox": {
+        "x": 195,
+        "y": 763,
+        "width": 130,
+        "height": 125
+      },
+      "ballCenter": {
+        "x": 260.0,
+        "y": 825.5
+      },
+      "ballCenterNormalized": {
+        "x": 0.381791,
+        "y": 0.917222
+      },
+      "spinFrames": 8,
+      "spinFrameSize": 160
+    }
+  }
+}

@@ -6,6 +6,21 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-10
+
+### 变更
+
+- 世界杯足球射门动画改用 PixiJS/WebGL 渲染（替代原 Canvas 2D 实现），点击射门与拖动/滚动页面时更流畅。
+
+### 新增
+
+- 射门改为弧圈球轨迹，每次点击的弯曲方向和弧度都不一样。
+- 为射门加入缎带拖尾、全局辉光（Bloom）与命中冲击波特效。
+
+### 优化
+
+- 移除滚动时的画布重算、精简全站光标样式选择器，并收窄「显示已撤回消息」的 DOM 监听范围，降低拖动与点击时的卡顿。
+
 ## [0.1.1] - 2026-07-10
 
 ### 新增
@@ -28,6 +43,7 @@
 
 - 还原撤回消息时正确显示原发送者姓名和头像。
 
-[Unreleased]: https://github.com/botshen/octo-help/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/botshen/octo-help/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/botshen/octo-help/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/botshen/octo-help/releases/tag/v0.1.0

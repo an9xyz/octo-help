@@ -14,7 +14,13 @@ export default defineConfig({
     web_accessible_resources: [
       {
         // MAIN-world script plus assets referenced from the page context.
-        resources: ['octo-main-world.js', 'messi-watermark.png', 'mbappe-watermark.png'],
+        resources: [
+          'octo-main-world.js',
+          'messi-watermark.png',
+          'mbappe-watermark.png',
+          'player-animation/*.png',
+          'player-animation/assets.json',
+        ],
         matches: OCTO_MATCHES,
       },
     ],

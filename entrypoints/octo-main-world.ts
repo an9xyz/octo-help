@@ -38,6 +38,7 @@ export default defineUnlistedScript(() => {
   // octo has several revoke phrasings (你撤回…/XX撤回…/撤回了成员…的一条消息/EN),
   // so the reliable signal is `message.revoke === true` read from the fiber.
   const ITEM_SELECTOR = '.wk-message-item';
+  const CONVERSATION_SELECTOR = '.wk-conversation-content'; // message-list scroll host
   const SYSTEM_SELECTOR = '.wk-message-system';
   const ROW_SELECTOR = '.wk-msg-row'; // octo's normal message row
   const CLONE_CLASS = 'octo-recall-clone'; // our restored bubble (cloned row)
@@ -262,16 +263,41 @@ export default defineUnlistedScript(() => {
     item.dataset[DONE_ATTR] = '1';
   }
 
+  function safeRestore(item: HTMLElement): void {
+    try {
+      restoreRow(item);
+    } catch {
+      // Never let one bad row break the sweep; leave it as the native tip.
+    }
+  }
+
   function scan(): void {
     if (!enabled) return;
     const items = document.querySelectorAll<HTMLElement>(ITEM_SELECTOR);
-    items.forEach((item) => {
-      try {
-        restoreRow(item);
-      } catch {
-        // Never let one bad row break the sweep; leave it as the native tip.
+    items.forEach(safeRestore);
+  }
+
+  /**
+   * Observer callback: restore only the message items that were just inserted
+   * (the common case as the virtualized list scrolls / receives messages),
+   * instead of re-scanning the whole document on every mutation. A debounced
+   * full scan still runs on idle as a safety net for in-place fiber re-renders
+   * that flip `revoke=true` on an already-present row without re-inserting it.
+   */
+  function handleMutations(mutations: MutationRecord[]): void {
+    if (!enabled) return;
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        const el = node as HTMLElement;
+        if (el.matches(ITEM_SELECTOR)) {
+          safeRestore(el);
+        } else {
+          el.querySelectorAll<HTMLElement>(ITEM_SELECTOR).forEach(safeRestore);
+        }
       }
-    });
+    }
+    scheduleScan();
   }
 
   function clearAll(): void {
@@ -355,9 +381,15 @@ export default defineUnlistedScript(() => {
     ensureStyle();
     scan();
     if (!observer) {
-      observer = new MutationObserver(scheduleScan);
+      observer = new MutationObserver(handleMutations);
     }
-    observer.observe(document.body, { childList: true, subtree: true });
+    // Narrow the observed subtree to the message-list container so we don't
+    // wake up on unrelated DOM churn elsewhere in the app. Fall back to body
+    // when the container isn't mounted yet (the debounced scan still catches
+    // rows once they appear under body).
+    const target =
+      document.querySelector<HTMLElement>(CONVERSATION_SELECTOR) ?? document.body;
+    observer.observe(target, { childList: true, subtree: true });
   }
 
   function disable(): void {
@@ -390,7 +422,11 @@ export default defineUnlistedScript(() => {
     } else if (data.type === MESSAGE_TYPE.kickStyle) {
       setKickStyle(data.styleId);
     } else if (data.type === MESSAGE_TYPE.playerWatermark) {
-      setPlayerWatermark(data.playerId, data.imageUrl);
+      setPlayerWatermark(
+        data.playerId,
+        data.playerImageUrl || data.imageUrl,
+        data.ballImageUrl,
+      );
     }
   });
 });

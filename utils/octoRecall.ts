@@ -59,7 +59,12 @@ export interface PlayerWatermarkMessage {
   source: typeof MESSAGE_SOURCE;
   type: typeof MESSAGE_TYPE.playerWatermark;
   playerId: PlayerWatermarkId;
+  /** Legacy complete player+ball image, retained for compatibility. */
   imageUrl: string;
+  /** Player cutout with the stationary ball removed. */
+  playerImageUrl: string;
+  /** Detached ball used by the full-screen kick canvas. */
+  ballImageUrl: string;
 }
 
 export type OctoMessage =

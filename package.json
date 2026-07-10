@@ -13,11 +13,15 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "release": "node scripts/release.mjs",
     "release:notes": "node scripts/release-notes.mjs",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "pixi-filters": "^6",
+    "pixi.js": "^8",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -26,6 +30,7 @@
     "@types/react-dom": "^19.2.3",
     "@wxt-dev/module-react": "^1.1.5",
     "typescript": "^5.9.3",
+    "vitest": "^2.1.9",
     "wxt": "^0.20.27"
   }
 }

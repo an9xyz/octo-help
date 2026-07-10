@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Octo Fullscreen Kick</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body {
+        color: #182131;
+        background: #eef2f5;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .wk-conversation-content {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        background:
+          linear-gradient(rgba(255,255,255,.86), rgba(255,255,255,.86)),
+          repeating-linear-gradient(90deg, #dce9e1 0 72px, #e8f0eb 72px 144px);
+      }
+      .pitch-line {
+        position: absolute;
+        inset: 10% 8%;
+        border: 1px solid rgba(21, 95, 61, .2);
+        pointer-events: none;
+      }
+      .pitch-line::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        border-left: 1px solid rgba(21, 95, 61, .2);
+      }
+      .toolbar {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 2147483100;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px;
+        border: 1px solid #d7dde5;
+        border-radius: 8px;
+        background: rgba(255,255,255,.94);
+        box-shadow: 0 6px 20px rgba(24,33,49,.12);
+      }
+      .toolbar button {
+        min-width: 34px;
+        height: 32px;
+        padding: 0 9px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: #3b4658;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .toolbar button:hover { background: #f1f3f7; }
+      .toolbar button[aria-pressed="true"] {
+        border-color: #c5cbd6;
+        background: #e9edf3;
+        color: #172033;
+      }
+      .divider { width: 1px; height: 22px; background: #dce1e8; }
+      body[data-octo-player-watermark] .wk-conversation-content::after {
+        content: "";
+        position: absolute;
+        right: clamp(20px, 2.4vw, 40px);
+        bottom: 22px;
+        background: var(--octo-player-watermark-image) center bottom / contain no-repeat;
+        filter: drop-shadow(0 8px 12px rgba(19, 41, 75, .18));
+        pointer-events: none;
+        z-index: 3;
+        transform-origin: 50% 92%;
+      }
+      body[data-octo-player-watermark="messi"] .wk-conversation-content::after {
+        width: clamp(96px, 8vw, 140px);
+        aspect-ratio: 374 / 900;
+      }
+      body[data-octo-player-watermark="mbappe"] .wk-conversation-content::after {
+        width: clamp(174px, 14vw, 240px);
+        aspect-ratio: 681 / 900;
+      }
+      body[data-octo-player-kicking="true"] .wk-conversation-content::after {
+        animation: recoil .38s cubic-bezier(.2,.8,.2,1);
+      }
+      @keyframes recoil {
+        0% { transform: translate(0,0) rotate(0); }
+        20% { transform: translate(3px,1px) rotate(1.6deg); }
+        48% { transform: translate(-5px,-2px) rotate(-2.2deg); }
+        100% { transform: translate(0,0) rotate(0); }
+      }
+    </style>
+  </head>
+  <body data-octo-player-watermark="messi">
+    <main class="wk-conversation-content"><div class="pitch-line"></div></main>
+    <nav class="toolbar" aria-label="射门测试控制">
+      <button type="button" data-player="messi" aria-pressed="true">梅西</button>
+      <button type="button" data-player="mbappe" aria-pressed="false">姆巴佩</button>
+      <span class="divider"></span>
+      <button type="button" data-style="lightning" aria-pressed="true" title="闪电爆射">⚡</button>
+      <button type="button" data-style="fire" aria-pressed="false" title="火焰弹道">🔥</button>
+      <button type="button" data-style="bullet" aria-pressed="false" title="子弹时间">🎬</button>
+      <button type="button" data-style="comet" aria-pressed="false" title="彗星光轨">☄</button>
+      <button type="button" data-style="cannon" aria-pressed="false" title="重炮轰门">💥</button>
+    </nav>
+    <script type="module">
+      import {
+        setFullscreenKickPlayer,
+        setFullscreenKickStyle,
+      } from '../utils/octoFullscreenKick.ts';
+
+      const selectPlayer = (playerId) => {
+        document.body.dataset.octoPlayerWatermark = playerId;
+        document.body.style.setProperty(
+          '--octo-player-watermark-image',
+          `url(/player-animation/${playerId}-player.png)`,
+        );
+        setFullscreenKickPlayer(playerId, `/player-animation/${playerId}-ball.png`);
+        document.querySelectorAll('[data-player]').forEach((button) => {
+          button.setAttribute('aria-pressed', String(button.dataset.player === playerId));
+        });
+      };
+
+      document.querySelectorAll('[data-player]').forEach((button) => {
+        button.addEventListener('click', () => selectPlayer(button.dataset.player));
+      });
+      document.querySelectorAll('[data-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+          setFullscreenKickStyle(button.dataset.style);
+          document.querySelectorAll('[data-style]').forEach((item) => {
+            item.setAttribute('aria-pressed', String(item === button));
+          });
+        });
+      });
+      selectPlayer('messi');
+      setFullscreenKickStyle('lightning');
+    </script>
+  </body>
+</html>
