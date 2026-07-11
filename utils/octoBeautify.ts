@@ -3077,6 +3077,7 @@ export function setPlayerWatermark(
 }
 
 let themeObserverBound = false;
+let themeObserver: MutationObserver | null = null;
 let reassertTimer: number | undefined;
 function watchThemeAttr(): void {
   if (themeObserverBound || !document.body) return;
@@ -3089,16 +3090,18 @@ function watchThemeAttr(): void {
     reassertTimer = window.setTimeout(() => reflectTheme(currentThemeId), 60);
   });
   mo.observe(document.body, { attributes: true, attributeFilter: ['theme-mode'] });
+  themeObserver = mo;
 }
 
 // ---- fold sessions: auto-expand + guard against re-collapse --------------
 
 const TOGGLE_SEL = '.wk-fold-session-card-toggle';
-const watchedToggles = new WeakSet<Element>();
+let watchedToggles = new WeakSet<Element>();
+const toggleObservers: MutationObserver[] = [];
 
 // Cap auto-expand clicks per toggle so a toggle that re-collapses (app fights
 // back) can't produce an infinite click loop.
-const expandCounts = new WeakMap<Element, number>();
+let expandCounts = new WeakMap<Element, number>();
 const MAX_EXPAND_CLICKS = 3;
 
 function expandToggle(btn: Element | null): void {
@@ -3118,6 +3121,7 @@ function watchToggle(btn: Element): void {
     if (btn.getAttribute('aria-expanded') === 'false') expandToggle(btn);
   });
   mo.observe(btn, { attributes: true, attributeFilter: ['aria-expanded'] });
+  toggleObservers.push(mo);
 }
 function watchAllToggles(): void {
   document.querySelectorAll(TOGGLE_SEL).forEach(watchToggle);
@@ -3161,20 +3165,23 @@ function applyClamp(): void {
 }
 
 let clickBound = false;
+let clickHandler: ((e: Event) => void) | null = null;
 function bindClicks(): void {
   if (clickBound) return;
   clickBound = true;
-  document.addEventListener(
-    'click',
-    (e) => {
-      const target = e.target as HTMLElement;
-      const clamp = target.closest && target.closest('.octo-clamp');
-      if (clamp && !target.closest('a, button, code, pre, img')) {
-        clamp.classList.toggle('octo-expanded');
-      }
-    },
-    true,
-  );
+  clickHandler = (e: Event) => {
+    const target = e.target as HTMLElement;
+    const clamp = target.closest && target.closest('.octo-clamp');
+    if (clamp && !target.closest('a, button, code, pre, img')) {
+      clamp.classList.toggle('octo-expanded');
+    }
+  };
+  document.addEventListener('click', clickHandler, true);
+}
+function removeClicks(): void {
+  if (clickHandler) document.removeEventListener('click', clickHandler, true);
+  clickHandler = null;
+  clickBound = false;
 }
 
 // ---- bot profile card gacha: roll a rarity per open + reveal FX ------------
@@ -3590,4 +3597,67 @@ export function initBeautify(initialThemeId: string): void {
 
   if (document.body) boot();
   else document.addEventListener('DOMContentLoaded', boot, { once: true });
+}
+
+/**
+ * Fully tear the beautify + theme + kick engine back down so the page looks
+ * exactly as it would with the extension uninstalled. Called when the popup's
+ * global master switch is turned off. `initBeautify` can be called again
+ * afterwards to bring everything back (the `started` guard is reset here).
+ */
+export function teardownBeautify(): void {
+  if (!started) return;
+  started = false;
+
+  // Stop all observers/timers we own.
+  if (bodyObserver) {
+    bodyObserver.disconnect();
+    bodyObserver = null;
+  }
+  if (themeObserver) {
+    themeObserver.disconnect();
+    themeObserver = null;
+  }
+  themeObserverBound = false;
+  toggleObservers.forEach((o) => o.disconnect());
+  toggleObservers.length = 0;
+  watchedToggles = new WeakSet<Element>();
+  expandCounts = new WeakMap<Element, number>();
+  if (reassertTimer) {
+    clearTimeout(reassertTimer);
+    reassertTimer = undefined;
+  }
+
+  // Remove the worldcup corner balls and tear down the full-screen kick canvas.
+  try { unmountBalls(); } catch { /* noop */ }
+  try { setFullscreenKickPlayer('none', ''); } catch { /* noop */ }
+
+  // Stop listening for clamp-expand clicks.
+  removeClicks();
+
+  // Strip every attribute / inline var / class we ever wrote to the page.
+  const body = document.body;
+  if (body) {
+    body.removeAttribute('data-octo-skin');
+    body.removeAttribute('data-octo-global-theme');
+    body.removeAttribute('data-octo-kick-style');
+    body.removeAttribute('data-octo-player-watermark');
+    body.removeAttribute('data-octo-player-kicking');
+    body.style.removeProperty('--octo-player-watermark-image');
+    // Only undo a dark mode WE forced (dark skins); never touch the app's own
+    // light/dark choice otherwise.
+    if (themeById(currentThemeId).base === 'dark' && body.getAttribute('theme-mode') === 'dark') {
+      selfWritingTheme = true;
+      try { body.removeAttribute('theme-mode'); } finally { selfWritingTheme = false; }
+    }
+  }
+  document
+    .querySelectorAll('.octo-clamp, .octo-expanded')
+    .forEach((el) => el.classList.remove('octo-clamp', 'octo-expanded'));
+  document
+    .querySelectorAll('[data-ai-continue]')
+    .forEach((el) => el.removeAttribute('data-ai-continue'));
+
+  // Finally drop the injected stylesheet so all color/layout overrides vanish.
+  document.getElementById(STYLE_ID)?.remove();
 }

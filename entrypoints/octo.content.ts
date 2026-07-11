@@ -2,6 +2,7 @@ import {
   BALL_CURSOR_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
+  MASTER_STORAGE_KEY,
   MESSI_WATERMARK_STORAGE_KEY,
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
@@ -11,6 +12,7 @@ import {
   type BallCursorMessage,
   type GlobalThemeMessage,
   type KickStyleMessage,
+  type MasterMessage,
   type PlayerWatermarkId,
   type PlayerWatermarkMessage,
   type ThemeMessage,
@@ -37,6 +39,13 @@ export default defineContentScript({
     function postToggle(enabled: boolean) {
       window.postMessage(
         { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.toggle, enabled } satisfies ToggleMessage,
+        '*',
+      );
+    }
+
+    function postMaster(enabled: boolean) {
+      window.postMessage(
+        { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.master, enabled } satisfies MasterMessage,
         '*',
       );
     }
@@ -97,6 +106,7 @@ export default defineContentScript({
     // its window 'message' listener synchronously on evaluation, but post twice
     // (now + next tick) to avoid a first-frame race.
     const stored = await browser.storage.local.get([
+      MASTER_STORAGE_KEY,
       STORAGE_KEY,
       THEME_STORAGE_KEY,
       GLOBAL_THEME_STORAGE_KEY,
@@ -105,36 +115,48 @@ export default defineContentScript({
       MESSI_WATERMARK_STORAGE_KEY,
       BALL_CURSOR_STORAGE_KEY,
     ]);
-    const initialEnabled = stored[STORAGE_KEY] === true;
-    const initialTheme =
+    // Master defaults ON (missing key => enabled) so existing users are
+    // unaffected until they explicitly turn everything off.
+    let currentMaster = stored[MASTER_STORAGE_KEY] !== false;
+    let currentEnabled = stored[STORAGE_KEY] === true;
+    let currentTheme =
       typeof stored[THEME_STORAGE_KEY] === 'string'
         ? (stored[THEME_STORAGE_KEY] as string)
         : DEFAULT_THEME;
-    const initialGlobalTheme =
+    let currentGlobalTheme =
       typeof stored[GLOBAL_THEME_STORAGE_KEY] === 'string'
         ? (stored[GLOBAL_THEME_STORAGE_KEY] as string)
         : DEFAULT_GLOBAL_THEME;
-    const initialKick =
+    let currentKick =
       typeof stored[KICK_STYLE_STORAGE_KEY] === 'string'
         ? (stored[KICK_STYLE_STORAGE_KEY] as string)
         : DEFAULT_KICK_STYLE;
     const storedPlayer = stored[PLAYER_WATERMARK_STORAGE_KEY];
-    const initialPlayerWatermark: PlayerWatermarkId =
+    let currentPlayerWatermark: PlayerWatermarkId =
       storedPlayer === 'messi' || storedPlayer === 'mbappe' || storedPlayer === 'none'
         ? storedPlayer
         : stored[MESSI_WATERMARK_STORAGE_KEY] === true
           ? 'messi'
           : 'none';
     // Default ON so existing users keep the football cursor.
-    const initialBallCursor = stored[BALL_CURSOR_STORAGE_KEY] !== false;
+    let currentBallCursor = stored[BALL_CURSOR_STORAGE_KEY] !== false;
+
+    // Post everything except the master flag. The main-world applies these only
+    // while the master switch is on; it ignores them while suspended.
+    const pushSettings = () => {
+      postKickStyle(currentKick);
+      postGlobalTheme(currentGlobalTheme);
+      postTheme(currentTheme);
+      postPlayerWatermark(currentPlayerWatermark);
+      postBallCursor(currentBallCursor);
+      postToggle(currentEnabled);
+    };
 
     const pushAll = () => {
-      postKickStyle(initialKick);
-      postGlobalTheme(initialGlobalTheme);
-      postTheme(initialTheme);
-      postPlayerWatermark(initialPlayerWatermark);
-      postBallCursor(initialBallCursor);
-      postToggle(initialEnabled);
+      // Master first so the main-world can (re)boot the engine before settings
+      // arrive; when off, it tears everything down and drops the rest.
+      postMaster(currentMaster);
+      pushSettings();
     };
     pushAll();
     setTimeout(pushAll, 0);
@@ -142,25 +164,40 @@ export default defineContentScript({
     // Relay later changes from the popup.
     browser.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
-      if (STORAGE_KEY in changes) postToggle(changes[STORAGE_KEY].newValue === true);
+      if (MASTER_STORAGE_KEY in changes) {
+        currentMaster = changes[MASTER_STORAGE_KEY].newValue !== false;
+        postMaster(currentMaster);
+        // On re-enable, replay every setting so the freshly re-booted engine
+        // gets the current theme / kick / watermark back.
+        if (currentMaster) pushSettings();
+      }
+      if (STORAGE_KEY in changes) {
+        currentEnabled = changes[STORAGE_KEY].newValue === true;
+        postToggle(currentEnabled);
+      }
       if (THEME_STORAGE_KEY in changes) {
         const next = changes[THEME_STORAGE_KEY].newValue;
-        postTheme(typeof next === 'string' ? next : DEFAULT_THEME);
+        currentTheme = typeof next === 'string' ? next : DEFAULT_THEME;
+        postTheme(currentTheme);
       }
       if (GLOBAL_THEME_STORAGE_KEY in changes) {
         const next = changes[GLOBAL_THEME_STORAGE_KEY].newValue;
-        postGlobalTheme(typeof next === 'string' ? next : DEFAULT_GLOBAL_THEME);
+        currentGlobalTheme = typeof next === 'string' ? next : DEFAULT_GLOBAL_THEME;
+        postGlobalTheme(currentGlobalTheme);
       }
       if (KICK_STYLE_STORAGE_KEY in changes) {
         const next = changes[KICK_STYLE_STORAGE_KEY].newValue;
-        postKickStyle(typeof next === 'string' ? next : DEFAULT_KICK_STYLE);
+        currentKick = typeof next === 'string' ? next : DEFAULT_KICK_STYLE;
+        postKickStyle(currentKick);
       }
       if (PLAYER_WATERMARK_STORAGE_KEY in changes) {
         const next = changes[PLAYER_WATERMARK_STORAGE_KEY].newValue;
-        postPlayerWatermark(next === 'messi' || next === 'mbappe' ? next : 'none');
+        currentPlayerWatermark = next === 'messi' || next === 'mbappe' ? next : 'none';
+        postPlayerWatermark(currentPlayerWatermark);
       }
       if (BALL_CURSOR_STORAGE_KEY in changes) {
-        postBallCursor(changes[BALL_CURSOR_STORAGE_KEY].newValue !== false);
+        currentBallCursor = changes[BALL_CURSOR_STORAGE_KEY].newValue !== false;
+        postBallCursor(currentBallCursor);
       }
     });
   },

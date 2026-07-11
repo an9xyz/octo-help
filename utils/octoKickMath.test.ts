@@ -9,7 +9,10 @@ import {
   KICK_STYLE_IDS,
   MAX_CANVAS_PIXELS,
   normalizeStyle,
+  pickTrajectoryMode,
   projectilePoint,
+  stepBounce,
+  TRAJECTORY_MODES,
   trailQuality,
 } from './octoKickMath';
 
@@ -180,5 +183,88 @@ describe('easeInOutSine', () => {
   it('clamps out-of-range input', () => {
     expect(easeInOutSine(-1)).toBeCloseTo(0, 6);
     expect(easeInOutSine(2)).toBeCloseTo(1, 6);
+  });
+});
+
+describe('pickTrajectoryMode', () => {
+  it('maps the low band to a straight shot', () => {
+    expect(pickTrajectoryMode(() => 0)).toBe('straight');
+    expect(pickTrajectoryMode(() => 0.33)).toBe('straight');
+  });
+  it('maps the middle band to a curve', () => {
+    expect(pickTrajectoryMode(() => 0.34)).toBe('curve');
+    expect(pickTrajectoryMode(() => 0.73)).toBe('curve');
+  });
+  it('maps the high band to a bounce', () => {
+    expect(pickTrajectoryMode(() => 0.74)).toBe('bounce');
+    expect(pickTrajectoryMode(() => 0.999)).toBe('bounce');
+  });
+  it('only ever returns a known mode', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(TRAJECTORY_MODES).toContain(pickTrajectoryMode());
+    }
+  });
+});
+
+describe('stepBounce', () => {
+  const bounds = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+
+  it('applies gravity to vy and integrates position with no walls hit', () => {
+    // dt=1s, gravity=10 => vy: 0->10; x: 50+5=55; y: 50+10=60. No wall crossed.
+    const { state, bounces } = stepBounce(
+      { x: 50, y: 50, vx: 5, vy: 0 },
+      10,
+      1,
+      bounds,
+      0.8,
+    );
+    expect(bounces).toBe(0);
+    expect(state.vy).toBeCloseTo(10, 5);
+    expect(state.x).toBeCloseTo(55, 5);
+    expect(state.y).toBeCloseTo(60, 5);
+  });
+
+  it('reflects and damps horizontal velocity off the right wall', () => {
+    // x: 90 + 40 = 130 > 100 => clamp to 100, vx: 40 -> -40*0.5 = -20.
+    const { state, bounces } = stepBounce(
+      { x: 90, y: 50, vx: 40, vy: 0 },
+      0,
+      1,
+      bounds,
+      0.5,
+    );
+    expect(bounces).toBe(1);
+    expect(state.x).toBe(100);
+    expect(state.vx).toBeCloseTo(-20, 5);
+  });
+
+  it('reflects off the left wall', () => {
+    const { state, bounces } = stepBounce(
+      { x: 10, y: 50, vx: -40, vy: 0 },
+      0,
+      1,
+      bounds,
+      0.5,
+    );
+    expect(bounces).toBe(1);
+    expect(state.x).toBe(0);
+    expect(state.vx).toBeCloseTo(20, 5);
+  });
+
+  it('can bounce off two walls (corner) in one step', () => {
+    const { bounces } = stepBounce(
+      { x: 95, y: 95, vx: 40, vy: 40 },
+      0,
+      1,
+      bounds,
+      0.8,
+    );
+    expect(bounces).toBe(2);
+  });
+
+  it('does not mutate the input state', () => {
+    const input = { x: 90, y: 50, vx: 40, vy: 0 };
+    stepBounce(input, 10, 1, bounds, 0.5);
+    expect(input).toEqual({ x: 90, y: 50, vx: 40, vy: 0 });
   });
 });

@@ -8,7 +8,12 @@ import {
   easeInOutSine,
   MAX_CANVAS_PIXELS,
   normalizeStyle,
+  pickTrajectoryMode,
+  type Bounds,
   type Point,
+  type PhysicsState,
+  stepBounce,
+  type TrajectoryMode,
   trailQuality,
   type KickStyleId,
 } from './octoKickMath';
@@ -70,6 +75,7 @@ interface KickStyleSpec {
 }
 
 interface PixiShot {
+  mode: TrajectoryMode;
   start: Point;
   target: Point;
   control: Point;
@@ -85,6 +91,13 @@ interface PixiShot {
   glow: Sprite;
   rope: MeshRope;
   ropePoints: Point[];
+  // Physics fields — only used when `mode === 'bounce'`.
+  physics?: PhysicsState;
+  gravity?: number;
+  restitution?: number;
+  bounds?: Bounds;
+  bounceCount?: number;
+  maxBounces?: number;
 }
 
 interface BurstParticle {
@@ -118,6 +131,11 @@ const ROPE_POINTS = 20;
 const SHOCKWAVE_LIFE = 520; // ms
 const SHAKE_LIFE = 200; // ms
 const MAX_POOLED_PARTICLES = 240;
+
+// Wall-bounce trajectory tuning.
+const BOUNCE_MAX_LIFETIME = 2600; // ms — hard cap so a shot always resolves
+const BOUNCE_MAX_WALL_HITS = 5; // resolve (final impact) after this many walls
+const BOUNCE_MIN_SPEED = 140; // px/s — resolve once the ball is basically at rest
 
 const PLAYER_LAYOUTS: Record<ActivePlayerId, PlayerLayout> = {
   messi: {
@@ -702,6 +720,58 @@ function spawnImpact(shot: PixiShot, now: number, quality: number): void {
   updateFxFilters();
 }
 
+/**
+ * Lighter-weight effect for a wall ricochet: a small expanding ring plus a few
+ * sparks and a faint shake, but no shockwave — bounces happen often, so this
+ * stays cheap while still reading as a physical hit against the edge.
+ */
+function spawnBounceEffect(point: Point, spec: KickStyleSpec, now: number, quality: number): void {
+  if (!burstLayer || !impactLayer || !glowTexture) return;
+
+  const ring = new Sprite(glowTexture);
+  ring.anchor.set(0.5);
+  ring.tint = spec.secondary;
+  ring.blendMode = 'add';
+  ring.position.set(point.x, point.y);
+  ring.alpha = 0.8;
+  impactLayer.addChild(ring);
+  impactRings.push({
+    ring,
+    born: now,
+    life: IMPACT_DURATION * 0.6,
+    radius: spec.impactRadius * 0.5,
+    wide: false,
+  });
+
+  const count = Math.max(3, Math.round(6 * (quality >= 0.9 ? 1 : quality >= 0.6 ? 0.7 : 0.45)));
+  const speed = spec.impactRadius * 1.8;
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.6;
+    const v = speed * (0.5 + Math.random() * 0.5);
+    const scale = (2.5 + Math.random() * 1.5) / GLOW_TEXTURE_SIZE;
+    const particle = acquireParticle(
+      glowTexture,
+      point.x,
+      point.y,
+      scale,
+      i % 2 ? spec.secondary : spec.color,
+      0.85,
+    );
+    burstLayer.addParticle(particle);
+    burstParticles.push({
+      particle,
+      vx: Math.cos(angle) * v,
+      vy: Math.sin(angle) * v,
+      born: now,
+      life: IMPACT_DURATION * (0.4 + Math.random() * 0.3),
+    });
+  }
+
+  shakeAmplitude = clamp(2, spec.impactRadius * 0.05, 5);
+  shakeUntil = now + SHAKE_LIFE * 0.6;
+  updateFxFilters();
+}
+
 function updateBurstParticles(now: number, dtSeconds: number): void {
   if (!burstLayer) return;
   const alive: BurstParticle[] = [];
@@ -759,6 +829,33 @@ function updateRope(shot: PixiShot, head: Point): void {
 
 let lastTickAt = 0;
 
+/**
+ * Shared per-frame visual update for a flying ball: perspective scale, launch
+ * and impact squash pulses, spin and glow sizing. `progress` (0..1) drives the
+ * pulses/perspective; `elapsed` (ms) drives the spin. Position comes from the
+ * caller (Bézier point for straight/curve, physics point for bounce).
+ */
+function applyShotVisual(shot: PixiShot, point: Point, progress: number, elapsed: number): void {
+  const perspectiveScale = 1 + (shot.endScale - 1) * progress;
+  const launchPulse = progress < 0.08 ? Math.sin((progress / 0.08) * Math.PI) : 0;
+  const impactPulse = progress > 0.93 ? Math.sin(((progress - 0.93) / 0.07) * Math.PI) : 0;
+  const drawn = shot.size * perspectiveScale;
+  shot.node.position.set(point.x, point.y);
+  // Scale directly from cached texture dims (avoids the width/height -> scale
+  // recompute Pixi does on every setter call each frame).
+  const baseScaleX = drawn / ballTexWidth;
+  const baseScaleY = drawn / ballAspect / ballTexHeight;
+  shot.ball.scale.set(
+    baseScaleX * (1 + launchPulse * 0.18 - impactPulse * 0.18),
+    baseScaleY * (1 - launchPulse * 0.12 + impactPulse * 0.24),
+  );
+  shot.ball.rotation = shot.spin * (elapsed / 1000);
+  const glowSize = drawn * 2.1;
+  shot.glow.width = glowSize;
+  shot.glow.height = glowSize;
+  shot.rope.alpha = 0.9;
+}
+
 function tick(): void {
   if (!ready || !app || !fxRoot) return;
   const now = performance.now();
@@ -769,30 +866,50 @@ function tick(): void {
   const liveShots: PixiShot[] = [];
   for (const shot of shots) {
     const elapsed = now - shot.startTime;
+
+    // Wall-bounce: integrate the physics projectile, spawn a light ricochet
+    // effect on each wall hit, and resolve (final impact) once it runs out of
+    // bounces, drops below resting speed, or hits the lifetime cap.
+    if (shot.mode === 'bounce' && shot.physics && shot.bounds) {
+      const next = stepBounce(
+        shot.physics,
+        shot.gravity ?? 0,
+        dtSeconds,
+        shot.bounds,
+        shot.restitution ?? 0.7,
+      );
+      shot.physics = next.state;
+      const point: Point = { x: next.state.x, y: next.state.y };
+      if (next.bounces > 0) {
+        shot.bounceCount = (shot.bounceCount ?? 0) + next.bounces;
+        spawnBounceEffect(point, shot.spec, now, quality);
+      }
+      updateRope(shot, point);
+
+      const speed = Math.hypot(next.state.vx, next.state.vy);
+      const resolved =
+        elapsed >= BOUNCE_MAX_LIFETIME ||
+        (shot.bounceCount ?? 0) >= (shot.maxBounces ?? BOUNCE_MAX_WALL_HITS) ||
+        (speed < BOUNCE_MIN_SPEED && (shot.bounceCount ?? 0) > 0);
+      if (!resolved) {
+        applyShotVisual(shot, point, clamp(0, elapsed / BOUNCE_MAX_LIFETIME, 1), elapsed);
+        liveShots.push(shot);
+        continue;
+      }
+      // Final impact where the ball comes to rest.
+      shot.target = point;
+      spawnImpact(shot, now, quality);
+      shot.node.destroy({ children: true });
+      shot.rope.destroy();
+      continue;
+    }
+
     const progress = clamp(0, elapsed / shot.duration, 1);
     if (progress < 1) {
       const t = easeInOutSine(progress);
       const point = bezierPoint(shot.start, shot.control, shot.target, t);
       updateRope(shot, point);
-
-      const perspectiveScale = 1 + (shot.endScale - 1) * progress;
-      const launchPulse = progress < 0.08 ? Math.sin((progress / 0.08) * Math.PI) : 0;
-      const impactPulse = progress > 0.93 ? Math.sin(((progress - 0.93) / 0.07) * Math.PI) : 0;
-      const drawn = shot.size * perspectiveScale;
-      shot.node.position.set(point.x, point.y);
-      // Scale directly from cached texture dims (avoids the width/height ->
-      // scale recompute Pixi does on every setter call each frame).
-      const baseScaleX = drawn / ballTexWidth;
-      const baseScaleY = drawn / ballAspect / ballTexHeight;
-      shot.ball.scale.set(
-        baseScaleX * (1 + launchPulse * 0.18 - impactPulse * 0.18),
-        baseScaleY * (1 - launchPulse * 0.12 + impactPulse * 0.24),
-      );
-      shot.ball.rotation = shot.spin * (elapsed / 1000);
-      const glowSize = drawn * 2.1;
-      shot.glow.width = glowSize;
-      shot.glow.height = glowSize;
-      shot.rope.alpha = 0.9;
+      applyShotVisual(shot, point, progress, elapsed);
       liveShots.push(shot);
       continue;
     }
@@ -863,13 +980,45 @@ function createShot(target: Point): void {
   const duration = clamp(spec.minDuration, (travelDistance / spec.speed) * 1000, spec.maxDuration);
   const durationSeconds = duration / 1000;
 
-  // Randomized banana curve — different every click; faster styles bend less.
+  // Randomize the flight path each click so it isn't always the same banana.
+  const mode = pickTrajectoryMode();
+
+  // Curve shape. `straight` pins the control point to the chord midpoint (a flat
+  // laser); `curve`/`bounce` bend it into a banana. Faster styles bend less.
   const flatness = clamp(0.45, spec.speed / 1600, 1);
   const bendSign = Math.random() < 0.5 ? -1 : 1;
-  const curviness = (0.16 + Math.random() * 0.3) / flatness;
+  const curviness = mode === 'straight' ? 0 : (0.16 + Math.random() * 0.3) / flatness;
   const lateral = bendSign * travelDistance * curviness;
-  const lift = travelDistance * (0.05 + Math.random() * 0.16);
+  const lift = mode === 'straight' ? 0 : travelDistance * (0.05 + Math.random() * 0.16);
   const control = curveControlPoint(geometry.start, target, lateral, lift);
+
+  // Wall-bounce: launch a physics projectile from the player toward the click,
+  // biased slightly upward so gravity arcs it down into the walls. The Bézier
+  // path is unused for this mode — the ticker integrates `physics` instead.
+  let physics: PhysicsState | undefined;
+  let bounds: Bounds | undefined;
+  let flightDuration = duration;
+  if (mode === 'bounce') {
+    const dx = target.x - geometry.start.x;
+    const dy = target.y - geometry.start.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const launchSpeed = spec.speed * (0.7 + Math.random() * 0.2);
+    physics = {
+      x: geometry.start.x,
+      y: geometry.start.y,
+      vx: (dx / len) * launchSpeed,
+      vy: (dy / len) * launchSpeed - launchSpeed * (0.3 + Math.random() * 0.25),
+    };
+    // Confine the ball fully on-screen (inset by its radius).
+    const inset = geometry.ballSize / 2;
+    bounds = {
+      minX: inset,
+      minY: inset,
+      maxX: Math.max(inset, window.innerWidth - inset),
+      maxY: Math.max(inset, window.innerHeight - inset),
+    };
+    flightDuration = BOUNCE_MAX_LIFETIME;
+  }
 
   const pathSpeed = travelDistance / Math.max(0.001, durationSeconds);
   const spin = clamp(
@@ -887,11 +1036,12 @@ function createShot(target: Point): void {
   ropeLayer.addChild(rope);
 
   shots.push({
+    mode,
     start: geometry.start,
     target,
     control,
     startTime: now,
-    duration,
+    duration: flightDuration,
     size: geometry.ballSize,
     style,
     spec,
@@ -902,6 +1052,12 @@ function createShot(target: Point): void {
     glow,
     rope,
     ropePoints: points,
+    physics,
+    gravity: spec.gravity,
+    restitution: 0.62 + Math.random() * 0.16,
+    bounds,
+    bounceCount: 0,
+    maxBounces: BOUNCE_MAX_WALL_HITS,
   });
   if (shots.length > MAX_ACTIVE_SHOTS) {
     const dropped = shots.splice(0, shots.length - MAX_ACTIVE_SHOTS);

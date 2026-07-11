@@ -137,3 +137,87 @@ export function curveControlPoint(
 export function easeInOutSine(t: number): number {
   return -(Math.cos(Math.PI * clamp(0, t, 1)) - 1) / 2;
 }
+
+// ---- physics: wall-bounce trajectory --------------------------------------
+
+/**
+ * The kinds of flight path a shot can take. Randomizing this per click keeps
+ * the effect from always being the same banana curveball:
+ *  - `straight`: a nearly flat laser to the click point.
+ *  - `curve`: the eased banana Bézier (bends left or right).
+ *  - `bounce`: a physics projectile that ricochets off the screen edges.
+ */
+export type TrajectoryMode = 'straight' | 'curve' | 'bounce';
+
+export const TRAJECTORY_MODES: readonly TrajectoryMode[] = ['straight', 'curve', 'bounce'];
+
+/** Axis-aligned play-field the ball is confined to (inclusive edges). */
+export interface Bounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** Mutable position + velocity of a free-flying (bouncing) ball. */
+export interface PhysicsState {
+  x: number;
+  y: number;
+  /** velocity in px/second */
+  vx: number;
+  vy: number;
+}
+
+/**
+ * Pick a trajectory mode with fixed weights (curve most common, then straight,
+ * then bounce). `rng` is injectable so the choice is deterministic in tests.
+ * Cumulative thresholds: straight < 0.34, curve < 0.74, else bounce.
+ */
+export function pickTrajectoryMode(rng: () => number = Math.random): TrajectoryMode {
+  const r = rng();
+  if (r < 0.34) return 'straight';
+  if (r < 0.74) return 'curve';
+  return 'bounce';
+}
+
+/**
+ * Advance a bouncing projectile by one timestep: apply gravity to the vertical
+ * velocity, integrate position, then reflect off any wall it crossed, damping
+ * the perpendicular velocity by `restitution` (0..1) and clamping the ball back
+ * inside `bounds`. Returns the next state (a new object, inputs untouched) plus
+ * how many walls were hit this step so the caller can spawn bounce effects.
+ */
+export function stepBounce(
+  state: PhysicsState,
+  gravity: number,
+  dtSeconds: number,
+  bounds: Bounds,
+  restitution: number,
+): { state: PhysicsState; bounces: number } {
+  let vx = state.vx;
+  let vy = state.vy + gravity * dtSeconds;
+  let x = state.x + vx * dtSeconds;
+  let y = state.y + vy * dtSeconds;
+  let bounces = 0;
+
+  if (x < bounds.minX) {
+    x = bounds.minX;
+    vx = -vx * restitution;
+    bounces++;
+  } else if (x > bounds.maxX) {
+    x = bounds.maxX;
+    vx = -vx * restitution;
+    bounces++;
+  }
+  if (y < bounds.minY) {
+    y = bounds.minY;
+    vy = -vy * restitution;
+    bounces++;
+  } else if (y > bounds.maxY) {
+    y = bounds.maxY;
+    vy = -vy * restitution;
+    bounces++;
+  }
+
+  return { state: { x, y, vx, vy }, bounces };
+}

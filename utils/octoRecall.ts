@@ -1,5 +1,10 @@
 // Shared constants between popup, content script (ISOLATED) and injected script (MAIN world).
 
+/** storage.local key holding the global master switch. Off => behaves like the
+ *  extension is uninstalled (recall + beautify + themes + kick all torn down).
+ *  Default ON (missing key => enabled). */
+export const MASTER_STORAGE_KEY = 'octoMasterEnabled';
+
 /** storage.local key holding the "show recalled messages" on/off state. Default OFF. */
 export const STORAGE_KEY = 'octoRecallEnabled';
 
@@ -27,6 +32,7 @@ export const MESSAGE_SOURCE = 'octo-recall';
 
 /** Message types sent from content script -> injected main-world script. */
 export const MESSAGE_TYPE = {
+  master: 'master',
   toggle: 'toggle',
   theme: 'theme',
   globalTheme: 'globalTheme',
@@ -34,6 +40,12 @@ export const MESSAGE_TYPE = {
   playerWatermark: 'playerWatermark',
   ballCursor: 'ballCursor',
 } as const;
+
+export interface MasterMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.master;
+  enabled: boolean;
+}
 
 export interface ToggleMessage {
   source: typeof MESSAGE_SOURCE;
@@ -78,6 +90,7 @@ export interface BallCursorMessage {
 }
 
 export type OctoMessage =
+  | MasterMessage
   | ToggleMessage
   | ThemeMessage
   | GlobalThemeMessage

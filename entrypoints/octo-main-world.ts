@@ -11,6 +11,7 @@ import {
   setKickStyle,
   setPlayerWatermark,
   setTheme,
+  teardownBeautify,
 } from '@/utils/octoBeautify';
 
 /**
@@ -404,8 +405,40 @@ export default defineUnlistedScript(() => {
   }
 
   function applyToggle(next: boolean): void {
+    recallEnabled = next;
+    // While the master switch is off the whole extension is suspended; just
+    // remember the desired recall state and apply it when master returns.
+    if (!masterEnabled) return;
     if (next) enable();
     else disable();
+  }
+
+  // ---- master switch (global "uninstall") --------------------------------
+
+  // Recall/beautify default: master ON (the content script pushes the real
+  // value on boot). `recallEnabled` is the popup's desired recall state,
+  // independent of `enabled` (the actual active flag gated by master).
+  let masterEnabled = true;
+  let recallEnabled = false;
+  let lastThemeId = DEFAULT_THEME;
+
+  /**
+   * Turn the whole extension on/off. Off is meant to look exactly like the
+   * extension is uninstalled: recall reverts its DOM and the beautify + theme
+   * + full-screen kick engine is fully torn down. On re-enable we re-boot the
+   * beautify engine (the content script re-pushes theme/kick/watermark right
+   * after) and restore recall if its own toggle is on.
+   */
+  function applyMaster(next: boolean): void {
+    if (next === masterEnabled) return;
+    masterEnabled = next;
+    if (next) {
+      initBeautify(lastThemeId);
+      if (recallEnabled) enable();
+    } else {
+      disable();
+      teardownBeautify();
+    }
   }
 
   // ---- messaging from the content script ----------------------------------
@@ -414,6 +447,16 @@ export default defineUnlistedScript(() => {
     if (event.source !== window) return;
     const data = event.data as OctoMessage | undefined;
     if (!data || data.source !== MESSAGE_SOURCE) return;
+    if (data.type === MESSAGE_TYPE.master) {
+      applyMaster(!!data.enabled);
+      return;
+    }
+    // Remember the theme even while suspended so a later master-on can re-boot
+    // with the right theme before the content script replays the settings.
+    if (data.type === MESSAGE_TYPE.theme) lastThemeId = data.themeId;
+    // While master is off the extension is suspended: drop all other settings
+    // so we never re-inject styles/attributes onto the torn-down page.
+    if (!masterEnabled) return;
     if (data.type === MESSAGE_TYPE.toggle) {
       applyToggle(!!data.enabled);
     } else if (data.type === MESSAGE_TYPE.theme) {
