@@ -50,6 +50,7 @@ export default defineUnlistedScript(() => {
   const DONE_ATTR = 'octoRecallDone'; // dataset key -> data-octo-recall-done
   const SYSCLASS_ATTR = 'octoRecallSysclass'; // marks that we removed the system class
   const STYLE_ID = 'octo-recall-style';
+  const IMG_BOX_CLASS = 'octo-recall-img-box'; // wrapper around recalled image
   const MAX_FIBER_DEPTH = 12;
   const MAX_FIBER_NODES = 800;
   const SCAN_DEBOUNCE_MS = 150;
@@ -100,21 +101,85 @@ export default defineUnlistedScript(() => {
     return null;
   }
 
+  type RecalledContent =
+    | { kind: 'text'; text: string }
+    | { kind: 'image'; url: string; width?: number; height?: number; alt?: string }
+    | { kind: 'file'; digest: string }
+    | { kind: 'other'; digest: string };
+
   /**
-   * Pull the original text out of a revoked MessageWrap. Text messages
-   * (contentType 1) expose `content.text`; for richer types we fall back to
-   * the SDK-provided `conversationDigest` (e.g. "[图片]"), avoiding per-type
-   * parsing. Returns null when nothing usable is present.
+   * Resolve a potentially-relative media path to an absolute URL, mirroring
+   * octo's `commonDataSource.getImageURL()`:
+   *   - http(s) URLs pass through
+   *   - file/preview/xxx → ${origin}/file/xxx (public MinIO)
+   *   - other paths → ${apiURL}${path} (authed API)
    */
-  function extractOriginal(mw: any): string | null {
+  function resolveMediaUrl(path: string): string {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    if (path.startsWith('file/preview/')) {
+      return `${window.location.origin}/${path.replace(/^file\/preview\//, 'file/')}`;
+    }
+    // Best-effort apiURL probe: octo stores it on WKApp, but fall back to a
+    // same-origin /api/v1 prefix which matches the default deployment.
+    const wk = (window as any).WKApp;
+    const apiURL =
+      (wk && wk.apiClient && wk.apiClient.config && wk.apiClient.config.apiURL) ||
+      '/api/v1/';
+    const base = apiURL.endsWith('/') ? apiURL : apiURL + '/';
+    return base + path.replace(/^\//, '');
+  }
+
+  /**
+   * Extract the original payload from a revoked MessageWrap. Returns a typed
+   * descriptor:
+   *   - text (contentType 1): content.text
+   *   - image (contentType 2): resolved URL + dimensions
+   *   - other rich types: conversationDigest for a human-readable fallback
+   * Returns null when nothing usable is present.
+   */
+  function extractOriginal(mw: any): RecalledContent | null {
     if (!mw || mw.revoke !== true) return null;
     const inner = mw.message;
     const content = inner && inner.content;
     if (!content) return null;
+
+    // Respect contentType when available (mirrors MessageContentTypeConst).
+    const ct: number | undefined =
+      inner.contentType ?? content.contentType ?? undefined;
+
+    // Image (type 2): url / remoteUrl / imgData — only treat as image when
+    // contentType is explicitly image (2), to avoid false-positives on other
+    // content types that may carry a `url` field (e.g. some card types).
+    const isImage =
+      ct === 2 ||
+      ct === 3; // gif also renders as an <img>
+    if (isImage) {
+      const raw =
+        content.url || content.remoteUrl || content.imgData || '';
+      if (raw && typeof raw === 'string') {
+        return {
+          kind: 'image',
+          url: resolveMediaUrl(raw),
+          width: typeof content.width === 'number' ? content.width : undefined,
+          height: typeof content.height === 'number' ? content.height : undefined,
+          alt: content.name || (ct === 3 ? 'GIF' : '图片'),
+        };
+      }
+    }
+
+    // Plain text
     const text = content.text;
-    if (typeof text === 'string' && text.length > 0) return text;
+    if (typeof text === 'string' && text.length > 0) {
+      return { kind: 'text', text };
+    }
+
+    // Fallback: SDK digest ("[图片]", "[文件]" etc.)
     const digest = content.conversationDigest;
-    if (typeof digest === 'string' && digest.length > 0) return digest;
+    if (typeof digest === 'string' && digest.length > 0) {
+      if (ct === 8) return { kind: 'file', digest };
+      return { kind: 'other', digest };
+    }
     return null;
   }
 
@@ -225,21 +290,44 @@ export default defineUnlistedScript(() => {
     const ts = clone.querySelector('.wk-msg-row-timestamp');
     if (ts && inner.timestamp) ts.textContent = formatTimestamp(inner.timestamp);
 
-    // Body -> plain original text (textContent, XSS-safe) inside a subtly
-    // grayed, bordered box so the recalled content reads as "recovered".
-    // We intentionally do not re-render markdown; a clean paragraph avoids
-    // any injection surface.
+    // Body — render based on recalled content kind.
     const body = clone.querySelector('.wk-msg-row-body');
     if (body) {
       body.textContent = '';
       const textContent = document.createElement('div');
       textContent.className = 'wk-msg-text-content';
-      const box = document.createElement('div');
-      box.className = `wk-markdown wk-markdown-recv ${BOX_CLASS}`;
-      const p = document.createElement('p');
-      p.textContent = original;
-      box.appendChild(p);
-      textContent.appendChild(box);
+
+      if (original.kind === 'image') {
+        // Render recalled image inside a soft bordered box, sized just like
+        // octo's own image bubbles (max 200px wide, rounded corners).
+        const box = document.createElement('div');
+        box.className = `${BOX_CLASS} ${IMG_BOX_CLASS}`;
+        const img = document.createElement('img');
+        img.src = original.url;
+        img.alt = original.alt || '图片';
+        img.loading = 'lazy';
+        img.style.cssText =
+          'display:block;max-width:200px;max-height:200px;border-radius:8px;object-fit:cover;';
+        if (original.width && original.height) {
+          // Preserve aspect ratio without forcing exact px (bubble caps at 200).
+          img.aspectRatio = `${original.width} / ${original.height}`;
+        }
+        box.appendChild(img);
+        textContent.appendChild(box);
+      } else {
+        // Text / file / other digest → plain paragraph in the gray recall box.
+        const box = document.createElement('div');
+        box.className = `wk-markdown wk-markdown-recv ${BOX_CLASS}`;
+        const p = document.createElement('p');
+        p.textContent =
+          original.kind === 'text'
+            ? original.text
+            : original.kind === 'file'
+              ? `📎 ${original.digest}`
+              : original.digest;
+        box.appendChild(p);
+        textContent.appendChild(box);
+      }
       body.appendChild(textContent);
     }
     // "已撤回" badge in the header (falls back to prepending to content).
@@ -360,6 +448,14 @@ export default defineUnlistedScript(() => {
         border-radius: 8px;
         background: rgba(0, 0, 0, 0.03);
         color: #646a73;
+      }
+      .${IMG_BOX_CLASS} {
+        padding: 4px;
+        line-height: 0;
+      }
+      .${IMG_BOX_CLASS} img {
+        /* match octo's bubble rounding and light hover feel without adding handlers */
+        cursor: default;
       }
       body[theme-mode='dark'] .${BADGE_CLASS} {
         background: rgba(250, 173, 20, 0.22);
