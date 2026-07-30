@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-07-30
+
 ### 新增
 
 - 桌面宠物支持 manifest 动作映射与状态机：静止、鼠标悬浮、左右拖动会切换不同动作，松开后恢复悬浮或静止状态。
@@ -87,7 +89,8 @@
 
 - 还原撤回消息时正确显示原发送者姓名和头像。
 
-[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/botshen/octo-help/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/botshen/octo-help/compare/v0.2.5...v0.2.7
 [0.2.3]: https://github.com/botshen/octo-help/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/botshen/octo-help/compare/v0.2.1...v0.2.2
