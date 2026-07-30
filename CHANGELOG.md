@@ -6,6 +6,17 @@
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-07-30
+
+### 新增
+
+- 新增「本地桌面宠物」：可在扩展弹窗导入 `.zip` / `.codex-pet.zip` 宠物包，在 Octo 页面右下角显示可拖拽、记忆位置的 spritesheet 帧动画宠物。
+- 宠物包解析全程在浏览器本地完成，校验 `pet.json`、spritesheet 路径、文件数量、大小和图片可解码状态；支持 WebP / PNG / JPG / GIF。
+
+### 优化
+
+- 扩展说明与权限描述补充本地桌面宠物能力，并增加 `unlimitedStorage` 以容纳本地宠物素材。
+
 ## [0.2.3] - 2026-07-10
 
 ### 新增
@@ -66,7 +77,8 @@
 
 - 还原撤回消息时正确显示原发送者姓名和头像。
 
-[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/botshen/octo-help/compare/v0.2.5...v0.2.7
 [0.2.3]: https://github.com/botshen/octo-help/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/botshen/octo-help/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/botshen/octo-help/compare/v0.2.0...v0.2.1
