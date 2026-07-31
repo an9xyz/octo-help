@@ -8,6 +8,7 @@ import {
   KICK_STYLE_STORAGE_KEY,
   MESSI_WATERMARK_STORAGE_KEY,
   PLAYER_WATERMARK_STORAGE_KEY,
+  QQ_SELF_LEFT_STORAGE_KEY,
   STORAGE_KEY,
   THEME_STORAGE_KEY,
   type PlayerWatermarkId,
@@ -38,6 +39,7 @@ function App() {
   const [kickStyle, setKick] = useState(DEFAULT_KICK_STYLE);
   const [playerWatermark, setPlayerWatermark] = useState<PlayerWatermarkId>('none');
   const [ballCursor, setBallCursor] = useState(true);
+  const [qqSelfLeft, setQqSelfLeft] = useState(false);
   const [desktopPet, setDesktopPet] = useState<StoredDesktopPet | null>(null);
   const [desktopPetEnabled, setDesktopPetEnabled] = useState(false);
   const [petBusy, setPetBusy] = useState(false);
@@ -56,6 +58,7 @@ function App() {
         PLAYER_WATERMARK_STORAGE_KEY,
         MESSI_WATERMARK_STORAGE_KEY,
         BALL_CURSOR_STORAGE_KEY,
+        QQ_SELF_LEFT_STORAGE_KEY,
         DESKTOP_PET_STORAGE_KEY,
         DESKTOP_PET_ENABLED_STORAGE_KEY,
       ])
@@ -75,6 +78,7 @@ function App() {
         }
         // Default ON (missing key => enabled).
         setBallCursor(res[BALL_CURSOR_STORAGE_KEY] !== false);
+        setQqSelfLeft(res[QQ_SELF_LEFT_STORAGE_KEY] === true);
         setDesktopPet(isStoredDesktopPet(res[DESKTOP_PET_STORAGE_KEY]) ? res[DESKTOP_PET_STORAGE_KEY] : null);
         setDesktopPetEnabled(res[DESKTOP_PET_ENABLED_STORAGE_KEY] === true);
       })
@@ -119,6 +123,12 @@ function App() {
     const next = !ballCursor;
     setBallCursor(next);
     await browser.storage.local.set({ [BALL_CURSOR_STORAGE_KEY]: next });
+  };
+
+  const toggleQqSelfLeft = async () => {
+    const next = !qqSelfLeft;
+    setQqSelfLeft(next);
+    await browser.storage.local.set({ [QQ_SELF_LEFT_STORAGE_KEY]: next });
   };
 
   const importDesktopPet = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -321,6 +331,28 @@ function App() {
       </section>
 
       <section className="group span-2">
+        {/* 该选项只影响 QQ 2014 皮肤 → 选中它时才展示，避免出现一个「点了没反应」的开关 */}
+        {themeId === 'qq2014' && (
+          <label className="row">
+            <div className="row-copy">
+              <span className="row-title">自己的消息靠左</span>
+              <span className="row-desc">
+                开启后自己发的消息不再翻到右侧，与其他人一样靠左显示（气泡样式保留，仍可按描边色区分）。
+              </span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={qqSelfLeft}
+              className={`switch${qqSelfLeft ? ' switch-on' : ''}`}
+              disabled={loading}
+              onClick={toggleQqSelfLeft}
+            >
+              <span className="switch-knob" />
+            </button>
+          </label>
+        )}
+
         <label className="row">
           <div className="row-copy">
             <span className="row-title">鼠标变足球</span>

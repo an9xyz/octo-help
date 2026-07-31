@@ -22,6 +22,13 @@ export type PlayerWatermarkId = 'none' | 'messi' | 'mbappe';
 /** storage.local key holding the "replace cursor with a football" on/off state. Default ON. */
 export const BALL_CURSOR_STORAGE_KEY = 'octoBallCursorEnabled';
 
+/**
+ * storage.local key for the QQ 2014 skin's "keep my own messages on the left"
+ * option. Default OFF (own messages sit on the right, like real QQ). Turning it
+ * on keeps octo-web's native all-left layout while still using the QQ bubbles.
+ */
+export const QQ_SELF_LEFT_STORAGE_KEY = 'octoQQSelfLeft';
+
 /** storage.local keys for the single imported desktop pet and its state. */
 export const DESKTOP_PET_STORAGE_KEY = 'octoDesktopPet';
 export const DESKTOP_PET_ENABLED_STORAGE_KEY = 'octoDesktopPetEnabled';
@@ -82,6 +89,7 @@ export const MESSAGE_TYPE = {
   kickStyle: 'kickStyle',
   playerWatermark: 'playerWatermark',
   ballCursor: 'ballCursor',
+  qqSelfLeft: 'qqSelfLeft',
   desktopPet: 'desktopPet',
   desktopPetPosition: 'desktopPetPosition',
 } as const;
@@ -128,6 +136,13 @@ export interface BallCursorMessage {
   enabled: boolean;
 }
 
+/** QQ 2014 skin: keep own messages left-aligned instead of flipping them right. */
+export interface QQSelfLeftMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.qqSelfLeft;
+  enabled: boolean;
+}
+
 /** Complete storage-backed pet state sent from the isolated content script. */
 export interface DesktopPetMessage {
   source: typeof MESSAGE_SOURCE;
@@ -151,5 +166,6 @@ export type OctoMessage =
   | KickStyleMessage
   | PlayerWatermarkMessage
   | BallCursorMessage
+  | QQSelfLeftMessage
   | DesktopPetMessage
   | DesktopPetPositionMessage;
