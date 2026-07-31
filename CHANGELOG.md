@@ -6,6 +6,41 @@
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-07-31
+
+### 新增
+
+- 新增 QQ 2012 经典与 QQ 2014 气泡两套消息区皮肤，并支持 QQ 2014「自己的消息靠左」开关。
+
+## [0.2.9] - 2026-07-30
+
+### 新增
+
+- 桌宠新增当前会话新消息短气泡，支持文本摘要和图片、视频、语音、文件等类型提示，并过滤自己发送、系统、撤回及重复消息。
+
+## [0.2.8] - 2026-07-30
+
+### 新增
+
+- 桌面宠物支持 manifest 动作映射与状态机：静止、鼠标悬浮、左右拖动会切换不同动作，松开后恢复悬浮或静止状态。
+- 兼容 Codex v1 `8 × 9` 与 v2 `8 × 11` atlas，并识别标准动作行、逐帧时长和 v2 方向帧。
+
+### 优化
+
+- 宠物包导入新增网格、动作帧、帧率/时长、循环配置和状态引用校验，同时保留旧版 `12 × 13` 第一行动画兼容逻辑。
+- 兼容早期制包示例中的 `sprite.{columns,rows,defaultFps}` 与 `states.{default,hover,dragging,dragLeft,dragRight}` 别名，冲突配置会在导入时拒绝。
+
+## [0.2.7] - 2026-07-30
+
+### 新增
+
+- 新增「本地桌面宠物」：可在扩展弹窗导入 `.zip` / `.codex-pet.zip` 宠物包，在 Octo 页面右下角显示可拖拽、记忆位置的 spritesheet 帧动画宠物。
+- 宠物包解析全程在浏览器本地完成，校验 `pet.json`、spritesheet 路径、文件数量、大小和图片可解码状态；支持 WebP / PNG / JPG / GIF。
+
+### 优化
+
+- 扩展说明与权限描述补充本地桌面宠物能力，并增加 `unlimitedStorage` 以容纳本地宠物素材。
+
 ## [0.2.3] - 2026-07-10
 
 ### 新增
@@ -66,7 +101,9 @@
 
 - 还原撤回消息时正确显示原发送者姓名和头像。
 
-[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/botshen/octo-help/compare/v0.2.7...v0.2.8
+[0.2.7]: https://github.com/botshen/octo-help/compare/v0.2.5...v0.2.7
 [0.2.3]: https://github.com/botshen/octo-help/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/botshen/octo-help/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/botshen/octo-help/compare/v0.2.0...v0.2.1

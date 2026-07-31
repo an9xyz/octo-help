@@ -27,6 +27,62 @@ export type PlayerWatermarkId = 'none' | 'messi' | 'mbappe';
 /** storage.local key holding the "replace cursor with a football" on/off state. Default ON. */
 export const BALL_CURSOR_STORAGE_KEY = 'octoBallCursorEnabled';
 
+/**
+ * storage.local key for the QQ 2014 skin's "keep my own messages on the left"
+ * option. Default OFF (own messages sit on the right, like real QQ). Turning it
+ * on keeps octo-web's native all-left layout while still using the QQ bubbles.
+ */
+export const QQ_SELF_LEFT_STORAGE_KEY = 'octoQQSelfLeft';
+
+/** storage.local keys for the single imported desktop pet and its state. */
+export const DESKTOP_PET_STORAGE_KEY = 'octoDesktopPet';
+export const DESKTOP_PET_ENABLED_STORAGE_KEY = 'octoDesktopPetEnabled';
+export const DESKTOP_PET_POSITION_STORAGE_KEY = 'octoDesktopPetPosition';
+
+export interface DesktopPetAnimationManifest {
+  row: number;
+  /** A frame count starting at column 0, or an explicit list of column indexes. */
+  frames: number | number[];
+  fps?: number;
+  frameDurationMs?: number;
+  /** Optional per-frame timings for Codex-compatible and other variable-speed loops. */
+  frameDurationsMs?: number[];
+  loop?: boolean;
+}
+
+export interface DesktopPetStateAnimations {
+  idle?: string;
+  hover?: string;
+  drag?: string;
+  dragLeft?: string;
+  dragRight?: string;
+}
+
+export interface DesktopPetManifest {
+  id: string;
+  displayName: string;
+  description?: string;
+  spritesheetPath: string;
+  /** Codex v1/v2 atlas contract. Omitted Codex v1 packages are detected by dimensions. */
+  spriteVersionNumber?: 1 | 2;
+  columns?: number;
+  rows?: number;
+  frameDurationMs?: number;
+  animations?: Record<string, DesktopPetAnimationManifest>;
+  stateAnimations?: DesktopPetStateAnimations;
+}
+
+export interface StoredDesktopPet {
+  manifest: DesktopPetManifest;
+  spritesheetDataUrl: string;
+  importedAt: number;
+}
+
+export interface DesktopPetPosition {
+  x: number;
+  y: number;
+}
+
 /** window.postMessage envelope source, so we ignore unrelated messages. */
 export const MESSAGE_SOURCE = 'octo-recall';
 
@@ -39,6 +95,9 @@ export const MESSAGE_TYPE = {
   kickStyle: 'kickStyle',
   playerWatermark: 'playerWatermark',
   ballCursor: 'ballCursor',
+  qqSelfLeft: 'qqSelfLeft',
+  desktopPet: 'desktopPet',
+  desktopPetPosition: 'desktopPetPosition',
 } as const;
 
 export interface MasterMessage {
@@ -89,6 +148,29 @@ export interface BallCursorMessage {
   enabled: boolean;
 }
 
+/** QQ 2014 skin: keep own messages left-aligned instead of flipping them right. */
+export interface QQSelfLeftMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.qqSelfLeft;
+  enabled: boolean;
+}
+
+/** Complete storage-backed pet state sent from the isolated content script. */
+export interface DesktopPetMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.desktopPet;
+  enabled: boolean;
+  pet: StoredDesktopPet | null;
+  position: DesktopPetPosition | null;
+}
+
+/** Drag result sent from the MAIN world back to the content script for storage. */
+export interface DesktopPetPositionMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.desktopPetPosition;
+  position: DesktopPetPosition;
+}
+
 export type OctoMessage =
   | MasterMessage
   | ToggleMessage
@@ -96,4 +178,7 @@ export type OctoMessage =
   | GlobalThemeMessage
   | KickStyleMessage
   | PlayerWatermarkMessage
-  | BallCursorMessage;
+  | BallCursorMessage
+  | QQSelfLeftMessage
+  | DesktopPetMessage
+  | DesktopPetPositionMessage;
