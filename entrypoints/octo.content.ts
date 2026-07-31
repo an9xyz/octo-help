@@ -9,6 +9,7 @@ import {
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
   PLAYER_WATERMARK_STORAGE_KEY,
+  QQ_SELF_LEFT_STORAGE_KEY,
   STORAGE_KEY,
   THEME_STORAGE_KEY,
   type BallCursorMessage,
@@ -19,6 +20,7 @@ import {
   type KickStyleMessage,
   type PlayerWatermarkId,
   type PlayerWatermarkMessage,
+  type QQSelfLeftMessage,
   type ThemeMessage,
   type ToggleMessage,
 } from '@/utils/octoRecall';
@@ -76,6 +78,13 @@ export default defineContentScript({
       );
     }
 
+    function postQQSelfLeft(enabled: boolean) {
+      window.postMessage(
+        { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.qqSelfLeft, enabled } satisfies QQSelfLeftMessage,
+        '*',
+      );
+    }
+
     function postPlayerWatermark(playerId: PlayerWatermarkId) {
       const imageUrl =
         playerId === 'none' ? '' : browser.runtime.getURL(`/${playerId}-watermark.png`);
@@ -128,6 +137,7 @@ export default defineContentScript({
       PLAYER_WATERMARK_STORAGE_KEY,
       MESSI_WATERMARK_STORAGE_KEY,
       BALL_CURSOR_STORAGE_KEY,
+      QQ_SELF_LEFT_STORAGE_KEY,
       DESKTOP_PET_STORAGE_KEY,
       DESKTOP_PET_ENABLED_STORAGE_KEY,
       DESKTOP_PET_POSITION_STORAGE_KEY,
@@ -154,6 +164,8 @@ export default defineContentScript({
           : 'none';
     // Default ON so existing users keep the football cursor.
     const initialBallCursor = stored[BALL_CURSOR_STORAGE_KEY] !== false;
+    // Default OFF: own messages sit on the right, like real QQ.
+    const initialQQSelfLeft = stored[QQ_SELF_LEFT_STORAGE_KEY] === true;
     let desktopPet = isStoredDesktopPet(stored[DESKTOP_PET_STORAGE_KEY])
       ? stored[DESKTOP_PET_STORAGE_KEY]
       : null;
@@ -168,6 +180,7 @@ export default defineContentScript({
       postTheme(initialTheme);
       postPlayerWatermark(initialPlayerWatermark);
       postBallCursor(initialBallCursor);
+      postQQSelfLeft(initialQQSelfLeft);
       postToggle(initialEnabled);
       postDesktopPet(desktopPet, desktopPetEnabled, desktopPetPosition);
     };
@@ -196,6 +209,9 @@ export default defineContentScript({
       }
       if (BALL_CURSOR_STORAGE_KEY in changes) {
         postBallCursor(changes[BALL_CURSOR_STORAGE_KEY].newValue !== false);
+      }
+      if (QQ_SELF_LEFT_STORAGE_KEY in changes) {
+        postQQSelfLeft(changes[QQ_SELF_LEFT_STORAGE_KEY].newValue === true);
       }
       if (DESKTOP_PET_STORAGE_KEY in changes) {
         const next = changes[DESKTOP_PET_STORAGE_KEY].newValue;

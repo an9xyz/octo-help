@@ -10,6 +10,7 @@ import {
   setGlobalTheme,
   setKickStyle,
   setPlayerWatermark,
+  setQQSelfLeft,
   setTheme,
 } from '@/utils/octoBeautify';
 import { applyDesktopPetState } from '@/utils/octoPetRenderer';
@@ -486,6 +487,8 @@ export default defineUnlistedScript(() => {
       );
     } else if (data.type === MESSAGE_TYPE.ballCursor) {
       setBallCursor(!!data.enabled);
+    } else if (data.type === MESSAGE_TYPE.qqSelfLeft) {
+      setQQSelfLeft(!!data.enabled);
     } else if (data.type === MESSAGE_TYPE.desktopPet) {
       applyDesktopPetState(data);
     }

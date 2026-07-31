@@ -37,6 +37,8 @@ export const THEMES: ThemeDef[] = [
   { id: "cyber-light", label: "赛博紫 · 亮", icon: "☀️", base: "light", skin: "" },
   { id: "cyber-dark", label: "赛博紫 · 暗", icon: "\u{1F319}", base: "dark", skin: "" },
   { id: "worldcup", label: "美加墨世界杯", icon: "\u{1F3C6}", base: "light", skin: "worldcup" },
+  { id: "qq2012", label: "QQ 2012 经典", icon: "\u{1F427}", base: "light", skin: "qq2012" },
+  { id: "qq2014", label: "QQ 2014 气泡", icon: "\u{1F4AC}", base: "light", skin: "qq2014" },
 ];
 export const DEFAULT_THEME = "cyber-light";
 
@@ -2868,6 +2870,469 @@ const BEAUTIFY_CSS = `            :root {
             }
             body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-list-item-subtitle {
                 color: var(--octo-global-muted) !important;
+            }
+
+            /* ========================================================
+             * QQ 2012 经典皮肤（body[data-octo-skin="qq2012"]）
+             * 依据 QQ2009/QQ2012 群聊窗口截图复刻消息区：
+             *   · 白底「纸面」，没有气泡、没有逐条头像
+             *   · 自己和对方一律左对齐（右对齐是后来移动端才有的）
+             *   · 每条两行：「昵称 时间」+ 正文
+             *   · 身份靠颜色：自己=绿昵称/蓝正文，对方=蓝昵称/黑正文
+             *   · 宋体小字号、行距紧凑
+             * bot 是 Octo 才有的概念（老 QQ 没有）→ 单给一档橙色。
+             * base(赛博)用 :has / 三重 :not 的高优先级选择器，故此处一律用
+             * 相同选择器 + body[data-octo-skin="qq2012"] 前缀压过，杜绝混入。
+             * ====================================================== */
+            body[data-octo-skin="qq2012"] {
+                --qq-paper: #ffffff;
+                --qq-self-name: #2f9e2f;   /* 自己：绿昵称 */
+                --qq-other-name: #0a5fbf;  /* 对方：蓝昵称 */
+                --qq-bot-name: #cc6600;    /* bot：橙昵称（老 QQ 无此角色，自定义一档）*/
+                --qq-self-text: #1414c8;   /* 自己正文：蓝 */
+                --qq-other-text: #000000;  /* 对方正文：黑 */
+                --qq-hover: #f2f7fd;
+                /* 宋体优先(Windows 还原度)，但 macOS 上宋体渲染细弱发虚 → 先落到黑体系，
+                 * 保证可读性；Windows 命中「宋体」仍是原汁原味。 */
+                --qq-font: "宋体", SimSun, "Microsoft YaHei", "PingFang SC", -apple-system, sans-serif;
+                --qq-size: 14px;           /* 原版 12px；Web 全宽下 14px 更耐读 */
+                --qq-measure: 78ch;        /* 正文行宽上限：老 QQ 窗口窄，Web 全宽必须限宽 */
+            }
+            /* 会话区 → 白纸 */
+            body[data-octo-skin="qq2012"] .wk-conversation-content,
+            body[data-octo-skin="qq2012"] .wk-conversation-messages {
+                background: var(--qq-paper) !important;
+            }
+
+            /* ---- 清掉赛博 HUD 取景角标 ---- */
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-markdown::before,
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-markdown::after,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text::before,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text::after {
+                display: none !important;
+                content: none !important;
+                opacity: 0 !important;
+            }
+
+            /* ---- 逐条头像：2012 群聊消息流里没有 → 隐藏 ---- */
+            body[data-octo-skin="qq2012"] .wk-msg-row-avatar,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-ava {
+                display: none !important;
+            }
+
+            /* ---- 消息行：块级、紧凑、全部左对齐（含自己，压掉 base 的 flex/margin）---- */
+            body[data-octo-skin="qq2012"] .wk-msg-row,
+            body[data-octo-skin="qq2012"] .wk-msg-row--send:not(:has(.ai-badge)),
+            body[data-octo-skin="qq2012"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]),
+            body[data-octo-skin="qq2012"] .wk-fold-msg {
+                display: block !important;
+                margin: 0 !important;
+                padding: 3px 14px !important;
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row:hover,
+            body[data-octo-skin="qq2012"] .wk-fold-msg:hover {
+                background: var(--qq-hover) !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row-content,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-body {
+                display: block !important;
+                max-width: none !important;
+                min-width: 0 !important;
+                gap: 0 !important;
+            }
+
+            /* ---- 头部行：「昵称 时间」同行、同色、小字 ----
+             * 用 inline-flex + gap 排版：原来的 display:block 会让认证徽章/AI 徽章
+             * 与时间粘成「沈鑫 ✓昨天 22:51」，靠 gap 拉开。 */
+            body[data-octo-skin="qq2012"] .wk-msg-row-header,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-head {
+                display: flex !important;
+                align-items: center !important;
+                flex-wrap: wrap !important;
+                gap: 6px !important;
+                height: auto !important;
+                min-height: 0 !important;
+                line-height: 1.75 !important;
+                margin: 0 !important;
+                font-family: var(--qq-font) !important;
+                font-size: var(--qq-size) !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row-sender,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-name {
+                display: inline-block !important;
+                background: none !important;
+                animation: none !important;
+                font-family: var(--qq-font) !important;
+                font-size: var(--qq-size) !important;
+                font-weight: 400 !important;
+                margin: 0 !important;         /* 间距交给 header 的 gap，避免叠加 */
+                padding: 0 !important;
+                height: auto !important;
+                border-radius: 0 !important;
+            }
+            /* 时间戳跟随各自身份色（老 QQ 里昵称和时间同色）*/
+            body[data-octo-skin="qq2012"] .wk-msg-row-timestamp,
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .wk-msg-row-timestamp,
+            body[data-octo-skin="qq2012"] .wk-msg-row--continue[data-ai-continue="true"] .wk-msg-row-timestamp,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-time {
+                font-family: var(--qq-font) !important;
+                font-size: var(--qq-size) !important;
+                margin: 0 !important;
+                color: inherit !important;
+            }
+            /* 对方：蓝昵称 */
+            body[data-octo-skin="qq2012"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-msg-row-header {
+                color: var(--qq-other-name) !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-msg-row-sender {
+                -webkit-text-fill-color: var(--qq-other-name) !important;
+                color: var(--qq-other-name) !important;
+            }
+            /* 自己：绿昵称 */
+            body[data-octo-skin="qq2012"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-header {
+                color: var(--qq-self-name) !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-sender {
+                -webkit-text-fill-color: var(--qq-self-name) !important;
+                color: var(--qq-self-name) !important;
+            }
+            /* bot：橙昵称（含 AI 连续、折叠 AI）*/
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .wk-msg-row-header,
+            body[data-octo-skin="qq2012"] .wk-msg-row--continue[data-ai-continue="true"] .wk-msg-row-header,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-head {
+                color: var(--qq-bot-name) !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .wk-msg-row-sender,
+            body[data-octo-skin="qq2012"] .wk-msg-row--continue[data-ai-continue="true"] .wk-msg-row-sender,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-name {
+                -webkit-text-fill-color: var(--qq-bot-name) !important;
+                color: var(--qq-bot-name) !important;
+            }
+            /* AI 徽章 → 极简橙色小方牌（老 QQ 没有 bot，保留以便一眼认出）*/
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .ai-badge,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-name::after {
+                background: var(--qq-bot-name) !important;
+                color: #fff !important;
+                -webkit-text-fill-color: #fff !important;
+                border-radius: 2px !important;
+                padding: 0 4px !important;
+                margin-left: 4px !important;
+                font-size: 10px !important;
+                font-weight: 400 !important;
+                letter-spacing: 0 !important;
+                box-shadow: none !important;
+                animation: none !important;
+            }
+
+            /* ---- 正文：彻底去气泡（背景/描边/圆角/阴影/切角/定宽全清）---- */
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .wk-markdown,
+            body[data-octo-skin="qq2012"] .wk-msg-row--continue[data-ai-continue="true"] .wk-markdown,
+            body[data-octo-skin="qq2012"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown,
+            body[data-octo-skin="qq2012"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text {
+                display: block !important;
+                background: transparent !important;
+                border: none !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                filter: none !important;
+                clip-path: none !important;
+                width: auto !important;
+                /* 老 QQ 聊天窗很窄，天然不会出现超长行；Web 全宽下必须限行宽，
+                 * 否则一句话横跨整屏，眼睛回扫困难。 */
+                max-width: var(--qq-measure) !important;
+                margin: 0 !important;
+                padding: 0 0 0 4px !important;
+                font-family: var(--qq-font) !important;
+                font-size: var(--qq-size) !important;
+                line-height: 1.8 !important;
+                transition: none !important;
+            }
+            /* hover 不做位移/发光（老 UI 没有），只留整行淡蓝底 */
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-markdown:hover,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text:hover {
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+                filter: none !important;
+                transform: none !important;
+            }
+            /* 正文配色：对方/bot 黑字，自己蓝字 */
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .wk-markdown,
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .wk-markdown p,
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .wk-markdown li,
+            body[data-octo-skin="qq2012"] .wk-msg-row:has(.ai-badge) .wk-markdown strong,
+            body[data-octo-skin="qq2012"] .wk-msg-row--continue[data-ai-continue="true"] .wk-markdown,
+            body[data-octo-skin="qq2012"] .wk-msg-row--continue[data-ai-continue="true"] .wk-markdown p,
+            body[data-octo-skin="qq2012"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown,
+            body[data-octo-skin="qq2012"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown p,
+            body[data-octo-skin="qq2012"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown li,
+            body[data-octo-skin="qq2012"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown strong,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text p {
+                color: var(--qq-other-text) !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown,
+            body[data-octo-skin="qq2012"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown p,
+            body[data-octo-skin="qq2012"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown li,
+            body[data-octo-skin="qq2012"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown strong {
+                color: var(--qq-self-text) !important;
+            }
+            /* 链接：老式蓝色下划线 */
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-markdown a,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text a {
+                color: #0a5fbf !important;
+                text-decoration: underline !important;
+            }
+            /* 行内 code：朴素灰底细边 */
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-markdown code,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text code {
+                background: #f4f4f4 !important;
+                color: #333333 !important;
+                border: 1px solid #dcdcdc !important;
+                border-radius: 2px !important;
+            }
+
+            /* ---- @提及：去赛博紫 chip，改老式蓝字（不做背景块）---- */
+            body[data-octo-skin="qq2012"] .wk-msg-row .mention-entity,
+            body[data-octo-skin="qq2012"] .wk-msg-row .mention-highlight,
+            body[data-octo-skin="qq2012"] .wk-msg-row .mention-fallback,
+            body[data-octo-skin="qq2012"] .wk-fold-msg-text .mention-entity {
+                background: transparent !important;
+                color: #0a5fbf !important;
+                border-radius: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* ---- 引用块：缩进 + 灰左条的朴素样式 ---- */
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-reply-block,
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-message-text-reply {
+                background: #fafafa !important;
+                border-left: 2px solid #c8c8c8 !important;
+                border-radius: 0 !important;
+                padding: 2px 8px !important;
+                margin: 2px 0 !important;
+                font-family: var(--qq-font) !important;
+                font-size: 12px !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-reply-block:hover,
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-message-text-reply:hover {
+                background: #f2f2f2 !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-reply-block__name,
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-message-text-reply-authorname {
+                color: #0a5fbf !important;
+            }
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-reply-block__digest,
+            body[data-octo-skin="qq2012"] .wk-msg-row .wk-message-text-reply-content {
+                color: #808080 !important;
+            }
+
+            /* ========================================================
+             * QQ 2014 气泡皮肤（body[data-octo-skin="qq2014"]）—— 对标 QQ5.x
+             * 依据 QQ5.5(2014) 群聊窗口截图复刻：
+             *   · 白底会话区，气泡是「白底 + 1px 淡色描边 + 小圆角」，没有实色填充、没有阴影
+             *   · 自己靠右(头像在右)，对方靠左；方形小圆角头像
+             *   · 身份靠描边色 + 左右位置区分：自己=淡蓝边，对方=淡灰边，bot=淡橙边
+             *   · 时间戳弱化成灰色小字（原版是整组居中，DOM 限制这里跟在昵称后）
+             * base(赛博)选择器优先级高，故一律「同选择器 + 皮肤前缀」压过。
+             * ====================================================== */
+            body[data-octo-skin="qq2014"] {
+                --q14-paper: #ffffff;
+                --q14-bubble: #ffffff;
+                --q14-self-border: #a9d5ef;   /* 自己：淡蓝描边 */
+                --q14-other-border: #d9d9d9;  /* 对方：淡灰描边 */
+                --q14-bot-border: #f0c48a;    /* bot：淡橙描边 */
+                --q14-self-name: #2f9e2f;
+                --q14-other-name: #0a5fbf;
+                --q14-bot-name: #cc6600;
+                --q14-ink: #1a1a1a;
+                --q14-time: #999999;
+                --q14-radius: 5px;
+                /* 气泡宽度上限：必须用绝对/视口单位。若写成百分比，父容器宽度本身是
+                 * shrink-to-fit（由内容决定）→ 百分比循环依赖 → 浏览器按 min-content 解析，
+                 * 短消息会被挤成一行两字。 */
+                --q14-bubble-max: min(620px, 62vw);
+            }
+            /* 会话区 → 白底 */
+            body[data-octo-skin="qq2014"] .wk-conversation-content,
+            body[data-octo-skin="qq2014"] .wk-conversation-messages {
+                background: var(--q14-paper) !important;
+            }
+            /* 清掉赛博 HUD 取景角标 */
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-markdown::before,
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-markdown::after,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-text::before,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-text::after {
+                display: none !important;
+                content: none !important;
+                opacity: 0 !important;
+            }
+            /* 方形小圆角头像（2014 是方的）*/
+            body[data-octo-skin="qq2014"] .wk-msg-row:has(.ai-badge) .wk-msg-avatar,
+            body[data-octo-skin="qq2014"] .wk-msg-row:has(.ai-badge) .wk-msg-avatar-img,
+            body[data-octo-skin="qq2014"] .wk-msg-avatar,
+            body[data-octo-skin="qq2014"] .wk-msg-avatar-img,
+            body[data-octo-skin="qq2014"] .wk-msg-row-avatar,
+            body[data-octo-skin="qq2014"] .wk-msg-row-avatar img,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-ava,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-ava img {
+                border-radius: 3px !important;
+            }
+
+            /* ---- 自己的消息整行翻到右侧（QQ 气泡期的核心手感）----
+             * 可选关闭：弹窗里勾「自己的消息也靠左」→ body[data-octo-qq-self-left]，
+             * 整段右对齐规则失效，回到 octo-web 原生的全左布局（气泡样式保留）。 */
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) {
+                display: flex !important;
+                flex-direction: row-reverse !important;
+            }
+            /* 注意：不能用 align-items:flex-end 做右对齐 —— 那会把气泡的交叉轴尺寸压成
+             * min-content，中文会被挤成一列一字（「懂了」竖排），带引用的消息正文更是被压到
+             * 几乎零宽而看不见。正确做法：容器保持 stretch，靠 margin-left:auto 把
+             * fit-content 宽度的气泡推到右侧。 */
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-content {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-header {
+                flex-direction: row-reverse !important;
+            }
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown,
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-reply-block,
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-message-text-reply {
+                width: -moz-fit-content !important;
+                width: fit-content !important;
+                max-width: 100% !important;
+                margin-left: auto !important;
+                margin-right: 0 !important;
+            }
+
+            /* ---- 昵称/时间：小字，昵称按身份上色，时间统一灰 ---- */
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-msg-row-sender,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-name {
+                background: none !important;
+                animation: none !important;
+                font-size: 12px !important;
+                font-weight: 400 !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-msg-row-sender {
+                -webkit-text-fill-color: var(--q14-other-name) !important;
+                color: var(--q14-other-name) !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-sender {
+                -webkit-text-fill-color: var(--q14-self-name) !important;
+                color: var(--q14-self-name) !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row:has(.ai-badge) .wk-msg-row-sender,
+            body[data-octo-skin="qq2014"] .wk-msg-row--continue[data-ai-continue="true"] .wk-msg-row-sender,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-name {
+                -webkit-text-fill-color: var(--q14-bot-name) !important;
+                color: var(--q14-bot-name) !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-msg-row-timestamp,
+            body[data-octo-skin="qq2014"] .wk-msg-row:has(.ai-badge) .wk-msg-row-timestamp,
+            body[data-octo-skin="qq2014"] .wk-msg-row--continue[data-ai-continue="true"] .wk-msg-row-timestamp,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-time {
+                color: var(--q14-time) !important;
+                font-size: 11px !important;
+            }
+            /* AI 徽章 → 淡橙描边小方牌，呼应 bot 气泡边 */
+            body[data-octo-skin="qq2014"] .wk-msg-row:has(.ai-badge) .ai-badge,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-name::after {
+                background: #fff6ea !important;
+                color: var(--q14-bot-name) !important;
+                -webkit-text-fill-color: var(--q14-bot-name) !important;
+                border: 1px solid var(--q14-bot-border) !important;
+                border-radius: 2px !important;
+                box-shadow: none !important;
+                animation: none !important;
+                font-size: 10px !important;
+            }
+
+            /* ---- 气泡：白底 + 1px 描边 + 小圆角，无阴影无渐变 ---- */
+            body[data-octo-skin="qq2014"] .wk-msg-row:has(.ai-badge) .wk-markdown,
+            body[data-octo-skin="qq2014"] .wk-msg-row--continue[data-ai-continue="true"] .wk-markdown,
+            body[data-octo-skin="qq2014"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown,
+            body[data-octo-skin="qq2014"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-text {
+                background: var(--q14-bubble) !important;
+                color: var(--q14-ink) !important;
+                border: 1px solid var(--q14-other-border) !important;
+                border-radius: var(--q14-radius) !important;
+                clip-path: none !important;
+                filter: none !important;
+                box-shadow: none !important;
+                padding: 8px 12px !important;
+                /* QQ 气泡不会横跨整屏：在 base 的 min(80%,820px) 之上再收一档 */
+                max-width: var(--q14-bubble-max) !important;
+                transition: border-color .12s linear !important;
+            }
+            /* 描边按身份：只有「自己」用淡蓝，对方/bot 一律淡灰。
+             * bot 不再描橙边 —— Octo 里 AI 消息占比很高，满屏橙框太吵，
+             * bot 身份交给橙昵称 + AI 徽章表达就够了。 */
+            body[data-octo-skin="qq2014"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown {
+                border-color: var(--q14-self-border) !important;
+            }
+            /* 正文一律深灰黑（2014 起气泡内不再按人分字色）*/
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-markdown p,
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-markdown li,
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-markdown strong,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-text p {
+                color: var(--q14-ink) !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-markdown a,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-text a {
+                color: #0a5fbf !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-markdown code,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-text code {
+                background: #f6f6f6 !important;
+                color: #333333 !important;
+                border: 1px solid #e2e2e2 !important;
+                border-radius: 2px !important;
+            }
+            /* hover：只把描边压深，不位移不发光 */
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-markdown:hover,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-text:hover {
+                transform: none !important;
+                filter: none !important;
+                box-shadow: none !important;
+                background: var(--q14-bubble) !important;
+                border-color: #8fc3e6 !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row:hover .wk-msg-row-timestamp-hover {
+                opacity: 1 !important;
+            }
+            /* @提及：老式蓝字，不做紫 chip */
+            body[data-octo-skin="qq2014"] .wk-msg-row .mention-entity,
+            body[data-octo-skin="qq2014"] .wk-msg-row .mention-highlight,
+            body[data-octo-skin="qq2014"] .wk-msg-row .mention-fallback,
+            body[data-octo-skin="qq2014"] .wk-fold-msg-text .mention-entity {
+                background: transparent !important;
+                color: #0a5fbf !important;
+                border-radius: 0 !important;
+                padding: 0 !important;
+            }
+            /* 引用块：朴素灰块 */
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-reply-block,
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-message-text-reply {
+                background: #fafafa !important;
+                border-left: 2px solid #c8c8c8 !important;
+                border-radius: 2px !important;
+                padding: 3px 9px !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-reply-block:hover,
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-message-text-reply:hover {
+                background: #f2f2f2 !important;
+            }
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-reply-block__name,
+            body[data-octo-skin="qq2014"] .wk-msg-row .wk-message-text-reply-authorname {
+                color: #0a5fbf !important;
             }`;
 
 // ---- style injection ----------------------------------------------------
@@ -2947,6 +3412,24 @@ export function setTheme(id: string): void {
 export function setGlobalTheme(id: string): void {
   currentGlobalThemeId = globalThemeById(id).id;
   reflectGlobalTheme(currentGlobalThemeId);
+}
+
+/**
+ * QQ 2014 skin option: keep own messages on the left (octo-web's native layout)
+ * instead of flipping them to the right. Reflected as a <body> attribute the
+ * skin CSS opts out on; harmless for every other theme.
+ */
+let qqSelfLeft = false;
+function reflectQQSelfLeft(): void {
+  const body = document.body;
+  if (!body) return;
+  if (qqSelfLeft) body.setAttribute('data-octo-qq-self-left', 'true');
+  else body.removeAttribute('data-octo-qq-self-left');
+}
+
+export function setQQSelfLeft(enabled: boolean): void {
+  qqSelfLeft = enabled;
+  reflectQQSelfLeft();
 }
 
 function extensionAssetUrl(value: string, expectedPath: string): URL | null {
@@ -3468,6 +3951,7 @@ export function initBeautify(initialThemeId: string): void {
     setTheme(currentThemeId);
     setGlobalTheme(currentGlobalThemeId);
     setKickStyle(currentKickStyle); // reflect default kick style onto <body> for bg CSS
+    reflectQQSelfLeft(); // re-apply if the option arrived before <body> existed
     watchThemeAttr();
     bindClicks();
     bodyObserver = new MutationObserver(onBodyMutations);
