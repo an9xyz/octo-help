@@ -38,6 +38,13 @@ export const QQ_SELF_LEFT_STORAGE_KEY = 'octoQQSelfLeft';
 export const DESKTOP_PET_STORAGE_KEY = 'octoDesktopPet';
 export const DESKTOP_PET_ENABLED_STORAGE_KEY = 'octoDesktopPetEnabled';
 export const DESKTOP_PET_POSITION_STORAGE_KEY = 'octoDesktopPetPosition';
+export const DESKTOP_PET_PLACEMENT_STORAGE_KEY = 'octoDesktopPetPlacement';
+export type DesktopPetPlacement = 'desktop' | 'composer';
+export const BUILT_IN_COMPANION_STORAGE_KEY = 'octoBuiltInCompanion';
+export type BuiltInCompanionId = 'ant' | 'snail' | 'wizard' | 'zombie';
+
+/** Comfortable three-line composer layout. Missing means enabled. */
+export const COMPOSER_ENHANCEMENT_STORAGE_KEY = 'octoComposerEnhancementEnabled';
 
 export interface DesktopPetAnimationManifest {
   row: number;
@@ -96,6 +103,7 @@ export const MESSAGE_TYPE = {
   playerWatermark: 'playerWatermark',
   ballCursor: 'ballCursor',
   qqSelfLeft: 'qqSelfLeft',
+  composerEnhancement: 'composerEnhancement',
   desktopPet: 'desktopPet',
   desktopPetPosition: 'desktopPetPosition',
 } as const;
@@ -162,6 +170,14 @@ export interface DesktopPetMessage {
   enabled: boolean;
   pet: StoredDesktopPet | null;
   position: DesktopPetPosition | null;
+  placement: DesktopPetPlacement;
+  builtInCompanion: BuiltInCompanionId | null;
+}
+
+export interface ComposerEnhancementMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.composerEnhancement;
+  enabled: boolean;
 }
 
 /** Drag result sent from the MAIN world back to the content script for storage. */
@@ -180,5 +196,6 @@ export type OctoMessage =
   | PlayerWatermarkMessage
   | BallCursorMessage
   | QQSelfLeftMessage
+  | ComposerEnhancementMessage
   | DesktopPetMessage
   | DesktopPetPositionMessage;

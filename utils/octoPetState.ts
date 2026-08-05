@@ -1,8 +1,20 @@
 import type {
+  BuiltInCompanionId,
   DesktopPetPosition,
   StoredDesktopPet,
 } from './octoRecall';
 import { parseDesktopPetManifest } from './octoPetManifest';
+
+const BUILT_IN_COMPANION_IDS = new Set<BuiltInCompanionId>([
+  'ant',
+  'snail',
+  'wizard',
+  'zombie',
+]);
+
+export function isBuiltInCompanionId(value: unknown): value is BuiltInCompanionId {
+  return typeof value === 'string' && BUILT_IN_COMPANION_IDS.has(value as BuiltInCompanionId);
+}
 
 export function isStoredDesktopPet(value: unknown): value is StoredDesktopPet {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;

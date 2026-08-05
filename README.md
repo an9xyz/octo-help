@@ -6,7 +6,9 @@
 - **消息美化 + 换肤** —— 三档气泡配色（AI / 自己 / 他人）、折叠会话自动展开、长消息限高「展开全文」、暗色适配，以及可切换的消息主题。
 - **Bot 资料卡「全息卡牌」+ 开卡抽卡** —— 把 Bot 资料卡改成 synthwave 落日 banner + 悬浮圆头像 + 信息合并大框 + 创建者置底署名，随鼠标 3D 倾斜；每次打开还会随机抽一个稀有度（宝可梦式档位 N/R/SR/SSR/UR，越稀越少），据此渲染金箔全息卡框、稀有度角标与高档辉光脉动，SR 及以上播放全屏揭晓特效。
 - **全站主题 + 世界杯特效** —— 可切换导航、会话和输入区配色，提供足球射门动画与梅西、姆巴佩水印。
-- **本地桌面宠物** —— 导入 `.zip` / `.codex-pet.zip` 宠物包，在 Octo 页面按静止、悬浮、左右拖动切换 spritesheet 动作，并记忆位置。
+- **输入框宠物** —— 内置蚂蚁、蜗牛、巫师和僵尸四种巡游宠物，输入或收到新消息时在输入框上沿活动；也可导入 `.zip` / `.codex-pet.zip` 自定义宠物。
+- **舒适输入框** —— 默认提供三行编辑空间，将工具栏移到右下角，同时保留 Octo 原生的附件、快捷键和全屏展开能力。
+- **GitHub 快捷入口** —— 自动识别消息中的仓库、Issue、PR、Commit、Action、Release 和文件链接，在消息旁提供准确跳转；PR/Issue 编号后即使直接粘着文字也不会把文字带进 URL。
 - **新消息气泡** —— 桌宠启用时，当前页面收到他人的新消息会显示 5 秒短气泡；内容只在本地内存中处理，不持久化。
 
 所有功能都在浏览器本地处理，不改动 Octo 源码，也不会上传宠物包。
@@ -14,11 +16,12 @@
 ## 原理
 
 - **撤回还原**：Octo 撤回消息时并不删除原文——后端同步时 `revoke=1` 与原始 payload 一起下发，原文保留在页面 React 内存的 `message.content` 上，前端只是把整行渲染成系统提示。插件注入页面 **MAIN world**，从撤回行的 React Fiber 反查出 `message`，克隆一条正常消息行、填入原文并标注「已撤回」。全程只读 props，不改 React 状态、不 patch 原型，可逆。
-- **换肤**：主题模型 `base`→`body[theme-mode]`（亮/暗，联动 app 原生暗色）、`skin`→`body[data-octo-skin]`（消息皮肤）。样式由注入的大段 CSS 按这两个属性切换；popup 选中的主题存 `browser.storage.local`，经内容脚本转发到 MAIN world 应用。有 `MutationObserver` 在 app 启动强制亮色时「重申」所选主题（带自写抑制 + 去抖，避免与 app 抢属性打死循环）。
+- **换肤**：主题模型 `base`→`body[theme-mode]`（亮/暗，联动 app 原生暗色）、`skin`→`body[data-octo-skin]`（消息皮肤）。样式由注入的大段 CSS 按这两个属性切换；Side Panel 选中的主题存 `browser.storage.local`，经内容脚本转发到 MAIN world 应用。有 `MutationObserver` 在 app 启动强制亮色时「重申」所选主题（带自写抑制 + 去抖，避免与 app 抢属性打死循环）。
 - **开卡抽卡**：Bot 资料卡弹窗挂载时，美化引擎的 `sync()` 按加权概率 `Math.random()` 抽一个稀有度，写到 `.wk-modal-shell` / `.wk-bot-detail-content` 的 `data-octo-rarity` 上——卡框配色、角标文字（`content: attr(...)`）、辉光强度全部由 CSS 据此渲染。抽卡是「每个卡片实例一次」：同一弹窗重渲染沿用已抽结果，关闭重开则是新实例、重新抽。揭晓特效节点注入 `<body>`（在弹窗 React 树之外，避免被 reconcile 清掉），播完自移除。只读随机 + 自身属性写入，不改源码、不改 React 状态。
-- **桌面宠物**：popup 使用 JSZip 本地校验并解压宠物包，把 manifest 与 spritesheet data URL 存入 `browser.storage.local`；内容脚本把状态转发到 MAIN world，页面脚本按 manifest 播放动作状态机，并把拖拽位置回写 storage。Codex v1 `8 × 9` 与 v2 `8 × 11` atlas 使用官方动作行和逐帧时长；无动画配置的旧 Octo 包仍按 `12 × 13` 第一行播放。
+- **桌面宠物**：Side Panel 使用 JSZip 本地校验并解压宠物包，把 manifest 与 spritesheet data URL 存入 `browser.storage.local`；内容脚本把状态转发到 MAIN world，页面脚本按 manifest 播放动作状态机，并把拖拽位置回写 storage。Codex v1 `8 × 9` 与 v2 `8 × 11` atlas 使用官方动作行和逐帧时长；无动画配置的旧 Octo 包仍按 `12 × 13` 第一行播放。
+- **输入区增强**：舒适模式只通过 scoped CSS 调整 Octo 的 `.wk-messageinput-*` 布局，不接管 Tiptap 编辑器事件；宠物输入框模式用 `ResizeObserver`、滚动监听和批量定位跟随当前会话输入框。
 
-美化/换肤逻辑移植自油猴脚本 [an9xyz/octo-script](https://github.com/an9xyz/octo-script)（MIT），改为由扩展 popup + `browser.storage` 驱动，去掉了原脚本页面内的 NavRail 菜单。
+美化/换肤逻辑移植自油猴脚本 [an9xyz/octo-script](https://github.com/an9xyz/octo-script)（MIT），改为由扩展 Side Panel + `browser.storage` 驱动，去掉了原脚本页面内的 NavRail 菜单。
 
 ## 结构
 
@@ -28,19 +31,22 @@
 - `utils/octoRecall.ts` — 共享常量（storage key、postMessage 协议）。
 - `utils/octoPet.ts` — 宠物包大小、路径、manifest 与图片校验及本地解析。
 - `utils/octoPetRenderer.ts` — 桌面宠物 overlay、spritesheet 动画与拖拽交互。
+- `utils/octoBuiltInCompanion.ts` — 四只内置输入框宠物的巡游、定位和消息唤醒。
+- `utils/octoGithubLink.ts` — GitHub URL 边界识别、分类和消息快捷入口。
+- `utils/octoComposerEnhancer.ts` — 三行舒适输入框样式和完整还原。
 - `utils/octoPetSpeech.ts` — 监听当前会话新增消息、提取短摘要、过滤自己/系统/撤回/重复消息。
-- `entrypoints/popup/` — 弹窗设置：主题选择 + 「显示已撤回的消息」开关（存 `browser.storage.local`，撤回开关默认关闭）。
+- `entrypoints/sidepanel/` — 侧边栏完整设置：全局开关、主题、特效、球星、桌宠和撤回消息设置。
 
 ## 开发
 
 ```bash
 pnpm install
-pnpm dev        # 加载到 Chrome
+pnpm dev        # 启动 17321 端口，不自动打开浏览器
 pnpm compile    # 类型检查
 pnpm build      # 生产构建
 ```
 
-安装扩展后打开 Octo，点扩展图标：选择消息主题、按需打开「显示已撤回的消息」，或在「桌面宠物」区导入 `.zip` / `.codex-pet.zip`。导入后宠物默认启用，可在网页中拖拽定位，也可回到 popup 停用、更换或删除。仅在 `im.deepminer.com.cn` 生效（改域名见 `wxt.config.ts` 的 `OCTO_MATCHES`）；所有处理在本地完成，插件不向任何服务器发送数据。
+安装扩展后打开 Octo，点击扩展图标打开 Side Panel：选择消息主题、切换「舒适输入框」，或在「桌面宠物」区导入 `.zip` / `.codex-pet.zip`。导入后宠物默认启用，可选择自由拖拽或输入框陪伴，也可停用、更换或删除。仅在 `im.deepminer.com.cn` 生效（改域名见 `wxt.config.ts` 的 `OCTO_MATCHES`）；所有处理在本地完成，插件不向任何服务器发送数据。
 
 ## 宠物包动作格式
 

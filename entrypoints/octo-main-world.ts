@@ -14,9 +14,14 @@ import {
   setTheme,
   teardownBeautify,
 } from '@/utils/octoBeautify';
-import { applyDesktopPetState } from '@/utils/octoPetRenderer';
+import {
+  setComposerEnhancement,
+  teardownComposerEnhancement,
+} from '@/utils/octoComposerEnhancer';
+import { applyDesktopPetState, teardownDesktopPet } from '@/utils/octoPetRenderer';
 import { getMessageWrapFromItem } from '@/utils/octoMessageFiber';
 import { startOctoPetSpeech } from '@/utils/octoPetSpeech';
+import { startOctoGithubLinks } from '@/utils/octoGithubLink';
 
 /**
  * MAIN-world script.
@@ -29,17 +34,17 @@ import { startOctoPetSpeech } from '@/utils/octoPetSpeech';
  *    `memoizedProps.message`, clone a normal row, and render the original.
  *
  * 2. Beautify + theme (skin) — ported from an9xyz/octo-script; see
- *    utils/octoBeautify.ts. Driven by the popup via postMessage.
+ *    utils/octoBeautify.ts. Driven by the side panel via postMessage.
  *
  * We only READ React props here — no prototype patching, no state mutation.
  * Every node we add carries an `octo-recall-*` class so toggling off fully
  * reverts the DOM.
  */
 export default defineUnlistedScript(() => {
-  // Beautify + theme engine boots immediately (theme id arrives via message,
-  // default until then). Independent of the recall toggle below.
-  initBeautify(DEFAULT_THEME);
-  startOctoPetSpeech();
+  // Stay dormant until the content script sends the persisted master state.
+  // This avoids briefly applying defaults for users who disabled all features.
+  let stopPetSpeech: (() => void) | undefined;
+  let stopGithubLinks: (() => void) | undefined;
 
   // Revoked rows render as a system message. We do NOT gate on the tip text —
   // octo has several revoke phrasings (你撤回…/XX撤回…/撤回了成员…的一条消息/EN),
@@ -472,10 +477,10 @@ export default defineUnlistedScript(() => {
 
   // ---- master switch (global "uninstall") --------------------------------
 
-  // Recall/beautify default: master ON (the content script pushes the real
-  // value on boot). `recallEnabled` is the popup's desired recall state,
+  // Start suspended; the content script always pushes the persisted master
+  // value first. `recallEnabled` is the side panel's desired recall state,
   // independent of `enabled` (the actual active flag gated by master).
-  let masterEnabled = true;
+  let masterEnabled = false;
   let recallEnabled = false;
   let lastThemeId = DEFAULT_THEME;
 
@@ -491,10 +496,19 @@ export default defineUnlistedScript(() => {
     masterEnabled = next;
     if (next) {
       initBeautify(lastThemeId);
+      stopPetSpeech ??= startOctoPetSpeech();
+      stopGithubLinks ??= startOctoGithubLinks();
       if (recallEnabled) enable();
     } else {
       disable();
+      document.getElementById(STYLE_ID)?.remove();
       teardownBeautify();
+      teardownComposerEnhancement();
+      teardownDesktopPet();
+      stopPetSpeech?.();
+      stopPetSpeech = undefined;
+      stopGithubLinks?.();
+      stopGithubLinks = undefined;
     }
   }
 
@@ -532,6 +546,8 @@ export default defineUnlistedScript(() => {
       setBallCursor(!!data.enabled);
     } else if (data.type === MESSAGE_TYPE.qqSelfLeft) {
       setQQSelfLeft(!!data.enabled);
+    } else if (data.type === MESSAGE_TYPE.composerEnhancement) {
+      setComposerEnhancement(!!data.enabled);
     } else if (data.type === MESSAGE_TYPE.desktopPet) {
       applyDesktopPetState(data);
     }

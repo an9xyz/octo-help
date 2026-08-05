@@ -20,7 +20,16 @@ import {
 //
 // Theme model: base -> body[theme-mode] (light/dark), skin -> body[data-octo-skin].
 
-export interface ThemeDef {
+export type ThemeCategory = "light" | "dark" | "classic" | "special";
+
+export interface ThemePresentation {
+  description: string;
+  category: ThemeCategory;
+  colors: [string, string, string];
+  keywords?: string[];
+}
+
+export interface ThemeDef extends ThemePresentation {
   id: string;
   label: string;
   icon: string;
@@ -28,27 +37,27 @@ export interface ThemeDef {
   skin: string;
 }
 
-export interface GlobalThemeDef {
+export interface GlobalThemeDef extends ThemePresentation {
   id: string;
   label: string;
   icon: string;
 }
 
 export const THEMES: ThemeDef[] = [
-  { id: "cyber-light", label: "赛博紫 · 亮", icon: "☀️", base: "light", skin: "" },
-  { id: "cyber-dark", label: "赛博紫 · 暗", icon: "\u{1F319}", base: "dark", skin: "" },
-  { id: "worldcup", label: "美加墨世界杯", icon: "\u{1F3C6}", base: "light", skin: "worldcup" },
-  { id: "qq2012", label: "QQ 2012 经典", icon: "\u{1F427}", base: "light", skin: "qq2012" },
-  { id: "qq2014", label: "QQ 2014 气泡", icon: "\u{1F4AC}", base: "light", skin: "qq2014" },
+  { id: "cyber-light", label: "赛博紫 · 亮", icon: "☀️", base: "light", skin: "", description: "明亮、清爽的默认紫色界面", category: "light", colors: ["#f7f7ff", "#7c6bf0", "#55d6be"], keywords: ["默认", "紫色", "明亮"] },
+  { id: "cyber-dark", label: "赛博紫 · 暗", icon: "\u{1F319}", base: "dark", skin: "", description: "深色背景与霓虹紫的夜间模式", category: "dark", colors: ["#171822", "#8d7cff", "#42d3bd"], keywords: ["黑色", "夜间", "暗色"] },
+  { id: "worldcup", label: "美加墨世界杯", icon: "\u{1F3C6}", base: "light", skin: "worldcup", description: "球场绿、海军蓝与金色赛事元素", category: "special", colors: ["#f7f3ea", "#0b6e4f", "#c6a04a"], keywords: ["足球", "世界杯", "运动"] },
+  { id: "qq2012", label: "QQ 2012 经典", icon: "\u{1F427}", base: "light", skin: "qq2012", description: "经典 QQ 会话列表与清透气泡", category: "classic", colors: ["#eaf7ff", "#56b8e9", "#8ed667"], keywords: ["怀旧", "QQ", "经典"] },
+  { id: "qq2014", label: "QQ 2014 气泡", icon: "\u{1F4AC}", base: "light", skin: "qq2014", description: "熟悉的彩色气泡与紧凑对话", category: "classic", colors: ["#f3fbff", "#73c7f0", "#b9e77b"], keywords: ["怀旧", "QQ", "气泡"] },
 ];
 export const DEFAULT_THEME = "cyber-light";
 
 export const GLOBAL_THEMES: GlobalThemeDef[] = [
-  { id: "none", label: "跟随原站", icon: "▫️" },
-  { id: "cyber-light", label: "赛博紫 · 亮", icon: "☀️" },
-  { id: "cyber-dark", label: "赛博紫 · 暗", icon: "\u{1F319}" },
-  { id: "mist", label: "雾青工作台", icon: "◈" },
-  { id: "worldcup", label: "美加墨世界杯", icon: "\u{1F3C6}" },
+  { id: "none", label: "跟随原站", icon: "▫️", description: "保留 Octo 原本的导航和工作区配色", category: "light", colors: ["#ffffff", "#f2f3f5", "#3370ff"], keywords: ["原生", "默认", "Octo"] },
+  { id: "cyber-light", label: "赛博紫 · 亮", icon: "☀️", description: "浅色工作区搭配低饱和赛博紫", category: "light", colors: ["#fafaff", "#ece9ff", "#7c6bf0"], keywords: ["紫色", "明亮", "工作台"] },
+  { id: "cyber-dark", label: "赛博紫 · 暗", icon: "\u{1F319}", description: "适合夜间使用的暗色工作区", category: "dark", colors: ["#151720", "#242735", "#8d7cff"], keywords: ["暗色", "夜间", "黑色"] },
+  { id: "mist", label: "雾青工作台", icon: "◈", description: "安静的雾青与灰蓝色工作台", category: "light", colors: ["#f4f8f8", "#dce9e8", "#5d8583"], keywords: ["青色", "灰色", "极简"] },
+  { id: "worldcup", label: "美加墨世界杯", icon: "\u{1F3C6}", description: "以海军蓝、球场绿点缀整个 Octo", category: "special", colors: ["#f7f3ea", "#13294b", "#0b6e4f"], keywords: ["足球", "世界杯", "运动"] },
 ];
 export const DEFAULT_GLOBAL_THEME = "none";
 
@@ -60,6 +69,21 @@ const BEAUTIFY_CSS = `            :root {
                 --octo-clamp-h: 240px;
                 /* 赛博切角：右上 + 左下各切 13px */
                 --octo-cut: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 13px 100%, 0 calc(100% - 13px));
+            }
+
+            /* Octo 的消息滚动层使用 overflow-y:auto，横向溢出也会因此
+             * 变成可滚动。增强消息行的左右留白使用内边距，不再撑宽滚动层。 */
+            .wk-conversation-messages {
+                overflow: hidden auto !important;
+                overflow-x: hidden !important;
+                overscroll-behavior-x: none !important;
+            }
+            .wk-conversation-messages::-webkit-scrollbar:horizontal {
+                display: none !important;
+                height: 0 !important;
+            }
+            .wk-conversation-messages::-webkit-scrollbar {
+                height: 0 !important;
             }
 
             /* ========== 隐藏折叠容器外壳 ========== */
@@ -113,8 +137,11 @@ const BEAUTIFY_CSS = `            :root {
                 background: transparent !important;
                 border: none !important;
                 box-shadow: none !important;
-                margin: 4px 12px !important;
-                padding: 0 !important;
+                margin: 4px 0 !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+                padding: 0 12px !important;
             }
 
             /* 连续消息：占位但隐藏头像，保持对齐 */
@@ -292,8 +319,11 @@ const BEAUTIFY_CSS = `            :root {
                 background: transparent !important;
                 border: none !important;
                 box-shadow: none !important;
-                margin: 4px 12px !important;
-                padding: 0 !important;
+                margin: 4px 0 !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+                padding: 0 12px !important;
             }
             .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown {
                 --octo-bg: #fafdfb;
@@ -352,8 +382,11 @@ const BEAUTIFY_CSS = `            :root {
                 background: transparent !important;
                 border: none !important;
                 box-shadow: none !important;
-                margin: 4px 12px !important;
-                padding: 0 !important;
+                margin: 4px 0 !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                box-sizing: border-box !important;
+                padding: 0 12px !important;
             }
             .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown {
                 --octo-bg: #ffffff;
@@ -2052,10 +2085,7 @@ const BEAUTIFY_CSS = `            :root {
             /* ================= 世界杯：聊天区背景（随所选射门风格切换，浅暖纸基底 + 可见点缀） =================
              * 背景直接铺在 .wk-conversation-content（消息容器不滚动的包裹层）；渐变用视口比例(vw/vh/%)尺寸，
              * 才能在真实的大聊天区可见（小盒子预览里够大、放大后被稀释是之前看不清的原因）。
-             * 同时给滚动层 .wk-conversation-messages 关掉横向滚动，杜绝底部横向滚动条。 */
-            body[data-octo-skin="worldcup"] .wk-conversation-messages {
-                overflow-x: hidden !important;   /* 消息永远不需要横向滚动 → 去掉底部横向滚动条 */
-            }
+             * 横向滚动已由公共消息区规则关闭，主题切换后也不会重新出现。 */
             body[data-octo-skin="worldcup"] .wk-conversation-content {
                 background-color: #f7f3ea !important;   /* 暖纸基底兜底 */
                 background-repeat: no-repeat !important;
@@ -3454,6 +3484,7 @@ function injectStyles(): void {
 let currentThemeId = DEFAULT_THEME;
 let currentGlobalThemeId = DEFAULT_GLOBAL_THEME;
 let selfWritingTheme = false;
+let nativeThemeMode: string | null | undefined;
 
 function themeById(id: string): ThemeDef {
   for (const t of THEMES) if (t.id === id) return t;
@@ -3750,21 +3781,28 @@ function wecomQrDataUrl(url: string, cellSize = 4): string {
   }
 }
 
+function clearWecomLinkState(anchor: HTMLAnchorElement): void {
+  anchor.removeAttribute('data-octo-wecom');
+  anchor.style.removeProperty('--octo-wecom-qr');
+  delete anchor.dataset.octoWecomQrFor;
+  if (anchor.dataset.octoWecomTitleAdded === 'true') anchor.removeAttribute('title');
+  delete anchor.dataset.octoWecomTitleAdded;
+}
+
 function tagWecomLinks(): void {
   document.querySelectorAll<HTMLAnchorElement>(WECOM_LINK_SEL).forEach((a) => {
     const kind = wecomKind(a.getAttribute('href') || '');
     const current = a.getAttribute('data-octo-wecom');
     if (!kind) {
-      if (current !== null) {
-        a.removeAttribute('data-octo-wecom');
-        a.style.removeProperty('--octo-wecom-qr');
-        delete a.dataset.octoWecomQrFor;
-      }
+      if (current !== null) clearWecomLinkState(a);
       return;
     }
     if (current !== kind) a.setAttribute('data-octo-wecom', kind);
     // Surface the real destination on hover, since the card shows a label.
-    if (!a.getAttribute('title')) a.setAttribute('title', a.href);
+    if (!a.getAttribute('title')) {
+      a.setAttribute('title', a.href);
+      a.dataset.octoWecomTitleAdded = 'true';
+    }
     // Inline QR, painted by CSS from this custom property. Encode once per href
     // (dataset guard) — createDataURL is not free and sync() runs often.
     if (a.dataset.octoWecomQrFor !== a.href) {
@@ -3786,29 +3824,29 @@ function tagWecomLinks(): void {
  * browser tab that would just show a login QR. Anything else keeps the default
  * behaviour (open the href normally).
  */
-let wecomClicksBound = false;
+let wecomClickHandler: ((event: MouseEvent) => void) | null = null;
 function bindWecomCardClicks(): void {
-  if (wecomClicksBound) return;
-  wecomClicksBound = true;
+  if (wecomClickHandler) return;
+  wecomClickHandler = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (!target || !target.closest) return;
+    const card = target.closest('a[data-octo-wecom="meeting"]') as HTMLAnchorElement | null;
+    if (!card) return;
+    const host = card.closest('.wk-markdown, .wk-fold-msg-text');
+    const code = parseMeetingCode(host?.textContent || '');
+    if (!code) return; // no code to join with -> let the link open as usual
+    event.preventDefault();
+    event.stopPropagation();
+    // Custom scheme: assigning location is the most reliable hand-off to the
+    // OS handler (window.open can be popup-blocked).
+    window.location.href = wemeetJoinUrl(code);
+  };
+  document.addEventListener('click', wecomClickHandler, true);
+}
 
-  document.addEventListener(
-    'click',
-    (e) => {
-      const target = e.target as HTMLElement | null;
-      if (!target || !target.closest) return;
-      const card = target.closest('a[data-octo-wecom="meeting"]') as HTMLAnchorElement | null;
-      if (!card) return;
-      const host = card.closest('.wk-markdown, .wk-fold-msg-text');
-      const code = parseMeetingCode(host?.textContent || '');
-      if (!code) return; // no code to join with -> let the link open as usual
-      e.preventDefault();
-      e.stopPropagation();
-      // Custom scheme: assigning location is the most reliable hand-off to the
-      // OS handler (window.open can be popup-blocked).
-      window.location.href = wemeetJoinUrl(code);
-    },
-    true,
-  );
+function removeWecomCardClicks(): void {
+  if (wecomClickHandler) document.removeEventListener('click', wecomClickHandler, true);
+  wecomClickHandler = null;
 }
 
 // ---- single-message height clamp + click to expand -----------------------
@@ -4155,6 +4193,7 @@ let bodyObserver: MutationObserver | null = null;
 let syncing = false;
 
 function sync(): void {
+  if (!started) return;
   // Re-entrancy + self-mutation guard: our own DOM writes below (attributes,
   // clamp classes, fold-expand clicks) would otherwise retrigger the body
   // observer and spin. Disconnect while we mutate, reconnect after.
@@ -4227,6 +4266,8 @@ export function initBeautify(initialThemeId: string): void {
   currentThemeId = themeById(initialThemeId).id;
 
   const boot = () => {
+    if (!started) return;
+    nativeThemeMode = document.body.getAttribute('theme-mode');
     injectStyles();
     setTheme(currentThemeId);
     setGlobalTheme(currentGlobalThemeId);
@@ -4247,7 +4288,7 @@ export function initBeautify(initialThemeId: string): void {
 
 /**
  * Fully tear the beautify + theme + kick engine back down so the page looks
- * exactly as it would with the extension uninstalled. Called when the popup's
+ * exactly as it would with the extension uninstalled. Called when the side panel's
  * global master switch is turned off. `initBeautify` can be called again
  * afterwards to bring everything back (the `started` guard is reset here).
  */
@@ -4278,8 +4319,9 @@ export function teardownBeautify(): void {
   try { unmountBalls(); } catch { /* noop */ }
   try { setFullscreenKickPlayer('none', ''); } catch { /* noop */ }
 
-  // Stop listening for clamp-expand clicks.
+  // Stop listening for page-side interactions.
   removeClicks();
+  removeWecomCardClicks();
 
   // Strip every attribute / inline var / class we ever wrote to the page.
   const body = document.body;
@@ -4289,12 +4331,17 @@ export function teardownBeautify(): void {
     body.removeAttribute('data-octo-kick-style');
     body.removeAttribute('data-octo-player-watermark');
     body.removeAttribute('data-octo-player-kicking');
+    body.removeAttribute('data-octo-qq-self-left');
     body.style.removeProperty('--octo-player-watermark-image');
-    // Only undo a dark mode WE forced (dark skins); never touch the app's own
-    // light/dark choice otherwise.
-    if (themeById(currentThemeId).base === 'dark' && body.getAttribute('theme-mode') === 'dark') {
+    if (nativeThemeMode !== undefined) {
       selfWritingTheme = true;
-      try { body.removeAttribute('theme-mode'); } finally { selfWritingTheme = false; }
+      try {
+        if (nativeThemeMode === null) body.removeAttribute('theme-mode');
+        else body.setAttribute('theme-mode', nativeThemeMode);
+      } finally {
+        selfWritingTheme = false;
+      }
+      nativeThemeMode = undefined;
     }
   }
   document
@@ -4303,6 +4350,22 @@ export function teardownBeautify(): void {
   document
     .querySelectorAll('[data-ai-continue]')
     .forEach((el) => el.removeAttribute('data-ai-continue'));
+  document
+    .querySelectorAll<HTMLAnchorElement>('[data-octo-wecom]')
+    .forEach(clearWecomLinkState);
+  document.querySelectorAll('.octo-gacha-fx').forEach((el) => el.remove());
+  document.querySelectorAll<HTMLElement>('[data-octo-rarity]').forEach((el) => {
+    el.removeAttribute('data-octo-rarity');
+    el.style.removeProperty('--octo-card-rx');
+    el.style.removeProperty('--octo-card-ry');
+    el.style.removeProperty('--octo-card-mx');
+    el.style.removeProperty('--octo-card-my');
+  });
+  document.querySelectorAll<HTMLElement>('[data-octo-kick]').forEach((el) => {
+    el.removeAttribute('data-octo-kick');
+    el.classList.remove('octo-boom');
+    el.style.removeProperty('--octo-go');
+  });
 
   // Finally drop the injected stylesheet so all color/layout overrides vanish.
   document.getElementById(STYLE_ID)?.remove();

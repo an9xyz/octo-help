@@ -1,10 +1,14 @@
 import {
   BALL_CURSOR_STORAGE_KEY,
+  BUILT_IN_COMPANION_STORAGE_KEY,
+  COMPOSER_ENHANCEMENT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
+  DESKTOP_PET_PLACEMENT_STORAGE_KEY,
   DESKTOP_PET_POSITION_STORAGE_KEY,
   DESKTOP_PET_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
+  MASTER_STORAGE_KEY,
   MESSI_WATERMARK_STORAGE_KEY,
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
@@ -13,11 +17,15 @@ import {
   STORAGE_KEY,
   THEME_STORAGE_KEY,
   type BallCursorMessage,
+  type BuiltInCompanionId,
+  type ComposerEnhancementMessage,
   type DesktopPetMessage,
+  type DesktopPetPlacement,
   type DesktopPetPosition,
   type DesktopPetPositionMessage,
   type GlobalThemeMessage,
   type KickStyleMessage,
+  type MasterMessage,
   type PlayerWatermarkId,
   type PlayerWatermarkMessage,
   type QQSelfLeftMessage,
@@ -25,7 +33,11 @@ import {
   type ToggleMessage,
 } from '@/utils/octoRecall';
 import { DEFAULT_GLOBAL_THEME, DEFAULT_KICK_STYLE, DEFAULT_THEME } from '@/utils/octoBeautify';
-import { isDesktopPetPosition, isStoredDesktopPet } from '@/utils/octoPetState';
+import {
+  isBuiltInCompanionId,
+  isDesktopPetPosition,
+  isStoredDesktopPet,
+} from '@/utils/octoPetState';
 
 /**
  * ISOLATED-world content script.
@@ -46,6 +58,13 @@ export default defineContentScript({
     function postToggle(enabled: boolean) {
       window.postMessage(
         { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.toggle, enabled } satisfies ToggleMessage,
+        '*',
+      );
+    }
+
+    function postMaster(enabled: boolean) {
+      window.postMessage(
+        { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.master, enabled } satisfies MasterMessage,
         '*',
       );
     }
@@ -113,6 +132,8 @@ export default defineContentScript({
       pet: DesktopPetMessage['pet'],
       enabled: boolean,
       position: DesktopPetPosition | null,
+      placement: DesktopPetPlacement,
+      builtInCompanion: BuiltInCompanionId | null,
     ) {
       window.postMessage(
         {
@@ -121,7 +142,20 @@ export default defineContentScript({
           pet,
           enabled,
           position,
+          placement,
+          builtInCompanion,
         } satisfies DesktopPetMessage,
+        '*',
+      );
+    }
+
+    function postComposerEnhancement(enabled: boolean) {
+      window.postMessage(
+        {
+          source: MESSAGE_SOURCE,
+          type: MESSAGE_TYPE.composerEnhancement,
+          enabled,
+        } satisfies ComposerEnhancementMessage,
         '*',
       );
     }
@@ -130,6 +164,7 @@ export default defineContentScript({
     // its window 'message' listener synchronously on evaluation, but post twice
     // (now + next tick) to avoid a first-frame race.
     const stored = await browser.storage.local.get([
+      MASTER_STORAGE_KEY,
       STORAGE_KEY,
       THEME_STORAGE_KEY,
       GLOBAL_THEME_STORAGE_KEY,
@@ -141,77 +176,122 @@ export default defineContentScript({
       DESKTOP_PET_STORAGE_KEY,
       DESKTOP_PET_ENABLED_STORAGE_KEY,
       DESKTOP_PET_POSITION_STORAGE_KEY,
+      DESKTOP_PET_PLACEMENT_STORAGE_KEY,
+      COMPOSER_ENHANCEMENT_STORAGE_KEY,
+      BUILT_IN_COMPANION_STORAGE_KEY,
     ]);
-    const initialEnabled = stored[STORAGE_KEY] === true;
-    const initialTheme =
+    // Master defaults ON (missing key => enabled) so existing users are
+    // unaffected until they explicitly turn everything off.
+    let currentMaster = stored[MASTER_STORAGE_KEY] !== false;
+    let currentEnabled = stored[STORAGE_KEY] === true;
+    let currentTheme =
       typeof stored[THEME_STORAGE_KEY] === 'string'
         ? (stored[THEME_STORAGE_KEY] as string)
         : DEFAULT_THEME;
-    const initialGlobalTheme =
+    let currentGlobalTheme =
       typeof stored[GLOBAL_THEME_STORAGE_KEY] === 'string'
         ? (stored[GLOBAL_THEME_STORAGE_KEY] as string)
         : DEFAULT_GLOBAL_THEME;
-    const initialKick =
+    let currentKick =
       typeof stored[KICK_STYLE_STORAGE_KEY] === 'string'
         ? (stored[KICK_STYLE_STORAGE_KEY] as string)
         : DEFAULT_KICK_STYLE;
     const storedPlayer = stored[PLAYER_WATERMARK_STORAGE_KEY];
-    const initialPlayerWatermark: PlayerWatermarkId =
+    let currentPlayerWatermark: PlayerWatermarkId =
       storedPlayer === 'messi' || storedPlayer === 'mbappe' || storedPlayer === 'none'
         ? storedPlayer
         : stored[MESSI_WATERMARK_STORAGE_KEY] === true
           ? 'messi'
           : 'none';
     // Default ON so existing users keep the football cursor.
-    const initialBallCursor = stored[BALL_CURSOR_STORAGE_KEY] !== false;
+    let currentBallCursor = stored[BALL_CURSOR_STORAGE_KEY] !== false;
     // Default OFF: own messages sit on the right, like real QQ.
-    const initialQQSelfLeft = stored[QQ_SELF_LEFT_STORAGE_KEY] === true;
+    let currentQQSelfLeft = stored[QQ_SELF_LEFT_STORAGE_KEY] === true;
     let desktopPet = isStoredDesktopPet(stored[DESKTOP_PET_STORAGE_KEY])
       ? stored[DESKTOP_PET_STORAGE_KEY]
       : null;
-    let desktopPetEnabled = stored[DESKTOP_PET_ENABLED_STORAGE_KEY] === true;
     let desktopPetPosition = isDesktopPetPosition(stored[DESKTOP_PET_POSITION_STORAGE_KEY])
       ? stored[DESKTOP_PET_POSITION_STORAGE_KEY]
       : null;
+    let desktopPetPlacement: DesktopPetPlacement =
+      stored[DESKTOP_PET_PLACEMENT_STORAGE_KEY] === 'composer' ? 'composer' : 'desktop';
+    let composerEnhancementEnabled = stored[COMPOSER_ENHANCEMENT_STORAGE_KEY] !== false;
+    const storedBuiltInCompanion = stored[BUILT_IN_COMPANION_STORAGE_KEY];
+    let builtInCompanion: BuiltInCompanionId | null = isBuiltInCompanionId(storedBuiltInCompanion)
+      ? storedBuiltInCompanion
+      : storedBuiltInCompanion === undefined && !desktopPet
+        ? 'wizard'
+        : null;
+    let desktopPetEnabled =
+      stored[DESKTOP_PET_ENABLED_STORAGE_KEY] === true ||
+      (stored[DESKTOP_PET_ENABLED_STORAGE_KEY] === undefined && builtInCompanion !== null);
+
+    // MAIN world ignores settings while suspended. Keep the latest values here
+    // and replay them after the master switch reboots the page-side engines.
+    const pushSettings = () => {
+      postKickStyle(currentKick);
+      postGlobalTheme(currentGlobalTheme);
+      postTheme(currentTheme);
+      postPlayerWatermark(currentPlayerWatermark);
+      postBallCursor(currentBallCursor);
+      postQQSelfLeft(currentQQSelfLeft);
+      postToggle(currentEnabled);
+      postComposerEnhancement(composerEnhancementEnabled);
+      postDesktopPet(
+        desktopPet,
+        desktopPetEnabled,
+        desktopPetPosition,
+        desktopPetPlacement,
+        builtInCompanion,
+      );
+    };
 
     const pushAll = () => {
-      postKickStyle(initialKick);
-      postGlobalTheme(initialGlobalTheme);
-      postTheme(initialTheme);
-      postPlayerWatermark(initialPlayerWatermark);
-      postBallCursor(initialBallCursor);
-      postQQSelfLeft(initialQQSelfLeft);
-      postToggle(initialEnabled);
-      postDesktopPet(desktopPet, desktopPetEnabled, desktopPetPosition);
+      postMaster(currentMaster);
+      pushSettings();
     };
     pushAll();
     setTimeout(pushAll, 0);
 
-    // Relay later changes from the popup.
+    // Relay later changes from the side panel.
     browser.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
-      if (STORAGE_KEY in changes) postToggle(changes[STORAGE_KEY].newValue === true);
+      if (MASTER_STORAGE_KEY in changes) {
+        currentMaster = changes[MASTER_STORAGE_KEY].newValue !== false;
+        postMaster(currentMaster);
+        if (currentMaster) pushSettings();
+      }
+      if (STORAGE_KEY in changes) {
+        currentEnabled = changes[STORAGE_KEY].newValue === true;
+        postToggle(currentEnabled);
+      }
       if (THEME_STORAGE_KEY in changes) {
         const next = changes[THEME_STORAGE_KEY].newValue;
-        postTheme(typeof next === 'string' ? next : DEFAULT_THEME);
+        currentTheme = typeof next === 'string' ? next : DEFAULT_THEME;
+        postTheme(currentTheme);
       }
       if (GLOBAL_THEME_STORAGE_KEY in changes) {
         const next = changes[GLOBAL_THEME_STORAGE_KEY].newValue;
-        postGlobalTheme(typeof next === 'string' ? next : DEFAULT_GLOBAL_THEME);
+        currentGlobalTheme = typeof next === 'string' ? next : DEFAULT_GLOBAL_THEME;
+        postGlobalTheme(currentGlobalTheme);
       }
       if (KICK_STYLE_STORAGE_KEY in changes) {
         const next = changes[KICK_STYLE_STORAGE_KEY].newValue;
-        postKickStyle(typeof next === 'string' ? next : DEFAULT_KICK_STYLE);
+        currentKick = typeof next === 'string' ? next : DEFAULT_KICK_STYLE;
+        postKickStyle(currentKick);
       }
       if (PLAYER_WATERMARK_STORAGE_KEY in changes) {
         const next = changes[PLAYER_WATERMARK_STORAGE_KEY].newValue;
-        postPlayerWatermark(next === 'messi' || next === 'mbappe' ? next : 'none');
+        currentPlayerWatermark = next === 'messi' || next === 'mbappe' ? next : 'none';
+        postPlayerWatermark(currentPlayerWatermark);
       }
       if (BALL_CURSOR_STORAGE_KEY in changes) {
-        postBallCursor(changes[BALL_CURSOR_STORAGE_KEY].newValue !== false);
+        currentBallCursor = changes[BALL_CURSOR_STORAGE_KEY].newValue !== false;
+        postBallCursor(currentBallCursor);
       }
       if (QQ_SELF_LEFT_STORAGE_KEY in changes) {
-        postQQSelfLeft(changes[QQ_SELF_LEFT_STORAGE_KEY].newValue === true);
+        currentQQSelfLeft = changes[QQ_SELF_LEFT_STORAGE_KEY].newValue === true;
+        postQQSelfLeft(currentQQSelfLeft);
       }
       if (DESKTOP_PET_STORAGE_KEY in changes) {
         const next = changes[DESKTOP_PET_STORAGE_KEY].newValue;
@@ -224,12 +304,35 @@ export default defineContentScript({
         const next = changes[DESKTOP_PET_POSITION_STORAGE_KEY].newValue;
         desktopPetPosition = isDesktopPetPosition(next) ? next : null;
       }
+      if (DESKTOP_PET_PLACEMENT_STORAGE_KEY in changes) {
+        desktopPetPlacement =
+          changes[DESKTOP_PET_PLACEMENT_STORAGE_KEY].newValue === 'composer'
+            ? 'composer'
+            : 'desktop';
+      }
+      if (BUILT_IN_COMPANION_STORAGE_KEY in changes) {
+        const next = changes[BUILT_IN_COMPANION_STORAGE_KEY].newValue;
+        builtInCompanion = isBuiltInCompanionId(next) ? next : null;
+      }
       if (
         DESKTOP_PET_STORAGE_KEY in changes ||
         DESKTOP_PET_ENABLED_STORAGE_KEY in changes ||
-        DESKTOP_PET_POSITION_STORAGE_KEY in changes
+        DESKTOP_PET_POSITION_STORAGE_KEY in changes ||
+        DESKTOP_PET_PLACEMENT_STORAGE_KEY in changes ||
+        BUILT_IN_COMPANION_STORAGE_KEY in changes
       ) {
-        postDesktopPet(desktopPet, desktopPetEnabled, desktopPetPosition);
+        postDesktopPet(
+          desktopPet,
+          desktopPetEnabled,
+          desktopPetPosition,
+          desktopPetPlacement,
+          builtInCompanion,
+        );
+      }
+      if (COMPOSER_ENHANCEMENT_STORAGE_KEY in changes) {
+        composerEnhancementEnabled =
+          changes[COMPOSER_ENHANCEMENT_STORAGE_KEY].newValue !== false;
+        postComposerEnhancement(composerEnhancementEnabled);
       }
     });
 

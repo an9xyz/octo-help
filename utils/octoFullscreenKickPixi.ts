@@ -1069,12 +1069,12 @@ function createShot(target: Point): void {
 
   lastShotAt = now;
   cursorSuppressedPoint = target;
-  cursorSuppressedUntil = now + duration + 80;
+  cursorSuppressedUntil = now + flightDuration + 80;
   if (cursorRestoreTimer) window.clearTimeout(cursorRestoreTimer);
   cursorRestoreTimer = window.setTimeout(() => {
     cursorRestoreTimer = undefined;
     refreshCursor();
-  }, duration + 90);
+  }, flightDuration + 90);
   refreshCursor(now);
   triggerPlayerRecoil();
   updateFxFilters();

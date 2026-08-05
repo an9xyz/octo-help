@@ -1,17 +1,14 @@
 {
   "name": "octo-chat-enhancer",
-  "description": "增强 Octo 网页聊天：还原已撤回消息，提供消息美化、全站主题、世界杯特效、球星水印和本地桌面宠物。",
+  "description": "增强 Octo 网页聊天：消息美化、舒适输入框、输入框宠物、GitHub 快捷入口和本地桌面宠物。",
   "private": true,
   "version": "0.2.11",
   "packageManager": "pnpm@10.11.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
-    "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

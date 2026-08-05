@@ -2,6 +2,7 @@ import {
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
   type DesktopPetMessage,
+  type DesktopPetPlacement,
   type DesktopPetPosition,
   type DesktopPetPositionMessage,
   type StoredDesktopPet,
@@ -14,6 +15,11 @@ import {
   type ResolvedDesktopPetAnimation,
   type ResolvedDesktopPetAnimations,
 } from './octoPetManifest';
+import {
+  applyBuiltInCompanion,
+  showBuiltInCompanionSpeech,
+  teardownBuiltInCompanion,
+} from './octoBuiltInCompanion';
 
 const ROOT_ID = 'octo-desktop-pet';
 const STYLE_ID = 'octo-desktop-pet-style';
@@ -21,16 +27,23 @@ const SPRITE_CLASS = 'octo-desktop-pet-sprite';
 const SPEECH_CLASS = 'octo-desktop-pet-speech';
 const VIEWPORT_PADDING = 8;
 const MAX_RENDERED_FRAME_SIZE = 180;
+const MAX_COMPOSER_FRAME_SIZE = 72;
 const SPEECH_DURATION_MS = 5_000;
+const COMPOSER_SELECTOR = '.wk-messageinput-card';
 
 let animationTimer: number | undefined;
 let speechTimer: number | undefined;
 let loadGeneration = 0;
 let lastPet: StoredDesktopPet | null = null;
 let lastPosition: DesktopPetPosition | null = null;
+let lastPlacement: DesktopPetPlacement = 'desktop';
 let interactionState: DesktopPetInteractionState = 'idle';
 let pointerHovering = false;
 let dragDirection: -1 | 0 | 1 = 0;
+let composerAnchor: HTMLElement | null = null;
+let composerMutationObserver: MutationObserver | null = null;
+let composerResizeObserver: ResizeObserver | null = null;
+let composerPositionFrame: number | null = null;
 
 interface AnimationRuntime {
   config: ResolvedDesktopPetAnimations;
@@ -71,6 +84,10 @@ function ensureStyle(): void {
     #${ROOT_ID}[data-dragging='true'] {
       cursor: grabbing;
       transition: none;
+    }
+    #${ROOT_ID}[data-placement='composer'] {
+      cursor: default;
+      filter: drop-shadow(0 6px 7px rgba(20, 24, 35, 0.2));
     }
     #${ROOT_ID} .${SPRITE_CLASS} {
       display: block;
@@ -119,6 +136,76 @@ function ensureStyle(): void {
     }
   `;
   (document.head || document.documentElement).appendChild(style);
+}
+
+function findComposerAnchor(): HTMLElement | null {
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR));
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    const rect = candidates[index].getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight) {
+      return candidates[index];
+    }
+  }
+  return null;
+}
+
+function positionAtComposer(root: HTMLElement): void {
+  if (lastPlacement !== 'composer') return;
+  const nextAnchor = findComposerAnchor();
+  if (!nextAnchor) {
+    root.style.visibility = 'hidden';
+    return;
+  }
+  root.style.visibility = 'visible';
+  if (composerAnchor !== nextAnchor) {
+    composerAnchor = nextAnchor;
+    composerResizeObserver?.disconnect();
+    composerResizeObserver = new ResizeObserver(scheduleComposerPosition);
+    composerResizeObserver.observe(nextAnchor);
+  }
+  const rect = nextAnchor.getBoundingClientRect();
+  const position = calculateComposerPetPosition(
+    rect,
+    { width: root.offsetWidth, height: root.offsetHeight },
+    { width: window.innerWidth, height: window.innerHeight },
+  );
+  root.style.left = `${position.x}px`;
+  root.style.top = `${position.y}px`;
+  root.style.right = 'auto';
+  root.style.bottom = 'auto';
+}
+
+function scheduleComposerPosition(): void {
+  if (composerPositionFrame != null) return;
+  composerPositionFrame = window.requestAnimationFrame(() => {
+    composerPositionFrame = null;
+    const root = document.getElementById(ROOT_ID);
+    if (root) positionAtComposer(root);
+  });
+}
+
+function stopComposerTracking(): void {
+  composerMutationObserver?.disconnect();
+  composerMutationObserver = null;
+  composerResizeObserver?.disconnect();
+  composerResizeObserver = null;
+  composerAnchor = null;
+  if (composerPositionFrame != null) {
+    window.cancelAnimationFrame(composerPositionFrame);
+    composerPositionFrame = null;
+  }
+  document.removeEventListener('scroll', scheduleComposerPosition, true);
+}
+
+function startComposerTracking(root: HTMLElement): void {
+  stopComposerTracking();
+  composerMutationObserver = new MutationObserver(scheduleComposerPosition);
+  composerMutationObserver.observe(document.body || document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+  document.addEventListener('scroll', scheduleComposerPosition, true);
+  positionAtComposer(root);
 }
 
 function stopAnimation(): void {
@@ -176,6 +263,7 @@ function removePet(): void {
     speechTimer = undefined;
   }
   document.getElementById(ROOT_ID)?.remove();
+  stopComposerTracking();
   lastPet = null;
   lastPosition = null;
   animationRuntime = null;
@@ -185,6 +273,7 @@ function removePet(): void {
 }
 
 export function showDesktopPetSpeech(text: string): boolean {
+  if (showBuiltInCompanionSpeech(text)) return true;
   const root = document.getElementById(ROOT_ID);
   if (!root || !lastPet || !text.trim()) return false;
   let speech = root.querySelector<HTMLElement>(`.${SPEECH_CLASS}`);
@@ -217,21 +306,54 @@ export function showDesktopPetSpeech(text: string): boolean {
   return true;
 }
 
+function clampPositionInViewport(
+  position: DesktopPetPosition,
+  width: number,
+  height: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): DesktopPetPosition {
+  return {
+    x: Math.min(
+      Math.max(VIEWPORT_PADDING, position.x),
+      Math.max(VIEWPORT_PADDING, viewportWidth - width - VIEWPORT_PADDING),
+    ),
+    y: Math.min(
+      Math.max(VIEWPORT_PADDING, position.y),
+      Math.max(VIEWPORT_PADDING, viewportHeight - height - VIEWPORT_PADDING),
+    ),
+  };
+}
+
+export function calculateComposerPetPosition(
+  anchor: Pick<DOMRect, 'left' | 'top' | 'width'>,
+  pet: { width: number; height: number },
+  viewport: { width: number; height: number },
+): DesktopPetPosition {
+  return clampPositionInViewport(
+    {
+      x: anchor.left + Math.min(24, Math.max(8, anchor.width * 0.04)),
+      y: anchor.top - pet.height + 7,
+    },
+    pet.width,
+    pet.height,
+    viewport.width,
+    viewport.height,
+  );
+}
+
 function clampPosition(
   position: DesktopPetPosition,
   width: number,
   height: number,
 ): DesktopPetPosition {
-  return {
-    x: Math.min(
-      Math.max(VIEWPORT_PADDING, position.x),
-      Math.max(VIEWPORT_PADDING, window.innerWidth - width - VIEWPORT_PADDING),
-    ),
-    y: Math.min(
-      Math.max(VIEWPORT_PADDING, position.y),
-      Math.max(VIEWPORT_PADDING, window.innerHeight - height - VIEWPORT_PADDING),
-    ),
-  };
+  return clampPositionInViewport(
+    position,
+    width,
+    height,
+    window.innerWidth,
+    window.innerHeight,
+  );
 }
 
 function setPosition(root: HTMLElement, position: DesktopPetPosition): DesktopPetPosition {
@@ -284,6 +406,7 @@ function enableDragging(root: HTMLElement): void {
   });
 
   root.addEventListener('pointerdown', (event) => {
+    if (lastPlacement === 'composer') return;
     if (!event.isPrimary || event.button !== 0) return;
     event.preventDefault();
     const rect = root.getBoundingClientRect();
@@ -351,7 +474,10 @@ function ensureRoot(pet: StoredDesktopPet): { root: HTMLElement; sprite: HTMLEle
     (document.body || document.documentElement).appendChild(root);
   }
   root.setAttribute('aria-label', pet.manifest.displayName);
-  root.title = `${pet.manifest.displayName}（拖拽移动）`;
+  root.dataset.placement = lastPlacement;
+  root.title = lastPlacement === 'composer'
+    ? `${pet.manifest.displayName}（输入框陪伴）`
+    : `${pet.manifest.displayName}（拖拽移动）`;
   return { root, sprite: root.querySelector<HTMLElement>(`.${SPRITE_CLASS}`)! };
 }
 
@@ -363,6 +489,13 @@ function loadSpritesheet(pet: StoredDesktopPet, position: DesktopPetPosition | n
   dragDirection = 0;
   const generation = ++loadGeneration;
   const { root, sprite } = ensureRoot(pet);
+  if (lastPlacement === 'desktop' && !position) {
+    root.style.left = 'auto';
+    root.style.top = 'auto';
+    root.style.right = '24px';
+    root.style.bottom = '88px';
+    root.style.visibility = 'visible';
+  }
   sprite.style.backgroundImage = `url("${pet.spritesheetDataUrl}")`;
 
   const image = new Image();
@@ -383,8 +516,10 @@ function loadSpritesheet(pet: StoredDesktopPet, position: DesktopPetPosition | n
     const frameHeight = image.naturalHeight / config.rows;
     const scale = Math.min(
       1,
-      MAX_RENDERED_FRAME_SIZE / frameWidth,
-      MAX_RENDERED_FRAME_SIZE / frameHeight,
+      (lastPlacement === 'composer' ? MAX_COMPOSER_FRAME_SIZE : MAX_RENDERED_FRAME_SIZE) /
+        frameWidth,
+      (lastPlacement === 'composer' ? MAX_COMPOSER_FRAME_SIZE : MAX_RENDERED_FRAME_SIZE) /
+        frameHeight,
     );
     const renderedWidth = Math.max(1, Math.round(frameWidth * scale));
     const renderedHeight = Math.max(1, Math.round(frameHeight * scale));
@@ -394,7 +529,9 @@ function loadSpritesheet(pet: StoredDesktopPet, position: DesktopPetPosition | n
       `${renderedWidth * config.columns}px ${renderedHeight * config.rows}px`;
     sprite.style.backgroundPosition = '0 0';
 
-    if (position) {
+    if (lastPlacement === 'composer') {
+      startComposerTracking(root);
+    } else if (position) {
       setPosition(root, position);
     } else {
       // Convert the default right/bottom placement to coordinates so a later
@@ -423,11 +560,23 @@ function loadSpritesheet(pet: StoredDesktopPet, position: DesktopPetPosition | n
 }
 
 export function applyDesktopPetState(message: DesktopPetMessage): void {
-  if (!message.enabled || !message.pet) {
+  if (!message.enabled || (!message.pet && !message.builtInCompanion)) {
     removePet();
+    teardownBuiltInCompanion();
     return;
   }
 
+  if (message.builtInCompanion) {
+    removePet();
+    applyBuiltInCompanion(message.builtInCompanion);
+    return;
+  }
+
+  teardownBuiltInCompanion();
+  if (!message.pet) return;
+
+  const placementChanged = lastPlacement !== message.placement;
+  lastPlacement = message.placement;
   const samePet =
     lastPet?.manifest.id === message.pet.manifest.id &&
     JSON.stringify(lastPet?.manifest) === JSON.stringify(message.pet.manifest) &&
@@ -435,19 +584,38 @@ export function applyDesktopPetState(message: DesktopPetMessage): void {
   lastPet = message.pet;
   lastPosition = message.position;
 
-  if (!samePet || !document.getElementById(ROOT_ID)) {
+  if (!samePet || placementChanged || !document.getElementById(ROOT_ID)) {
     loadSpritesheet(message.pet, message.position);
     return;
   }
   const root = document.getElementById(ROOT_ID);
-  if (root && message.position) setPosition(root, message.position);
+  if (!root) return;
+  root.dataset.placement = lastPlacement;
+  if (lastPlacement === 'composer') {
+    startComposerTracking(root);
+  } else {
+    stopComposerTracking();
+    root.style.visibility = 'visible';
+    if (message.position) setPosition(root, message.position);
+  }
+}
+
+/** Remove all page-side pet state when the extension master switch is off. */
+export function teardownDesktopPet(): void {
+  removePet();
+  teardownBuiltInCompanion();
+  document.getElementById(STYLE_ID)?.remove();
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', () => {
     const root = document.getElementById(ROOT_ID);
     if (!root) return;
-    const rect = root.getBoundingClientRect();
-    setPosition(root, lastPosition ?? { x: rect.left, y: rect.top });
+    if (lastPlacement === 'composer') {
+      scheduleComposerPosition();
+    } else {
+      const rect = root.getBoundingClientRect();
+      setPosition(root, lastPosition ?? { x: rect.left, y: rect.top });
+    }
   });
 }
