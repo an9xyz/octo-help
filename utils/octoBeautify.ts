@@ -1,4 +1,5 @@
 import type { PlayerWatermarkId } from './octoRecall';
+import qrcode from 'qrcode-generator';
 import {
   setFullscreenKickBallCursor,
   setFullscreenKickPlayer,
@@ -3333,6 +3334,109 @@ const BEAUTIFY_CSS = `            :root {
             body[data-octo-skin="qq2014"] .wk-msg-row .wk-reply-block__name,
             body[data-octo-skin="qq2014"] .wk-msg-row .wk-message-text-reply-authorname {
                 color: #0a5fbf !important;
+            }
+
+            /* ========================================================
+             * 企业微信链接 → 内联「弹窗式」卡片（JS 打 data-octo-wecom，见 tagWecomLinks）
+             * 消息里贴出来的企微链接是一长串裸 URL，很占地方也看不出是什么，而且在
+             * 浏览器里点开只会得到扫码登录页 → 直接在消息里渲染成一张卡片：
+             * 二维码在上、名称+提示在下，信息一眼全见，不需要任何点击。
+             * 做法仍是「不注入 DOM」：原 URL 文本用 font-size:0 收掉，
+             *   ::before = 二维码（图源由 JS 写在 --octo-wecom-qr 自定义属性上）
+             *   ::after  = 名称 + 扫码提示（两行，靠 CSS 换行符分行）
+             * 会议卡片点击 = 唤起本地腾讯会议（见 bindWecomCardClicks）；
+             * 真实 URL 在 title 里，hover 可见。
+             * ====================================================== */
+            .wk-markdown a[data-octo-wecom],
+            .wk-fold-msg-text a[data-octo-wecom] {
+                --octo-wecom-ink: #2b6cb0;
+                --octo-wecom-card: #ffffff;
+                --octo-wecom-line: #dfe3ea;
+                display: inline-flex !important;
+                /* 横排：二维码在左、文案在右。竖排会白白拉高消息（并更容易触发限高）。 */
+                flex-direction: row !important;
+                align-items: center !important;
+                gap: 14px !important;
+                width: -moz-fit-content !important;
+                width: fit-content !important;
+                max-width: 100% !important;
+                margin: 6px 0 !important;
+                padding: 12px 14px !important;
+                border: 1px solid var(--octo-wecom-line) !important;
+                border-radius: 10px !important;
+                background: var(--octo-wecom-card) !important;
+                box-shadow: 0 2px 10px rgba(20, 24, 40, 0.08) !important;
+                font-size: 0 !important;          /* 收掉裸 URL 文本 */
+                line-height: 1.4 !important;
+                text-decoration: none !important;
+                vertical-align: middle !important;
+                transition: box-shadow .14s ease, border-color .14s ease !important;
+            }
+            .wk-markdown a[data-octo-wecom]:hover,
+            .wk-fold-msg-text a[data-octo-wecom]:hover {
+                border-color: #b9c6d6 !important;
+                box-shadow: 0 4px 16px rgba(20, 24, 40, 0.14) !important;
+                text-decoration: none !important;
+            }
+            /* 二维码本体：白底 + 细边，保证扫码对比度。图源来自 --octo-wecom-qr。
+             * 变量缺失（编码失败）时退化成日历图标，不至于露一个空白块。 */
+            .wk-markdown a[data-octo-wecom]::before,
+            .wk-fold-msg-text a[data-octo-wecom]::before {
+                content: "" !important;
+                flex: 0 0 auto !important;
+                width: 124px !important;
+                height: 124px !important;
+                padding: 6px !important;
+                box-sizing: border-box !important;
+                border: 1px solid #eceef3 !important;
+                border-radius: 6px !important;
+                background:
+                    var(--octo-wecom-qr, url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%232b6cb0%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%3E%3Crect%20x%3D%223%22%20y%3D%225%22%20width%3D%2218%22%20height%3D%2216%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22M3%2010h18M8%203v4M16%203v4%22%2F%3E%3C%2Fsvg%3E"))
+                    no-repeat center / contain,
+                    #ffffff !important;
+                image-rendering: pixelated !important;   /* 二维码放大不糊 */
+            }
+            /* 名称 + 扫码提示。
+             * 换行符必须双写反斜杠：这段 CSS 位于 JS 模板字符串内，单写的换行转义会被
+             * JS 当成非法转义并吞掉反斜杠，CSS 只收到字母 A，于是两行挤成一行并多出个 A。 */
+            .wk-markdown a[data-octo-wecom]::after,
+            .wk-fold-msg-text a[data-octo-wecom]::after {
+                flex: 0 0 auto !important;   /* 不收缩：否则窄气泡里标题会被挤成逐字换行 */
+                color: var(--octo-wecom-ink) !important;
+                font-size: 13px !important;
+                font-weight: 600 !important;
+                line-height: 1.7 !important;
+                text-align: left !important;
+                white-space: pre !important; /* 只认我们写的换行，不再自动折行 */
+            }
+            .wk-markdown a[data-octo-wecom="meeting"]::after,
+            .wk-fold-msg-text a[data-octo-wecom="meeting"]::after {
+                content: "企业微信会议\\A手机企微扫码入会 · 点击用腾讯会议打开" !important;
+            }
+            .wk-markdown a[data-octo-wecom="schedule"]::after,
+            .wk-fold-msg-text a[data-octo-wecom="schedule"]::after {
+                content: "企业微信日程\\A手机企微扫码打开" !important;
+            }
+            .wk-markdown a[data-octo-wecom="link"]::after,
+            .wk-fold-msg-text a[data-octo-wecom="link"]::after {
+                content: "企业微信链接\\A手机企微扫码打开" !important;
+            }
+            /* 暗色：卡片压暗；二维码保持白底（否则扫不出来） */
+            body[theme-mode="dark"] .wk-markdown a[data-octo-wecom],
+            body[theme-mode="dark"] .wk-fold-msg-text a[data-octo-wecom] {
+                --octo-wecom-ink: #9fc3ea;
+                --octo-wecom-card: #211d38;
+                --octo-wecom-line: #3a3462;
+                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.34) !important;
+            }
+            body[theme-mode="dark"] .wk-markdown a[data-octo-wecom]:hover,
+            body[theme-mode="dark"] .wk-fold-msg-text a[data-octo-wecom]:hover {
+                border-color: #4d4682 !important;
+                box-shadow: 0 4px 18px rgba(0, 0, 0, 0.46) !important;
+            }
+            body[theme-mode="dark"] .wk-markdown a[data-octo-wecom]::before,
+            body[theme-mode="dark"] .wk-fold-msg-text a[data-octo-wecom]::before {
+                border-color: rgba(255, 255, 255, 0.16) !important;
             }`;
 
 // ---- style injection ----------------------------------------------------
@@ -3550,6 +3654,163 @@ function markAIContinueMessages(): void {
   });
 }
 
+// ---- WeCom (企业微信) links -> inline card --------------------------------
+
+/**
+ * Tag links that point at 企业微信 so CSS can render them as a compact inline
+ * card instead of a raw 60-char URL. `/webapp/ts/…` is the schedule (日程)
+ * app; anything else on the host gets the generic label.
+ *
+ * Recognition only — the anchor keeps its href and its normal click behaviour
+ * (still opens externally). We deliberately don't try to preview the content:
+ * those pages 302 to a QR login, so an in-page iframe would show a login box,
+ * and fetching one would mean routing the user's corp ticket through us.
+ *
+ * Attribute-only writes (no DOM injection) so React re-renders can't fight us,
+ * and only changed values are written (idempotent under the sync loop).
+ */
+const WECOM_HOST = 'work.weixin.qq.com';
+const WECOM_LINK_SEL = '.wk-markdown a[href], .wk-fold-msg-text a[href]';
+
+/**
+ * Classify an href: '' when it isn't a 企业微信 link, otherwise which kind.
+ *   /webapp/tm/<tm_code> → meeting  (会议；tm_code is the same value that shows
+ *                          up as tm_code= in the app's wxwork://jump deep link)
+ *   /webapp/ts/<code>    → schedule (日程)
+ *   anything else on the host → link
+ * Exported for unit tests; `base` lets tests avoid depending on location.
+ */
+export function wecomKind(
+  href: string,
+  base?: string,
+): '' | 'meeting' | 'schedule' | 'link' {
+  let url: URL;
+  try {
+    url = new URL(href, base ?? window.location.href);
+  } catch {
+    return '';
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+  if (url.hostname !== WECOM_HOST && !url.hostname.endsWith(`.${WECOM_HOST}`)) return '';
+  if (url.pathname.startsWith('/webapp/tm/')) return 'meeting';
+  if (url.pathname.startsWith('/webapp/ts/')) return 'schedule';
+  return 'link';
+}
+
+/**
+ * Pull the Tencent Meeting code out of a WeCom meeting invite. WeCom's own
+ * invite text carries it on a labelled line, e.g.
+ *   #企业微信会议：446-153-273
+ * and 企业微信 meetings are Tencent Meeting under the hood, so that code can be
+ * handed straight to wemeet:// — no token exchange or signature needed (unlike
+ * the wxwork://jump deep link, whose jump_code we cannot compute).
+ *
+ * Only labelled lines are accepted: a bare 9-digit run in chat is far more
+ * likely to be a phone number, an order id, or a date range. Returns '' when
+ * nothing usable is found.
+ */
+export function parseMeetingCode(text: string): string {
+  if (!text) return '';
+  const labelled =
+    /(?:企业微信会议|腾讯会议|会议号码|会议号|会议\s*ID|入会号)\s*[:：]?\s*([0-9][0-9\s-]{7,20})/;
+  const m = labelled.exec(text);
+  if (!m) return '';
+  const digits = m[1].replace(/\D/g, '');
+  // Tencent Meeting codes are 9 digits today; allow 9–12 for personal/长号.
+  return digits.length >= 9 && digits.length <= 12 ? digits : '';
+}
+
+/**
+ * Deep link that joins a meeting in the local 腾讯会议 client.
+ *
+ * Must be `page/inmeeting`, not `page/premeeting/join`: both schemes exist and
+ * both open the app, but `premeeting/join` only brings up the "enter a meeting
+ * number" screen and ignores the code, so nothing is actually joined. The only
+ * form observed carrying the code in the shipped client is
+ * `wemeet://page/inmeeting?meeting_code=` (grepped out of WeMeetFramework).
+ */
+export function wemeetJoinUrl(meetingCode: string): string {
+  return `wemeet://page/inmeeting?meeting_code=${encodeURIComponent(meetingCode)}`;
+}
+
+/**
+ * Render the QR for `url` locally as a data URL. Nothing is sent anywhere —
+ * these links carry a corp ticket, so a third-party QR service is out of the
+ * question. Returns '' if encoding fails (e.g. url too long for the format).
+ */
+function wecomQrDataUrl(url: string, cellSize = 4): string {
+  try {
+    // typeNumber 0 = auto-size; 'M' = ~15% error correction (plenty on screen).
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    return qr.createDataURL(cellSize, 2);
+  } catch {
+    return '';
+  }
+}
+
+function tagWecomLinks(): void {
+  document.querySelectorAll<HTMLAnchorElement>(WECOM_LINK_SEL).forEach((a) => {
+    const kind = wecomKind(a.getAttribute('href') || '');
+    const current = a.getAttribute('data-octo-wecom');
+    if (!kind) {
+      if (current !== null) {
+        a.removeAttribute('data-octo-wecom');
+        a.style.removeProperty('--octo-wecom-qr');
+        delete a.dataset.octoWecomQrFor;
+      }
+      return;
+    }
+    if (current !== kind) a.setAttribute('data-octo-wecom', kind);
+    // Surface the real destination on hover, since the card shows a label.
+    if (!a.getAttribute('title')) a.setAttribute('title', a.href);
+    // Inline QR, painted by CSS from this custom property. Encode once per href
+    // (dataset guard) — createDataURL is not free and sync() runs often.
+    if (a.dataset.octoWecomQrFor !== a.href) {
+      const src = wecomQrDataUrl(a.href);
+      if (src) {
+        a.style.setProperty('--octo-wecom-qr', `url("${src}")`);
+        a.dataset.octoWecomQrFor = a.href;
+      }
+    }
+  });
+}
+
+// ---- WeCom meeting card -> launch 腾讯会议 -----------------------------------
+
+/**
+ * The card renders everything inline (QR + labels), so there is no popover to
+ * open. The only interaction left is the natural link click, and for a meeting
+ * invite the useful destination is the local 腾讯会议 client rather than a
+ * browser tab that would just show a login QR. Anything else keeps the default
+ * behaviour (open the href normally).
+ */
+let wecomClicksBound = false;
+function bindWecomCardClicks(): void {
+  if (wecomClicksBound) return;
+  wecomClicksBound = true;
+
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target as HTMLElement | null;
+      if (!target || !target.closest) return;
+      const card = target.closest('a[data-octo-wecom="meeting"]') as HTMLAnchorElement | null;
+      if (!card) return;
+      const host = card.closest('.wk-markdown, .wk-fold-msg-text');
+      const code = parseMeetingCode(host?.textContent || '');
+      if (!code) return; // no code to join with -> let the link open as usual
+      e.preventDefault();
+      e.stopPropagation();
+      // Custom scheme: assigning location is the most reliable hand-off to the
+      // OS handler (window.open can be popup-blocked).
+      window.location.href = wemeetJoinUrl(code);
+    },
+    true,
+  );
+}
+
 // ---- single-message height clamp + click to expand -----------------------
 
 const CLAMP_SEL = [
@@ -3562,6 +3823,14 @@ const CLAMP_SEL = [
 
 function applyClamp(): void {
   document.querySelectorAll(CLAMP_SEL).forEach((el) => {
+    // Never clamp a message that carries a 企业微信 card: the 240px limit cuts the
+    // QR in half and drops the "展开全文" gradient right on top of it, leaving a
+    // code nobody can scan. These messages are short anyway — it is the card that
+    // makes them tall, not a wall of text.
+    if (el.querySelector('a[data-octo-wecom]')) {
+      el.classList.remove('octo-clamp', 'octo-expanded');
+      return;
+    }
     const full = (el as HTMLElement).scrollHeight;
     const tall = full > CLAMP_HEIGHT + 8;
     if (tall) el.classList.add('octo-clamp');
@@ -3898,6 +4167,10 @@ function sync(): void {
     try { watchAllToggles(); } catch { /* noop */ }
     try { expandAllFoldSessions(); } catch { /* noop */ }
     try { markAIContinueMessages(); } catch { /* noop */ }
+    // Must precede applyClamp(): the clamp skips messages carrying a 企业微信
+    // card, and it can only see them once the anchors are tagged. Tagging after
+    // clamping would clamp the card for one frame and un-clamp on the next.
+    try { tagWecomLinks(); } catch { /* noop */ }
     try { applyClamp(); } catch { /* noop */ }
     try { rollBotCardRarity(); } catch { /* noop */ }
     try { bindBotCardTilt(); } catch { /* noop */ }
@@ -3961,6 +4234,7 @@ export function initBeautify(initialThemeId: string): void {
     reflectQQSelfLeft(); // re-apply if the option arrived before <body> existed
     watchThemeAttr();
     bindClicks();
+    bindWecomCardClicks();
     bodyObserver = new MutationObserver(onBodyMutations);
     bodyObserver.observe(document.body, { childList: true, subtree: true });
     sync();
