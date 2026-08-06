@@ -1,4 +1,5 @@
 import { defineConfig } from 'wxt';
+import { CHROME_EXTENSION_PUBLIC_KEY, FIREFOX_EXTENSION_ID } from './utils/extensionIdentity';
 import { OCTO_MATCHES } from './utils/octoRecall';
 
 // See https://wxt.dev/api/config.html
@@ -24,10 +25,22 @@ export default defineConfig({
   webExt: {
     disabled: true,
   },
-  manifest: {
+  manifest: ({ browser }) => ({
     name: 'Octo 聊天增强',
     description: '把撤回的消息读回来，顺手换套好看的皮肤：撤回还原、消息美化与全站换肤、舒适输入框、GitHub 快捷跳转和桌面宠物。',
     minimum_chrome_version: '114',
+    // Pin the extension ID. With no key, Chromium derives the ID from the
+    // install *path*, so every user — and every re-extract of the release ZIP
+    // into a new folder — got a different ID, and with it a different, empty
+    // storage area. Firefox ignores `key` and needs its own declaration; both
+    // constants live in utils/extensionIdentity.ts. See README「固定的扩展 ID」.
+    ...(browser === 'firefox'
+      ? {
+          browser_specific_settings: {
+            gecko: { id: FIREFOX_EXTENSION_ID, strict_min_version: '115.0' },
+          },
+        }
+      : { key: CHROME_EXTENSION_PUBLIC_KEY }),
     action: {
       default_title: '打开 Octo 聊天增强设置',
     },
@@ -46,5 +59,5 @@ export default defineConfig({
         matches: [...OCTO_MATCHES],
       },
     ],
-  },
+  }),
 });

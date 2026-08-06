@@ -24,3 +24,6 @@ web-ext.config.ts
 *.njsproj
 *.sln
 *.sw?
+
+# 扩展签名私钥不入库（丢失只影响 .crx 签名，不影响固定的扩展 ID）
+*.pem
