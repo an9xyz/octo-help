@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-06
+
 ### 新增
 
 - 「舒适输入框」底部新增 **5 个快捷 @ 头像**：读这个会话的历史记录，统计谁被 @ 得最多（谁发的都算，自己发的算双倍，越近的权重越高），把最常被 @ 的 5 个排在那里，点一下就在输入框里 @ 他 —— 不用再打 `@` 然后滚动找人。插入的是和手打 `@` 选人完全一样的真 @（对方会收到提醒），而不是一段长得像 @ 的文字。AI 会带紫色角标，单聊里不显示。
@@ -174,7 +176,8 @@
 
 - 还原撤回消息时正确显示原发送者姓名和头像。
 
-[Unreleased]: https://github.com/botshen/octo-help/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/botshen/octo-help/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/botshen/octo-help/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/botshen/octo-help/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/botshen/octo-help/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/botshen/octo-help/compare/v0.2.7...v0.2.8
