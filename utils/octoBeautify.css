@@ -307,6 +307,65 @@
                 color: #2f9163 !important;
             }
 
+            /* ---- 自己的头像：略大一圈 + hover 越转越快 ----
+             * 变换落在头像本体（容器的直接子元素）而不是 `.wk-msg-row-avatar` 容器：
+             * 容器是带内边距/占位的布局盒，绕它的中心转起来头像就不是“原地自转”而是偏心绕圈；
+             * 落在头像自身 + `transform-origin: 50% 50%` 才是以自身为中心。
+             * 同时容器不动一行样式，它的盒子、堆叠和 Octo 自己挂在头像上的行为（点击弹资料卡等）
+             * 保持原样 —— 变换只影响绘制，且子元素仍在容器内，事件照旧冒泡。
+             * hover 探针挂在容器上（`:hover > *`）而不是被变换的元素：盯着一个又转又缩的
+             * 命中区会反复丢失/重新获得 hover，动画跟着反复重启而抽。
+             * 旋转用独立的 `rotate` 属性，与 `scale` 互不覆盖 —— 若写成 transform 简写，
+             * 旋转动画会连带把放大倍数还原成 1。
+             * 注意 base 规则里刻意不声明 `rotate`：`!important` 声明的优先级高于动画，
+             * 一旦写上 `rotate: 0deg !important`，hover 的旋转动画就再也转不起来。
+             * 放大用 `scale` 而不是 width/height：Octo 自己决定头像尺寸，改尺寸会挤动整行基线。
+             * 加速手感由两段动画接力：第一段 1.5s 内从「慢慢挪」冲到 3 圈（每段关键帧的
+             * 角度增量递增 → 越转越快），紧接第二段以 0.25s/圈 的高速无限循环；
+             * 第一段结束时正好停在 1080deg ≡ 0deg，两段衔接处不会看到角度跳变。
+             * --octo-self-avatar-hover-intent 是 hover 节流（hover intent）：鼠标只是滑过头像去点
+             * 旁边的东西时，延迟内离开就不会起动任何动画；快速进出不会闪一下。
+             * （延迟只加在 hover 规则上 → 离开时立即回落，不拖油瓶。）
+             * `:not(:has(> *))` 分支是兼容兵：若哪天 Octo 把头像直接渲染成 `.wk-msg-row-avatar`
+             * 本体（无子元素），效果就落回它自己，而不是默默失效。 */
+            @keyframes octo-self-avatar-spin-up {
+                0%   { rotate: 0deg; }
+                30%  { rotate: 60deg; }
+                55%  { rotate: 240deg; }
+                78%  { rotate: 600deg; }
+                100% { rotate: 1080deg; }
+            }
+            @keyframes octo-self-avatar-spin-fast {
+                from { rotate: 0deg; }
+                to   { rotate: 360deg; }
+            }
+            .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-avatar > *,
+            .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-avatar:not(:has(> *)) {
+                --octo-self-avatar-hover-intent: .14s;
+                position: relative !important;
+                z-index: 2 !important;                 /* 放大后压在气泡上方，不被遮住 */
+                transform-origin: 50% 50% !important;  /* 以头像自身为中心旋转/缩放 */
+                scale: 1.18 !important;
+                transition: scale .18s cubic-bezier(.34, 1.56, .64, 1), filter .18s ease !important;
+            }
+            .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-avatar:hover > *,
+            .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-avatar:not(:has(> *)):hover {
+                scale: 1.34 !important;
+                filter: drop-shadow(0 3px 10px rgba(40, 90, 60, 0.35)) !important;
+                transition-delay: var(--octo-self-avatar-hover-intent) !important;
+                animation:
+                    octo-self-avatar-spin-up 1.5s linear var(--octo-self-avatar-hover-intent) both,
+                    octo-self-avatar-spin-fast .25s linear calc(1.5s + var(--octo-self-avatar-hover-intent)) infinite !important;
+            }
+            /* 系统设置了「减少动态效果」时只保留放大，不转 —— 旋转是这里唯一的装饰性动效。 */
+            @media (prefers-reduced-motion: reduce) {
+                .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-avatar:hover > *,
+                .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-avatar:not(:has(> *)):hover {
+                    animation: none !important;
+                    scale: 1.28 !important;
+                }
+            }
+
             /* ========================================================
              * 接收的普通用户消息（非 AI、非自己）—— 中性 slate 卡片
              * 排除：自己(--send) / AI(.ai-badge) / AI 连续(data-ai-continue)
