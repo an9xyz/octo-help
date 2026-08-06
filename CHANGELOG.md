@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-06
+
 ### 优化
 
 - 安装包体积从 3.4 MB 降到 1.5 MB，每次打开 Octo 注入的脚本从 1.07 MB 降到 308 KB；球星射门特效改为首次启用时才下载，没开过的用户不再为它付费。
@@ -157,7 +159,9 @@
 
 - 还原撤回消息时正确显示原发送者姓名和头像。
 
-[Unreleased]: https://github.com/botshen/octo-help/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/botshen/octo-help/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/botshen/octo-help/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/botshen/octo-help/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/botshen/octo-help/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/botshen/octo-help/compare/v0.2.5...v0.2.7
 [0.2.3]: https://github.com/botshen/octo-help/compare/v0.2.2...v0.2.3
