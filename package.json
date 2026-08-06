@@ -2,7 +2,7 @@
   "name": "octo-chat-enhancer",
   "description": "把撤回的消息读回来，顺手换套好看的皮肤：撤回还原、消息美化与全站换肤、舒适输入框、GitHub 快捷跳转和桌面宠物。",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "packageManager": "pnpm@10.11.0",
   "type": "module",
   "scripts": {
