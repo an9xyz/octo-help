@@ -1,4 +1,4 @@
-import type { PlayerWatermarkId } from './octoRecall';
+import type { PlayerWatermarkId } from './octoShared';
 import qrcode from 'qrcode-generator';
 import BEAUTIFY_CSS from './octoBeautify.css?raw';
 import { CLAMP_CANDIDATE_SELECTOR, OCTO_SELECTORS } from './octoSelectors';

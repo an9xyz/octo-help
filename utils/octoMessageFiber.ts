@@ -7,7 +7,10 @@ function findFiberKey(element: Element): string | undefined {
 
 /**
  * Read the MessageWrap attached to an Octo message row without mutating React.
- * Both recall restoration and pet notifications use this small, bounded walk.
+ *
+ * Used by the new-message bubble to know who sent what: the rendered row shows the
+ * text but not whether it is the user's own message, a system notice, or a duplicate,
+ * and those all have to be filtered out before a pet says anything.
  */
 export function getMessageWrapFromItem(item: Element): any | null {
   const key = findFiberKey(item);

@@ -1,4 +1,4 @@
-import type { PlayerWatermarkId } from './octoRecall';
+import type { PlayerWatermarkId } from './octoShared';
 import { OCTO_SELECTORS } from './octoSelectors';
 import {
   bezierPoint,

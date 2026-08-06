@@ -6,7 +6,7 @@ import {
   type DesktopPetPosition,
   type DesktopPetPositionMessage,
   type StoredDesktopPet,
-} from './octoRecall';
+} from './octoShared';
 import { OCTO_SELECTORS } from './octoSelectors';
 import {
   isBuiltInCompanionId,

@@ -1,6 +1,6 @@
 import { defineConfig } from 'wxt';
 import { CHROME_EXTENSION_PUBLIC_KEY, FIREFOX_EXTENSION_ID } from './utils/extensionIdentity';
-import { OCTO_MATCHES } from './utils/octoRecall';
+import { OCTO_MATCHES } from './utils/octoShared';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -27,7 +27,7 @@ export default defineConfig({
   },
   manifest: ({ browser }) => ({
     name: 'Octo 聊天增强',
-    description: '把撤回的消息读回来，顺手换套好看的皮肤：撤回还原、消息美化与全站换肤、舒适输入框、GitHub 快捷跳转和桌面宠物。',
+    description: '给 Octo 网页版换套好看的皮肤，顺手把常用操作变快：消息美化与全站换肤、舒适输入框（含快捷 @ 群成员）、GitHub 快捷跳转和桌面宠物。',
     minimum_chrome_version: '114',
     // Pin the extension ID. With no key, Chromium derives the ID from the
     // install *path*, so every user — and every re-extract of the release ZIP

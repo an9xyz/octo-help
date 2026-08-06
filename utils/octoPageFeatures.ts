@@ -18,7 +18,7 @@
  * - Registry order is TEARDOWN order, because teardown must be exhaustive and
  *   is a straight walk over every entry.
  * - Startup is a separate, explicit sequence, because it is not the reverse of
- *   teardown (the beautify engine has to be up before recall restores rows) and
+ *   teardown (the beautify engine has to be up before the strips it styles) and
  *   some features are started by an incoming setting rather than by the master
  *   switch. Omitting a feature from the startup order is a visible bug — the
  *   feature simply does not run — whereas omitting a teardown is silent, which

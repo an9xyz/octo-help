@@ -2,7 +2,7 @@ import type {
   DesktopPetAnimationManifest,
   DesktopPetManifest,
   DesktopPetStateAnimations,
-} from './octoRecall';
+} from './octoShared';
 
 const LEGACY_COLUMNS = 12;
 const LEGACY_ROWS = 13;

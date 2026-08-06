@@ -6,7 +6,7 @@ import {
   type KickScriptApi,
   type PlayerWatermarkId,
   type RequestKickScriptMessage,
-} from './octoRecall';
+} from './octoShared';
 
 /**
  * Lazy façade over the pixi.js-powered full-screen kick effect.

@@ -1,7 +1,7 @@
 import JSZip, { type JSZipObject } from 'jszip';
 import type {
   StoredDesktopPet,
-} from './octoRecall';
+} from './octoShared';
 import {
   parseDesktopPetManifest,
   validateDesktopPetSpritesheetDimensions,

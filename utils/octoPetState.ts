@@ -2,7 +2,7 @@ import type {
   BuiltInCompanionId,
   DesktopPetPosition,
   StoredDesktopPet,
-} from './octoRecall';
+} from './octoShared';
 import { parseDesktopPetManifest } from './octoPetManifest';
 
 const BUILT_IN_COMPANION_IDS = new Set<BuiltInCompanionId>([

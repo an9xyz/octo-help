@@ -61,11 +61,12 @@ describe('stopAllFeatures', () => {
 
 describe('startFeatures', () => {
   it('starts in the given order, not registry order', () => {
-    // Startup order is independent: beautify must be up before recall runs.
+    // Startup order is independent of teardown order: beautify must be up before the
+    // features whose markup it styles.
     const log: string[] = [];
-    const features = ['recall', 'beautify'].map((id) => feature(id, log));
-    startFeatures(features, ['beautify', 'recall']);
-    expect(log).toEqual(['start:beautify', 'start:recall']);
+    const features = ['composerEnhancement', 'beautify'].map((id) => feature(id, log));
+    startFeatures(features, ['beautify', 'composerEnhancement']);
+    expect(log).toEqual(['start:beautify', 'start:composerEnhancement']);
   });
 
   it('skips features that have no start', () => {
@@ -100,7 +101,7 @@ describe('the master switch contract', () => {
   it('start-then-stop leaves every started feature stopped', () => {
     // The property that matters: whatever came up must go back down.
     const started = new Set<string>();
-    const ids = ['recall', 'beautify', 'petSpeech', 'githubLinks', 'compatCheck'];
+    const ids = ['beautify', 'composerEnhancement', 'petSpeech', 'githubLinks', 'compatCheck'];
     const features: PageFeature[] = ids.map((id) => ({
       id,
       start: () => started.add(id),

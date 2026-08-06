@@ -13,7 +13,7 @@ import {
   type PlayerWatermarkId,
   type RequestKickScriptMessage,
   type StoredCompatReport,
-} from '@/utils/octoRecall';
+} from '@/utils/octoShared';
 import {
   BALL_CURSOR_STORAGE_KEY,
   BEAUTIFY_STORAGE_KEY,
@@ -25,9 +25,8 @@ import {
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
   QQ_SELF_LEFT_STORAGE_KEY,
-  STORAGE_KEY,
   THEME_STORAGE_KEY,
-} from '@/utils/octoRecall';
+} from '@/utils/octoShared';
 import {
   DESKTOP_PET_KEYS,
   RELAYED_STORAGE_KEYS,
@@ -48,7 +47,6 @@ import {
   readPlayerWatermarkFromChange,
   readPlayerWatermarkInitial,
   readQQSelfLeft,
-  readRecallEnabled,
   readTheme,
   type DesktopPetKey,
   type SettingValues,
@@ -85,8 +83,6 @@ export default defineContentScript({
 
     const postMaster = (enabled: boolean) =>
       postToPage({ type: MESSAGE_TYPE.master, enabled });
-    const postToggle = (enabled: boolean) =>
-      postToPage({ type: MESSAGE_TYPE.toggle, enabled });
     const postBeautify = (enabled: boolean) =>
       postToPage({ type: MESSAGE_TYPE.beautify, enabled });
     const postTheme = (themeId: string) =>
@@ -139,7 +135,6 @@ export default defineContentScript({
     ])) as SettingValues;
 
     let currentMaster = readMaster(stored);
-    let currentEnabled = readRecallEnabled(stored);
     let beautifyEnabled = readBeautifyEnabled(stored);
     let currentTheme = readTheme(stored);
     let currentGlobalTheme = readGlobalTheme(stored);
@@ -167,7 +162,6 @@ export default defineContentScript({
       postPlayerWatermark(currentPlayerWatermark);
       postBallCursor(currentBallCursor);
       postQQSelfLeft(currentQQSelfLeft);
-      postToggle(currentEnabled);
       postComposerEnhancement(composerEnhancementEnabled);
       postDesktopPet();
     };
@@ -193,7 +187,6 @@ export default defineContentScript({
      * Processing order comes from SIMPLE_RELAY_KEYS.
      */
     const SIMPLE_RELAYS: Record<SimpleRelayKey, (values: SettingValues) => void> = {
-      [STORAGE_KEY]: (v) => postToggle((currentEnabled = readRecallEnabled(v))),
       [BEAUTIFY_STORAGE_KEY]: (v) => {
         beautifyEnabled = readBeautifyEnabled(v);
         postBeautify(beautifyEnabled);

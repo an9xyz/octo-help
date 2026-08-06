@@ -11,9 +11,8 @@ import {
   MESSI_WATERMARK_STORAGE_KEY,
   PLAYER_WATERMARK_STORAGE_KEY,
   QQ_SELF_LEFT_STORAGE_KEY,
-  STORAGE_KEY,
   THEME_STORAGE_KEY,
-} from './octoRecall';
+} from './octoShared';
 import { DEFAULT_THEME } from './octoThemeCatalog';
 import {
   DESKTOP_PET_KEYS,
@@ -32,7 +31,6 @@ import {
   readPlayerWatermarkFromChange,
   readPlayerWatermarkInitial,
   readQQSelfLeft,
-  readRecallEnabled,
   readTheme,
 } from './octoSettingsParsers';
 import { postToPage, toNewValues, touchesAny } from './octoSettingsRelay';
@@ -58,7 +56,6 @@ describe('defaults that keep existing users unaffected', () => {
   });
 
   it.each([
-    ['recall', readRecallEnabled, STORAGE_KEY],
     ['qq self-left', readQQSelfLeft, QQ_SELF_LEFT_STORAGE_KEY],
   ] as const)('%s defaults OFF when the key is missing', (_l, read, key) => {
     expect(read({})).toBe(false);
@@ -230,7 +227,7 @@ describe('relay helpers', () => {
     postToPage({ type: 'theme', themeId: 'cyber-dark' });
     globalThis.window = original;
     expect(posted).toEqual([
-      { source: 'octo-recall', type: 'theme', themeId: 'cyber-dark' },
+      { source: 'octo-enhancer', type: 'theme', themeId: 'cyber-dark' },
     ]);
   });
 });

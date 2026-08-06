@@ -1,4 +1,4 @@
-import type { BuiltInCompanionId } from './octoRecall';
+import type { BuiltInCompanionId } from './octoShared';
 import { OCTO_SELECTORS } from './octoSelectors';
 
 const ROOT_ID = 'octo-built-in-companion';

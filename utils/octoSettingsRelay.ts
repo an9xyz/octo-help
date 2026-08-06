@@ -1,4 +1,4 @@
-import { MESSAGE_SOURCE, type OctoMessage } from './octoRecall';
+import { MESSAGE_SOURCE, type OctoMessage } from './octoShared';
 
 /**
  * `Omit` over a discriminated union collapses it into one flattened object type,

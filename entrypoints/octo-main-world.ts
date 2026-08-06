@@ -4,7 +4,7 @@ import {
   MESSAGE_TYPE,
   type CompatReportMessage,
   type OctoMessage,
-} from '@/utils/octoRecall';
+} from '@/utils/octoShared';
 import { DEFAULT_THEME } from '@/utils/octoThemeCatalog';
 import {
   initBeautify,
@@ -21,7 +21,6 @@ import {
   teardownComposerEnhancement,
 } from '@/utils/octoComposerEnhancer';
 import { applyDesktopPetState, teardownDesktopPet } from '@/utils/octoPetRenderer';
-import { getMessageWrapFromItem } from '@/utils/octoMessageFiber';
 import { startOctoPetSpeech } from '@/utils/octoPetSpeech';
 import { startOctoGithubLinks } from '@/utils/octoGithubLink';
 import {
@@ -30,28 +29,23 @@ import {
   type PageFeature,
 } from '@/utils/octoPageFeatures';
 import {
-  OCTO_SELECTORS,
   checkOctoCompat,
   documentCompatProbe,
   type OctoCompatReport,
 } from '@/utils/octoSelectors';
 
 /**
- * MAIN-world script.
+ * MAIN-world script — the parts of the extension that need the page's own JS
+ * context rather than an isolated one:
  *
- * Two independent features run here in the page's JS context:
+ *  - Beautify + theme (skin), ported from an9xyz/octo-script (utils/octoBeautify.ts).
+ *  - Quick-@ member strip, which needs the composer's Tiptap editor instance.
+ *  - Input-box pet, new-message bubbles, GitHub shortcuts.
+ *  - Octo DOM compatibility self-check.
  *
- * 1. Show recalled messages — octo hides a revoked message's content behind a
- *    "XX撤回了一条消息" tip, but the original payload stays in React memory on
- *    `message.content`. We walk the fiber from the revoked row to the cell's
- *    `memoizedProps.message`, clone a normal row, and render the original.
- *
- * 2. Beautify + theme (skin) — ported from an9xyz/octo-script; see
- *    utils/octoBeautify.ts. Driven by the side panel via postMessage.
- *
- * We only READ React props here — no prototype patching, no state mutation.
- * Every node we add carries an `octo-recall-*` class so toggling off fully
- * reverts the DOM.
+ * Driven by the side panel via postMessage. We only READ page state — no prototype
+ * patching, no React state mutation — and every node we add is removable, so the
+ * master switch can put the page back exactly as Octo rendered it.
  */
 export default defineUnlistedScript(() => {
   // Stay dormant until the content script sends the persisted master state.
@@ -59,442 +53,11 @@ export default defineUnlistedScript(() => {
   let stopPetSpeech: (() => void) | undefined;
   let stopGithubLinks: (() => void) | undefined;
 
-  // Revoked rows render as a system message. We do NOT gate on the tip text —
-  // octo has several revoke phrasings (你撤回…/XX撤回…/撤回了成员…的一条消息/EN),
-  // so the reliable signal is `message.revoke === true` read from the fiber.
-  const ITEM_SELECTOR = OCTO_SELECTORS.messageItem;
-  const CONVERSATION_SELECTOR = OCTO_SELECTORS.conversation; // message-list scroll host
-  const SYSTEM_SELECTOR = OCTO_SELECTORS.messageSystem;
-  const ROW_SELECTOR = OCTO_SELECTORS.messageRow; // octo's normal message row
-  const CLONE_CLASS = 'octo-recall-clone'; // our restored bubble (cloned row)
-  const ITEM_CLASS = 'octo-recall-item'; // marks a message item we restored
-  const BADGE_CLASS = 'octo-recall-badge';
-  const BOX_CLASS = 'octo-recall-box'; // gray box around restored content
-  const HIDDEN_CLASS = 'octo-recall-hidden-tip'; // marks a hidden native tip
-  const DONE_ATTR = 'octoRecallDone'; // dataset key -> data-octo-recall-done
-  const SYSCLASS_ATTR = 'octoRecallSysclass'; // marks that we removed the system class
-  const STYLE_ID = 'octo-recall-style';
-  const IMG_BOX_CLASS = 'octo-recall-img-box'; // wrapper around recalled image
-  const SCAN_DEBOUNCE_MS = 150;
-
-  let enabled = false;
-  let observer: MutationObserver | null = null;
-  let scanTimer: number | undefined;
-
-  type RecalledContent =
-    | { kind: 'text'; text: string }
-    | { kind: 'image'; url: string; width?: number; height?: number; alt?: string }
-    | { kind: 'file'; digest: string }
-    | { kind: 'other'; digest: string };
-
-  /**
-   * Resolve a potentially-relative media path to an absolute URL, mirroring
-   * octo's `commonDataSource.getImageURL()`:
-   *   - http(s) URLs pass through
-   *   - file/preview/xxx → ${origin}/file/xxx (public MinIO)
-   *   - other paths → ${apiURL}${path} (authed API)
-   */
-  function resolveMediaUrl(path: string): string {
-    if (!path) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    if (path.startsWith('file/preview/')) {
-      return `${window.location.origin}/${path.replace(/^file\/preview\//, 'file/')}`;
-    }
-    // Best-effort apiURL probe: octo stores it on WKApp, but fall back to a
-    // same-origin /api/v1 prefix which matches the default deployment.
-    const wk = (window as any).WKApp;
-    const apiURL =
-      (wk && wk.apiClient && wk.apiClient.config && wk.apiClient.config.apiURL) ||
-      '/api/v1/';
-    const base = apiURL.endsWith('/') ? apiURL : apiURL + '/';
-    return base + path.replace(/^\//, '');
-  }
-
-  /**
-   * Extract the original payload from a revoked MessageWrap. Returns a typed
-   * descriptor:
-   *   - text (contentType 1): content.text
-   *   - image (contentType 2): resolved URL + dimensions
-   *   - other rich types: conversationDigest for a human-readable fallback
-   * Returns null when nothing usable is present.
-   */
-  function extractOriginal(mw: any): RecalledContent | null {
-    if (!mw || mw.revoke !== true) return null;
-    const inner = mw.message;
-    const content = inner && inner.content;
-    if (!content) return null;
-
-    // Respect contentType when available (mirrors MessageContentTypeConst).
-    const ct: number | undefined =
-      inner.contentType ?? content.contentType ?? undefined;
-
-    // Image (type 2): url / remoteUrl / imgData — only treat as image when
-    // contentType is explicitly image (2), to avoid false-positives on other
-    // content types that may carry a `url` field (e.g. some card types).
-    const isImage =
-      ct === 2 ||
-      ct === 3; // gif also renders as an <img>
-    if (isImage) {
-      const raw =
-        content.url || content.remoteUrl || content.imgData || '';
-      if (raw && typeof raw === 'string') {
-        return {
-          kind: 'image',
-          url: resolveMediaUrl(raw),
-          width: typeof content.width === 'number' ? content.width : undefined,
-          height: typeof content.height === 'number' ? content.height : undefined,
-          alt: content.name || (ct === 3 ? 'GIF' : '图片'),
-        };
-      }
-    }
-
-    // Plain text
-    const text = content.text;
-    if (typeof text === 'string' && text.length > 0) {
-      return { kind: 'text', text };
-    }
-
-    // Fallback: SDK digest ("[图片]", "[文件]" etc.)
-    const digest = content.conversationDigest;
-    if (typeof digest === 'string' && digest.length > 0) {
-      if (ct === 8) return { kind: 'file', digest };
-      return { kind: 'other', digest };
-    }
-    return null;
-  }
-
-  // ---- DOM restore / clear ------------------------------------------------
-
-  function formatTimestamp(sec: number): string {
-    const d = new Date(sec * 1000);
-    const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(
-      d.getMinutes(),
-    )}`;
-  }
-
-  /**
-   * Resolve a sender's display name from a UID. Revoked messages carry a null
-   * `message.from`, so we can't read the name off the revoked message itself.
-   * Instead, scan other rendered rows for a non-revoked message by the same
-   * fromUID and copy its rendered sender name. Returns null if none is found
-   * (caller then leaves the name blank rather than showing a wrong one).
-   */
-  function resolveSenderName(uid: string): string | null {
-    if (!uid) return null;
-    const items = document.querySelectorAll<HTMLElement>(ITEM_SELECTOR);
-    for (const it of items) {
-      const other = getMessageWrapFromItem(it);
-      if (!other || other.revoke === true) continue;
-      const oInner = other.message;
-      if (oInner && oInner.fromUID === uid) {
-        // Prefer the name on the fiber; fall back to the rendered sender text.
-        if (oInner.from && oInner.from.title) return oInner.from.title as string;
-        const s = it.querySelector(OCTO_SELECTORS.messageRowSender);
-        const txt = s && s.textContent && s.textContent.trim();
-        if (txt) return txt;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Find a real message row to clone, matching the send/recv side so alignment
-   * and colors come out native. Falls back to any row. Never clones one of our
-   * own restored rows.
-   */
-  function pickDonorRow(send: boolean): HTMLElement | null {
-    const rows = document.querySelectorAll<HTMLElement>(ROW_SELECTOR);
-    let fallback: HTMLElement | null = null;
-    for (const row of rows) {
-      if (row.classList.contains(CLONE_CLASS)) continue;
-      if (!row.querySelector(OCTO_SELECTORS.messageRowBody)) continue;
-      fallback ??= row;
-      const isSend = row.classList.contains('wk-msg-row--send');
-      // Prefer a non-"continue" donor of the same side (has avatar + header).
-      if (isSend === send && !row.classList.contains('wk-msg-row--continue')) {
-        return row;
-      }
-    }
-    return fallback;
-  }
-
-  /**
-   * Rebuild a revoked message as a normal-looking bubble by cloning a real row
-   * and swapping in the original content, then hide the native "撤回" tip.
-   * The clone is static (React handlers don't fire) but visually native.
-   */
-  function restoreRow(item: HTMLElement): void {
-    if (!enabled) return;
-    // Idempotency keyed on the actual clone, not just a flag that can desync.
-    if (item.querySelector(`.${CLONE_CLASS}`)) return;
-
-    // Only system rows carry the revoke tip; cheap pre-filter before fiber walk.
-    const systemEl = item.querySelector<HTMLElement>(SYSTEM_SELECTOR);
-    if (!systemEl) return;
-
-    const mw = getMessageWrapFromItem(item);
-    const original = extractOriginal(mw); // returns null unless revoke === true
-    if (original == null) return;
-
-    const inner = mw.message;
-    // octo normalizes all rows to the left layout (see below), so prefer a
-    // plain (recv-style) donor row for the cleanest structural match.
-    const donor = pickDonorRow(false);
-    if (!donor) return;
-
-    const clone = donor.cloneNode(true) as HTMLElement;
-    clone.classList.add(CLONE_CLASS);
-    // octo lays every message out left-aligned (avatar always on the left);
-    // the --send modifier only adds an indent that would misalign our row, so
-    // we normalize to the plain left layout to line up with normal messages.
-    clone.classList.remove('wk-msg-row--send', 'wk-msg-row--continue');
-
-    // Avatar (always correct — keyed on fromUID)
-    const img = clone.querySelector<HTMLImageElement>(OCTO_SELECTORS.messageAvatarImg);
-    const senderName =
-      (inner.from && inner.from.title) || resolveSenderName(inner.fromUID) || '';
-    if (img && inner.fromUID) {
-      img.src = `/api/v1/users/${encodeURIComponent(inner.fromUID)}/avatar`;
-      img.alt = senderName;
-    }
-    // Sender name — revoked messages have a null `from`, so never trust the
-    // cloned donor's name; set the resolved name, or blank it out so we never
-    // show a different person's name on a revoked message.
-    const sender = clone.querySelector(OCTO_SELECTORS.messageRowSender);
-    if (sender) sender.textContent = senderName;
-    // Strip the donor's AI badge — it reflects the donor's sender, not this
-    // revoked message's, and would falsely tag e.g. a human message as AI.
-    clone.querySelectorAll('.ai-badge').forEach((b) => b.remove());
-    // Timestamp
-    const ts = clone.querySelector(OCTO_SELECTORS.messageRowTimestamp);
-    if (ts && inner.timestamp) ts.textContent = formatTimestamp(inner.timestamp);
-
-    // Body — render based on recalled content kind.
-    const body = clone.querySelector(OCTO_SELECTORS.messageRowBody);
-    if (body) {
-      body.textContent = '';
-      const textContent = document.createElement('div');
-      textContent.className = 'wk-msg-text-content';
-
-      if (original.kind === 'image') {
-        // Render recalled image inside a soft bordered box, sized just like
-        // octo's own image bubbles (max 200px wide, rounded corners).
-        const box = document.createElement('div');
-        box.className = `${BOX_CLASS} ${IMG_BOX_CLASS}`;
-        const img = document.createElement('img');
-        img.src = original.url;
-        img.alt = original.alt || '图片';
-        img.loading = 'lazy';
-        img.style.cssText =
-          'display:block;max-width:200px;max-height:200px;border-radius:8px;object-fit:cover;';
-        if (original.width && original.height) {
-          // Preserve aspect ratio without forcing exact px (bubble caps at 200).
-          img.style.aspectRatio = `${original.width} / ${original.height}`;
-        }
-        box.appendChild(img);
-        textContent.appendChild(box);
-      } else {
-        // Text / file / other digest → plain paragraph in the gray recall box.
-        const box = document.createElement('div');
-        box.className = `wk-markdown wk-markdown-recv ${BOX_CLASS}`;
-        const p = document.createElement('p');
-        p.textContent =
-          original.kind === 'text'
-            ? original.text
-            : original.kind === 'file'
-              ? `📎 ${original.digest}`
-              : original.digest;
-        box.appendChild(p);
-        textContent.appendChild(box);
-      }
-      body.appendChild(textContent);
-    }
-    // "已撤回" badge in the header (falls back to prepending to content).
-    const badge = document.createElement('span');
-    badge.className = BADGE_CLASS;
-    badge.textContent = '已撤回';
-    const header = clone.querySelector(OCTO_SELECTORS.messageRowHeader);
-    if (header) header.appendChild(badge);
-    else clone.querySelector(OCTO_SELECTORS.messageRowContent)?.prepend(badge);
-
-    // Hide native tip (reversibly) and neutralize the system-row layout the
-    // item still gets from octo's `:has(.wk-message-system)` rule (centered +
-    // extra padding). We add a marker class the CSS resets, and record whether
-    // we removed `wk-message-item-system` so clearAll restores prior state.
-    systemEl.classList.add(HIDDEN_CLASS);
-    item.classList.add(ITEM_CLASS);
-    if (item.classList.contains('wk-message-item-system')) {
-      item.classList.remove('wk-message-item-system');
-      item.dataset[SYSCLASS_ATTR] = '1';
-    }
-    item.appendChild(clone);
-    item.dataset[DONE_ATTR] = '1';
-  }
-
-  function safeRestore(item: HTMLElement): void {
-    try {
-      restoreRow(item);
-    } catch {
-      // Never let one bad row break the sweep; leave it as the native tip.
-    }
-  }
-
-  function scan(): void {
-    if (!enabled) return;
-    const items = document.querySelectorAll<HTMLElement>(ITEM_SELECTOR);
-    items.forEach(safeRestore);
-  }
-
-  /**
-   * Observer callback: restore only the message items that were just inserted
-   * (the common case as the virtualized list scrolls / receives messages),
-   * instead of re-scanning the whole document on every mutation. A debounced
-   * full scan still runs on idle as a safety net for in-place fiber re-renders
-   * that flip `revoke=true` on an already-present row without re-inserting it.
-   */
-  function handleMutations(mutations: MutationRecord[]): void {
-    if (!enabled) return;
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (node.nodeType !== 1) continue;
-        const el = node as HTMLElement;
-        if (el.matches(ITEM_SELECTOR)) {
-          safeRestore(el);
-        } else {
-          el.querySelectorAll<HTMLElement>(ITEM_SELECTOR).forEach(safeRestore);
-        }
-      }
-    }
-    scheduleScan();
-  }
-
-  function clearAll(): void {
-    document.querySelectorAll(`.${CLONE_CLASS}`).forEach((el) => el.remove());
-    document
-      .querySelectorAll<HTMLElement>(`.${HIDDEN_CLASS}`)
-      .forEach((el) => el.classList.remove(HIDDEN_CLASS));
-    document
-      .querySelectorAll<HTMLElement>(`${ITEM_SELECTOR}[data-octo-recall-done]`)
-      .forEach((item) => {
-        item.classList.remove(ITEM_CLASS);
-        // Only restore the system class if we were the ones who removed it.
-        if (item.dataset[SYSCLASS_ATTR]) {
-          item.classList.add('wk-message-item-system');
-          delete item.dataset[SYSCLASS_ATTR];
-        }
-        delete item.dataset[DONE_ATTR];
-      });
-  }
-
-  function scheduleScan(): void {
-    if (scanTimer) window.clearTimeout(scanTimer);
-    scanTimer = window.setTimeout(scan, SCAN_DEBOUNCE_MS);
-  }
-
-  // ---- style --------------------------------------------------------------
-
-  function ensureStyle(): void {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
-    style.textContent = `
-      .${HIDDEN_CLASS} { display: none !important; }
-      .${ITEM_CLASS} {
-        /* undo octo's :has(.wk-message-system) system-row layout so the
-           restored row aligns exactly like a normal message */
-        padding: 0 !important;
-        justify-content: normal !important;
-      }
-      .${BADGE_CLASS} {
-        display: inline-flex;
-        align-items: center;
-        margin-left: 6px;
-        padding: 0 6px;
-        height: 16px;
-        border-radius: 8px;
-        background: rgba(250, 173, 20, 0.16);
-        color: #d48806;
-        font-size: 11px;
-        font-weight: 600;
-        line-height: 16px;
-        vertical-align: middle;
-      }
-      .${BOX_CLASS} {
-        display: inline-block;
-        margin-top: 2px;
-        padding: 6px 10px;
-        border: 1px solid rgba(0, 0, 0, 0.09);
-        border-radius: 8px;
-        background: rgba(0, 0, 0, 0.03);
-        color: #646a73;
-      }
-      .${IMG_BOX_CLASS} {
-        padding: 4px;
-        line-height: 0;
-      }
-      .${IMG_BOX_CLASS} img {
-        /* match octo's bubble rounding and light hover feel without adding handlers */
-        cursor: default;
-      }
-      body[theme-mode='dark'] .${BADGE_CLASS} {
-        background: rgba(250, 173, 20, 0.22);
-        color: #f0b429;
-      }
-      body[theme-mode='dark'] .${BOX_CLASS} {
-        border-color: rgba(255, 255, 255, 0.12);
-        background: rgba(255, 255, 255, 0.05);
-        color: #a6a6a6;
-      }
-    `;
-    (document.head || document.documentElement).appendChild(style);
-  }
-
-  // ---- enable / disable ---------------------------------------------------
-
-  function enable(): void {
-    if (enabled) return;
-    enabled = true;
-    ensureStyle();
-    scan();
-    if (!observer) {
-      observer = new MutationObserver(handleMutations);
-    }
-    // Narrow the observed subtree to the message-list container so we don't
-    // wake up on unrelated DOM churn elsewhere in the app. Fall back to body
-    // when the container isn't mounted yet (the debounced scan still catches
-    // rows once they appear under body).
-    const target =
-      document.querySelector<HTMLElement>(CONVERSATION_SELECTOR) ?? document.body;
-    observer.observe(target, { childList: true, subtree: true });
-  }
-
-  function disable(): void {
-    enabled = false;
-    if (observer) observer.disconnect();
-    if (scanTimer) {
-      window.clearTimeout(scanTimer);
-      scanTimer = undefined;
-    }
-    clearAll();
-  }
-
-  function applyToggle(next: boolean): void {
-    recallEnabled = next;
-    // While the master switch is off the whole extension is suspended; just
-    // remember the desired recall state and apply it when master returns.
-    if (!masterEnabled) return;
-    if (next) enable();
-    else disable();
-  }
-
   // ---- master switch (global "uninstall") --------------------------------
 
-  // Start suspended; the content script always pushes the persisted master
-  // value first. `recallEnabled` is the side panel's desired recall state,
-  // independent of `enabled` (the actual active flag gated by master).
+  // Start suspended; the content script always pushes the persisted master value
+  // first, so a user who disabled everything never sees a flash of defaults.
   let masterEnabled = false;
-  let recallEnabled = false;
   // Beautify has its own switch in the panel, remembered even while suspended so
   // a master re-enable does not resurrect an engine the user turned off.
   let beautifyEnabled = true;
@@ -565,20 +128,9 @@ export default defineUnlistedScript(() => {
    */
   const PAGE_FEATURES: PageFeature[] = [
     {
-      id: 'recall',
-      // Gated on its own toggle, unlike the rest: the master switch only
-      // restores recall if the user had it on.
-      start: () => {
-        if (recallEnabled) enable();
-      },
-      stop: () => {
-        disable();
-        document.getElementById(STYLE_ID)?.remove();
-      },
-    },
-    {
       id: 'beautify',
-      // Gated on its own toggle, like recall.
+      // Gated on its own toggle, unlike the rest: the master switch only restarts
+      // the engine if the user had it on.
       start: () => {
         if (beautifyEnabled) initBeautify(lastThemeId);
       },
@@ -624,11 +176,6 @@ export default defineUnlistedScript(() => {
     },
   ];
 
-  /**
-   * Startup order. NOT the reverse of teardown order: the beautify engine must
-   * be up before recall clones rows into the page, and the compat check runs
-   * last so it probes a fully mounted extension.
-   */
   /** Settings that only make sense with the beautify engine running. */
   const BEAUTIFY_DRIVEN_TYPES = new Set<string>([
     MESSAGE_TYPE.theme,
@@ -639,20 +186,24 @@ export default defineUnlistedScript(() => {
     MESSAGE_TYPE.qqSelfLeft,
   ]);
 
+  /**
+   * Startup order. NOT the reverse of teardown order: the beautify engine goes first
+   * because the other features' markup is styled by it, and the compat check goes
+   * last so it probes a fully mounted extension.
+   */
   const FEATURE_START_ORDER = [
     'beautify',
+    'composerEnhancement',
     'petSpeech',
     'githubLinks',
-    'recall',
     'compatCheck',
   ] as const;
 
   /**
-   * Turn the whole extension on/off. Off is meant to look exactly like the
-   * extension is uninstalled: recall reverts its DOM and the beautify + theme
-   * + full-screen kick engine is fully torn down. On re-enable we re-boot the
-   * beautify engine (the content script re-pushes theme/kick/watermark right
-   * after) and restore recall if its own toggle is on.
+   * Turn the whole extension on/off. Off is meant to look exactly like the extension
+   * is uninstalled: every engine is torn down and every node we added is removed. On
+   * re-enable we re-boot the beautify engine (the content script re-pushes
+   * theme/kick/watermark right after).
    */
   function applyMaster(next: boolean): void {
     if (next === masterEnabled) return;
@@ -685,7 +236,6 @@ export default defineUnlistedScript(() => {
       message: Extract<OctoMessage, { type: K }>,
     ) => void;
   } = {
-    [MESSAGE_TYPE.toggle]: (m) => applyToggle(!!m.enabled),
     [MESSAGE_TYPE.beautify]: (m) => applyBeautify(!!m.enabled),
     [MESSAGE_TYPE.theme]: (m) => setTheme(m.themeId),
     [MESSAGE_TYPE.globalTheme]: (m) => setGlobalTheme(m.themeId),

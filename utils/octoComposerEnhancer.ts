@@ -1,3 +1,5 @@
+import { setMentionQuickBar, teardownMentionQuickBar } from './octoMentionBar';
+
 const STYLE_ID = 'octo-composer-enhancement-style';
 const ENABLED_ATTRIBUTE = 'data-octo-composer-enhanced';
 
@@ -80,9 +82,14 @@ export function setComposerEnhancement(enabled: boolean): void {
   }
   ensureStyle();
   document.body?.setAttribute(ENABLED_ATTRIBUTE, 'true');
+  // The quick-@ strip lives in the roomier composer this feature creates, so it
+  // rides the same switch instead of adding a second one for what the user
+  // experiences as one input box.
+  setMentionQuickBar(true);
 }
 
 export function teardownComposerEnhancement(): void {
   document.body?.removeAttribute(ENABLED_ATTRIBUTE);
   document.getElementById(STYLE_ID)?.remove();
+  teardownMentionQuickBar();
 }

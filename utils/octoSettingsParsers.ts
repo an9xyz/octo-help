@@ -13,14 +13,13 @@ import {
   MESSI_WATERMARK_STORAGE_KEY,
   PLAYER_WATERMARK_STORAGE_KEY,
   QQ_SELF_LEFT_STORAGE_KEY,
-  STORAGE_KEY,
   THEME_STORAGE_KEY,
   type BuiltInCompanionId,
   type DesktopPetPlacement,
   type DesktopPetPosition,
   type PlayerWatermarkId,
   type StoredDesktopPet,
-} from './octoRecall';
+} from './octoShared';
 import {
   DEFAULT_GLOBAL_THEME,
   DEFAULT_KICK_STYLE,
@@ -63,10 +62,6 @@ export function readBeautifyEnabled(v: SettingValues): boolean {
   return v[BEAUTIFY_STORAGE_KEY] !== false;
 }
 
-/** "Show recalled messages" toggle. Missing means OFF. */
-export function readRecallEnabled(v: SettingValues): boolean {
-  return v[STORAGE_KEY] === true;
-}
 
 export function readTheme(v: SettingValues): string {
   const value = v[THEME_STORAGE_KEY];
@@ -179,7 +174,6 @@ export function readDesktopPetEnabledFromChange(v: SettingValues): boolean {
 /** Every key the content script needs to read at startup. */
 export const RELAYED_STORAGE_KEYS = [
   MASTER_STORAGE_KEY,
-  STORAGE_KEY,
   BEAUTIFY_STORAGE_KEY,
   THEME_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
@@ -205,7 +199,6 @@ export const RELAYED_STORAGE_KEYS = [
  * you notice when a toggle silently stops working.
  */
 export const SIMPLE_RELAY_KEYS = [
-  STORAGE_KEY,
   BEAUTIFY_STORAGE_KEY,
   THEME_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,

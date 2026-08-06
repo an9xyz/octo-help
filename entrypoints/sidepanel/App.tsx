@@ -24,14 +24,13 @@ import {
   PLAYER_WATERMARK_STORAGE_KEY,
   QQ_SELF_LEFT_STORAGE_KEY,
   COMPAT_REPORT_STORAGE_KEY,
-  STORAGE_KEY,
   THEME_STORAGE_KEY,
   type PlayerWatermarkId,
   type BuiltInCompanionId,
   type DesktopPetPlacement,
   type StoredCompatReport,
   type StoredDesktopPet,
-} from '@/utils/octoRecall';
+} from '@/utils/octoShared';
 import {
   GLOBAL_THEMES,
   THEMES,
@@ -326,7 +325,6 @@ function readCompatReport(value: unknown): StoredCompatReport | null {
 
 function App() {
   const [masterEnabled, setMasterEnabled] = useState(true);
-  const [enabled, setEnabled] = useState(false);
   const [themeId, setThemeId] = useState(DEFAULT_THEME);
   const [globalThemeId, setGlobalThemeId] = useState(DEFAULT_GLOBAL_THEME);
   const [kickStyle, setKick] = useState(DEFAULT_KICK_STYLE);
@@ -368,7 +366,6 @@ function App() {
     browser.storage.local
       .get([
         MASTER_STORAGE_KEY,
-        STORAGE_KEY,
         BEAUTIFY_STORAGE_KEY,
         THEME_STORAGE_KEY,
         GLOBAL_THEME_STORAGE_KEY,
@@ -388,7 +385,6 @@ function App() {
         if (!mounted) return;
         // Missing key means enabled so existing users keep the current behavior.
         setMasterEnabled(res[MASTER_STORAGE_KEY] !== false);
-        setEnabled(res[STORAGE_KEY] === true);
         setBeautifyEnabled(res[BEAUTIFY_STORAGE_KEY] !== false);
         setThemeId(normalizeStoredId(res[THEME_STORAGE_KEY], THEMES, DEFAULT_THEME));
         setGlobalThemeId(
@@ -494,10 +490,6 @@ function App() {
   const toggleFeature = (id: string) =>
     setOpenFeature((current) => (current === id ? null : id));
 
-  const toggleRecall = async () => {
-    const next = !enabled;
-    await persistSetting(STORAGE_KEY, enabled, next, setEnabled);
-  };
 
   const chooseTheme = async (id: string) => {
     await persistSetting(THEME_STORAGE_KEY, themeId, id, setThemeId);
@@ -1012,22 +1004,6 @@ function App() {
           </p>
         </FeatureSection>
 
-        <FeatureSection
-          icon="↺"
-          iconClass="is-message"
-          title="显示已撤回的消息"
-          summary={enabled ? '还原原文并标注「已撤回」' : '已关闭'}
-          enabled={enabled}
-          onToggleEnabled={toggleRecall}
-          open={openFeature === 'recall'}
-          onToggleOpen={() => toggleFeature('recall')}
-          disabled={loading}
-        >
-          <p className="feature-note">
-            Octo 撤回消息时并不删除原文，它仍在页面内存里。开启后会把「撤回了一条消息」还原成正常气泡并加上标注，
-            全程只读页面数据，关闭即完全还原。
-          </p>
-        </FeatureSection>
       </div>
 
       <p className="footnote">仅在 im.deepminer.com.cn 生效 · 所有处理均在本地完成</p>

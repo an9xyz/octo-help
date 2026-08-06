@@ -3,7 +3,7 @@ import {
   KICK_GLOBAL_KEY,
   KICK_READY_EVENT,
   type KickScriptApi,
-} from '@/utils/octoRecall';
+} from '@/utils/octoShared';
 import {
   setFullscreenKickBallCursor,
   setFullscreenKickPlayer,

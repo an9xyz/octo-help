@@ -21,6 +21,12 @@
 export const OCTO_SELECTORS = {
   /** Scroll host of the message list. Also the app-shell presence probe. */
   conversation: '.wk-conversation-content',
+  /** Inner scroller. Carries `data-conversation-channel-id/-type` on builds that
+   *  have it — the supported way to learn which conversation is open. */
+  conversationMessages: '.wk-conversation-messages',
+  /** Highlighted row in the conversation list. Its avatar `<img src>` is today's
+   *  only plain-DOM source for the open conversation's channel id. */
+  conversationListSelected: '.wk-conversationlist-item-selected',
   /** Broader message-area match, used when watching for new messages. */
   messageArea: '.wk-conversation-messages, .wk-conversation-content',
   /** One logical message (may render as a normal row or a system notice). */
@@ -31,7 +37,7 @@ export const OCTO_SELECTORS = {
   messageRowSend: '.wk-msg-row--send',
   /** Row variant: continuation of the previous sender's block. */
   messageRowContinue: '.wk-msg-row--continue',
-  /** System notice inside an item — this is what a recalled message renders as. */
+  /** System notice inside an item (join/leave/recall tips) — never spoken by a pet. */
   messageSystem: '.wk-message-system',
   /** Rendered message body (markdown). */
   messageBody: '.wk-markdown',
@@ -39,13 +45,8 @@ export const OCTO_SELECTORS = {
   foldMessageBody: '.wk-fold-msg-text',
   /** Message body in either context. */
   anyMessageBody: '.wk-markdown, .wk-fold-msg-text',
-  /** Row sub-parts, used when cloning a system row back into a normal one. */
+  /** Sender name inside a row. */
   messageRowSender: '.wk-msg-row-sender',
-  messageRowBody: '.wk-msg-row-body',
-  messageRowHeader: '.wk-msg-row-header',
-  messageRowContent: '.wk-msg-row-content',
-  messageRowTimestamp: '.wk-msg-row-timestamp',
-  messageAvatarImg: '.wk-msg-avatar-img',
   /** Where a link shortcut is appended, in normal and folded contexts. */
   linkShortcutHost: '.wk-msg-row-content, .wk-fold-msg-body',
   /** Links inside a message body — the input to the link-card passes. */
@@ -54,6 +55,10 @@ export const OCTO_SELECTORS = {
   foldToggle: '.wk-fold-session-card-toggle',
   /** The message composer container. */
   composer: '.wk-messageinput-card',
+  /** The composer's Tiptap editor surface. The element carries the editor
+   *  instance on an own `editor` property, which is how a real mention gets
+   *  inserted (see utils/octoMention.ts). */
+  composerEditor: '.wk-messageinput-editor .ProseMirror',
   /** Bot profile card body (the gacha card). */
   botCardContent: '.wk-bot-detail-content',
   /** Bot profile card modal wrapper. */
@@ -105,10 +110,11 @@ interface CompatCheck {
  * `.wk-msg-row--send` disappears, own-message bubbles just lose their accent.
  */
 const COMPAT_CHECKS: CompatCheck[] = [
-  { key: 'messageItem', feature: '撤回消息还原 / 新消息气泡', requires: 'conversation' },
+  { key: 'messageItem', feature: '新消息气泡', requires: 'conversation' },
   { key: 'messageRow', feature: '消息美化与主题', requires: 'conversation' },
   { key: 'messageBody', feature: '长消息折叠、链接卡片', requires: 'messageRow' },
   { key: 'composer', feature: '舒适输入框、输入框宠物', requires: 'conversation' },
+  { key: 'composerEditor', feature: '快捷 @ 群成员', requires: 'composer' },
 ];
 
 export interface OctoCompatReport {

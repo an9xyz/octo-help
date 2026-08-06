@@ -1,4 +1,5 @@
-// Shared constants between popup, content script (ISOLATED) and injected script (MAIN world).
+// Shared constants between the side panel, the content script (ISOLATED) and the
+// injected script (MAIN world).
 
 /**
  * The Octo deployment this extension attaches to.
@@ -11,12 +12,9 @@
 export const OCTO_MATCHES = ['https://im.deepminer.com.cn/*'] as const;
 
 /** storage.local key holding the global master switch. Off => behaves like the
- *  extension is uninstalled (recall + beautify + themes + kick all torn down).
+ *  extension is uninstalled (beautify + themes + kick + pets all torn down).
  *  Default ON (missing key => enabled). */
 export const MASTER_STORAGE_KEY = 'octoMasterEnabled';
-
-/** storage.local key holding the "show recalled messages" on/off state. Default OFF. */
-export const STORAGE_KEY = 'octoRecallEnabled';
 
 /**
  * storage.local key for the beautify + theme engine's own on/off switch.
@@ -120,12 +118,11 @@ export interface DesktopPetPosition {
 }
 
 /** window.postMessage envelope source, so we ignore unrelated messages. */
-export const MESSAGE_SOURCE = 'octo-recall';
+export const MESSAGE_SOURCE = 'octo-enhancer';
 
 /** Message types sent from content script -> injected main-world script. */
 export const MESSAGE_TYPE = {
   master: 'master',
-  toggle: 'toggle',
   beautify: 'beautify',
   theme: 'theme',
   globalTheme: 'globalTheme',
@@ -146,11 +143,6 @@ export interface MasterMessage {
   enabled: boolean;
 }
 
-export interface ToggleMessage {
-  source: typeof MESSAGE_SOURCE;
-  type: typeof MESSAGE_TYPE.toggle;
-  enabled: boolean;
-}
 
 /** Beautify + theme engine on/off, independent of the master switch. */
 export interface BeautifyMessage {
@@ -268,7 +260,6 @@ export interface CompatReportMessage {
 
 export type OctoMessage =
   | MasterMessage
-  | ToggleMessage
   | BeautifyMessage
   | ThemeMessage
   | GlobalThemeMessage

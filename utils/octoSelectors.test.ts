@@ -20,7 +20,14 @@ function probeWith(present: string[]): CompatProbe {
 const S = OCTO_SELECTORS;
 
 /** Everything the checks care about, i.e. a healthy Octo page. */
-const HEALTHY = [S.conversation, S.messageItem, S.messageRow, S.messageBody, S.composer];
+const HEALTHY = [
+  S.conversation,
+  S.messageItem,
+  S.messageRow,
+  S.messageBody,
+  S.composer,
+  S.composerEditor,
+];
 
 describe('checkOctoCompat', () => {
   it('reports nothing on a healthy page', () => {
@@ -59,9 +66,9 @@ describe('checkOctoCompat', () => {
     expect(report.brokenFeatures).toEqual(['舒适输入框、输入框宠物']);
   });
 
-  it('flags recall when the message item class disappears', () => {
+  it('names the feature behind a renamed message item', () => {
     const report = checkOctoCompat(probeWith(HEALTHY.filter((s) => s !== S.messageItem)));
-    expect(report.brokenFeatures).toEqual(['撤回消息还原 / 新消息气泡']);
+    expect(report.brokenFeatures).toEqual(['新消息气泡']);
   });
 
   it('reports several broken features at once without duplicates', () => {

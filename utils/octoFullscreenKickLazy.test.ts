@@ -5,7 +5,7 @@ import {
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
   type KickScriptApi,
-} from './octoRecall';
+} from './octoShared';
 
 /**
  * The lazy façade is what keeps pixi.js (543 KB) out of the always-injected
