@@ -10,6 +10,7 @@ import {
 } from 'react';
 import {
   BALL_CURSOR_STORAGE_KEY,
+  BEAUTIFY_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
@@ -43,6 +44,8 @@ import {
   type ThemeDef,
 } from '@/utils/octoThemeCatalog';
 import { isBuiltInCompanionId, isStoredDesktopPet } from '@/utils/octoPetState';
+import { AiBalanceBanner, AiBalanceCard } from './AiBalanceCard';
+import { FeatureSection } from './FeatureSection';
 import './App.css';
 
 const PLAYER_WATERMARKS: Array<{ id: PlayerWatermarkId; label: string; icon: string }> = [
@@ -344,6 +347,14 @@ function App() {
   const [compatReport, setCompatReport] = useState<StoredCompatReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeThemePicker, setActiveThemePicker] = useState<'message' | 'global' | null>(null);
+  const [beautifyEnabled, setBeautifyEnabled] = useState(true);
+  /**
+   * Which feature is expanded. One at a time on purpose: the panel's problem was
+   * that every knob of every feature was on screen at once.
+   */
+  const [openFeature, setOpenFeature] = useState<string | null>(null);
+  /** Restores the previous shooter when the football switch is flipped back on. */
+  const lastPlayer = useRef<PlayerWatermarkId>('messi');
   const petFileInput = useRef<HTMLInputElement>(null);
   const closeThemePicker = useCallback(() => setActiveThemePicker(null), []);
 
@@ -359,6 +370,7 @@ function App() {
       .get([
         MASTER_STORAGE_KEY,
         STORAGE_KEY,
+        BEAUTIFY_STORAGE_KEY,
         THEME_STORAGE_KEY,
         GLOBAL_THEME_STORAGE_KEY,
         KICK_STYLE_STORAGE_KEY,
@@ -378,6 +390,7 @@ function App() {
         // Missing key means enabled so existing users keep the current behavior.
         setMasterEnabled(res[MASTER_STORAGE_KEY] !== false);
         setEnabled(res[STORAGE_KEY] === true);
+        setBeautifyEnabled(res[BEAUTIFY_STORAGE_KEY] !== false);
         setThemeId(normalizeStoredId(res[THEME_STORAGE_KEY], THEMES, DEFAULT_THEME));
         setGlobalThemeId(
           normalizeStoredId(res[GLOBAL_THEME_STORAGE_KEY], GLOBAL_THEMES, DEFAULT_GLOBAL_THEME),
@@ -389,6 +402,7 @@ function App() {
         } else if (res[MESSI_WATERMARK_STORAGE_KEY] === true) {
           setPlayerWatermark('messi');
         }
+        if (storedPlayer === 'messi' || storedPlayer === 'mbappe') lastPlayer.current = storedPlayer;
         // Default ON (missing key => enabled).
         setBallCursor(res[BALL_CURSOR_STORAGE_KEY] !== false);
         setQqSelfLeft(res[QQ_SELF_LEFT_STORAGE_KEY] === true);
@@ -460,6 +474,27 @@ function App() {
     await persistSetting(MASTER_STORAGE_KEY, masterEnabled, next, setMasterEnabled);
   };
 
+  const toggleBeautify = async () => {
+    const next = !beautifyEnabled;
+    await persistSetting(BEAUTIFY_STORAGE_KEY, beautifyEnabled, next, setBeautifyEnabled);
+  };
+
+  /**
+   * The football feature has no boolean of its own — "no shooter" *is* off — so
+   * the switch maps onto the watermark choice and remembers the last shooter.
+   */
+  const toggleFootball = async () => {
+    if (playerWatermark === 'none') {
+      await choosePlayerWatermark(lastPlayer.current);
+      return;
+    }
+    lastPlayer.current = playerWatermark;
+    await choosePlayerWatermark('none');
+  };
+
+  const toggleFeature = (id: string) =>
+    setOpenFeature((current) => (current === id ? null : id));
+
   const toggleRecall = async () => {
     const next = !enabled;
     await persistSetting(STORAGE_KEY, enabled, next, setEnabled);
@@ -478,6 +513,7 @@ function App() {
   };
 
   const choosePlayerWatermark = async (id: PlayerWatermarkId) => {
+    if (id !== 'none') lastPlayer.current = id;
     await persistSetting(
       PLAYER_WATERMARK_STORAGE_KEY,
       playerWatermark,
@@ -614,34 +650,51 @@ function App() {
 
   return (
     <main className="panel">
-      <header className="brand">
+      {/* The master switch belongs to the app bar, not to the feature list: it is
+          not "one more toggle" — off is supposed to look like the extension is
+          not installed. Keeping it in the same stack as the per-feature rows made
+          it read as a peer of them. */}
+      <header className={`brand${masterEnabled ? '' : ' is-paused'}`}>
         <img className="brand-logo" src="/logo.png" alt="" />
         <div className="brand-copy">
           <h1 className="title">Octo 聊天增强</h1>
-          <span className="brand-subtitle">让你的 Octo 更好看、更好用</span>
+          <span className="brand-subtitle">
+            {masterEnabled ? '让你的 Octo 更好看、更好用' : '已暂停，页面与未安装时一致'}
+          </span>
+        </div>
+        <div className="brand-master">
+          <span className="brand-master-label">{masterEnabled ? '已启用' : '已暂停'}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-label="启用全部增强"
+            aria-checked={masterEnabled}
+            className={`switch master-switch${masterEnabled ? ' switch-on' : ''}`}
+            disabled={loading}
+            onClick={toggleMaster}
+          >
+            <span className="switch-knob" />
+          </button>
         </div>
       </header>
 
-      <section className={`master-card${masterEnabled ? ' is-enabled' : ''}`}>
-        <div className="master-status" aria-hidden="true"><span /></div>
-        <div className="master-copy">
-          <span className="master-title">全部增强</span>
-          <span className="master-desc">
-            {masterEnabled ? '已开启，修改设置后立即生效' : '已暂停，修改会在重新开启后生效'}
-          </span>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-label="启用全部增强"
-          aria-checked={masterEnabled}
-          className={`switch master-switch${masterEnabled ? ' switch-on' : ''}`}
-          disabled={loading}
-          onClick={toggleMaster}
-        >
-          <span className="switch-knob" />
-        </button>
-      </section>
+      {/* Hidden while paused: the background stops polling then, so the number
+          would be a stale figure with nothing saying so. */}
+      {masterEnabled && <AiBalanceBanner />}
+
+      {!masterEnabled && (
+        <section className="master-paused" role="status">
+          <span className="master-paused-icon" aria-hidden="true">⏸</span>
+          <div>
+            <strong>全部增强已暂停</strong>
+            <p>
+              页面已还原成没有安装扩展的样子，余额查询和图标角标也一并停止。
+              下面的设置可以照常修改，会在重新启用后生效。
+            </p>
+          </div>
+        </section>
+      )}
+
       {settingsError && <p className="settings-error" role="alert">{settingsError}</p>}
       {compatReport && compatReport.brokenFeatures.length > 0 && (
         <section className="compat-warning" role="status">
@@ -656,15 +709,27 @@ function App() {
         </section>
       )}
 
-      <div className="settings-stack">
-        <section className="settings-card" aria-labelledby="appearance-title">
-          <header className="section-heading">
-            <span className="section-icon" aria-hidden="true">◐</span>
-            <div>
-              <h2 id="appearance-title">外观</h2>
-              <p>主题只在选择时展开，主页保持简洁</p>
-            </div>
-          </header>
+      <div className={`settings-stack${masterEnabled ? '' : ' is-paused'}`}>
+        <AiBalanceCard
+          disabled={loading}
+          open={openFeature === 'balance'}
+          onToggleOpen={() => toggleFeature('balance')}
+        />
+
+        <FeatureSection
+          icon="◐"
+          title="消息美化与主题"
+          summary={
+            beautifyEnabled
+              ? `${selectedMessageTheme.label} · ${selectedGlobalTheme.label}`
+              : '已关闭，页面保持 Octo 原样'
+          }
+          enabled={beautifyEnabled}
+          onToggleEnabled={toggleBeautify}
+          open={openFeature === 'appearance'}
+          onToggleOpen={() => toggleFeature('appearance')}
+          disabled={loading}
+        >
           <button
             type="button"
             className="choice-row"
@@ -695,16 +760,44 @@ function App() {
             </span>
             <span className="choice-action">更换 <b aria-hidden="true">›</b></span>
           </button>
-        </section>
-
-        <section className="settings-card" aria-labelledby="football-title">
-          <header className="section-heading">
-            <span className="section-icon is-football" aria-hidden="true">⚽</span>
-            <div>
-              <h2 id="football-title">足球玩法</h2>
-              <p>统一管理射门动画、球星和鼠标效果</p>
+          {themeId === 'qq2014' && (
+            <div className="config-row">
+              <div className="config-copy">
+                <span>自己的消息靠左</span>
+                <small>QQ 2014 主题专属布局</small>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-label="自己的消息靠左"
+                aria-checked={qqSelfLeft}
+                className={`switch${qqSelfLeft ? ' switch-on' : ''}`}
+                disabled={loading}
+                onClick={toggleQqSelfLeft}
+              >
+                <span className="switch-knob" />
+              </button>
             </div>
-          </header>
+          )}
+        </FeatureSection>
+
+        <FeatureSection
+          icon="⚽"
+          iconClass="is-football"
+          title="足球玩法"
+          summary={
+            playerWatermark === 'none'
+              ? '已关闭'
+              : `${PLAYER_WATERMARKS.find((player) => player.id === playerWatermark)?.label ?? ''} · ${
+                  KICK_STYLES.find((style) => style.id === kickStyle)?.label ?? ''
+                }`
+          }
+          enabled={playerWatermark !== 'none'}
+          onToggleEnabled={toggleFootball}
+          open={openFeature === 'football'}
+          onToggleOpen={() => toggleFeature('football')}
+          disabled={loading}
+        >
           {themeId !== 'worldcup' && (
             <p className="context-note"><span aria-hidden="true">i</span>气泡射门动画需要选用“美加墨世界杯”消息主题</p>
           )}
@@ -761,16 +854,27 @@ function App() {
               <span className="switch-knob" />
             </button>
           </div>
-        </section>
+        </FeatureSection>
 
-        <section className="settings-card" aria-labelledby="pet-title">
-          <header className="section-heading">
-            <span className="section-icon is-pet" aria-hidden="true">✦</span>
-            <div>
-              <h2 id="pet-title">输入框宠物</h2>
-              <p>内置四只开箱即用，也支持本地宠物包</p>
-            </div>
-          </header>
+        <FeatureSection
+          icon="✦"
+          iconClass="is-pet"
+          title="输入框宠物"
+          summary={
+            desktopPetEnabled
+              ? `${selectedBuiltInCompanion?.label ?? desktopPet?.manifest.displayName ?? '已启用'}${
+                  desktopPet && !builtInCompanion && desktopPetPlacement === 'desktop' ? ' · 自由拖拽' : ''
+                }`
+              : desktopPet || builtInCompanion
+                ? '已关闭'
+                : '还没有选择宠物'
+          }
+          enabled={desktopPetEnabled}
+          onToggleEnabled={toggleDesktopPet}
+          open={openFeature === 'pet'}
+          onToggleOpen={() => toggleFeature('pet')}
+          disabled={loading || petBusy || (!desktopPet && !builtInCompanion)}
+        >
           <div className="built-in-pet-grid" role="radiogroup" aria-label="内置宠物">
             {BUILT_IN_COMPANIONS.map((companion) => (
               <button
@@ -903,70 +1007,41 @@ function App() {
             <span className="pet-limit">ZIP，最大 10 MB</span>
           </div>
           {petError && <p className="pet-error" role="alert">{petError}</p>}
-        </section>
+        </FeatureSection>
 
-        <section className="settings-card" aria-labelledby="message-title">
-          <header className="section-heading">
-            <span className="section-icon is-message" aria-hidden="true">≡</span>
-            <div>
-              <h2 id="message-title">消息增强</h2>
-              <p>按需开启不影响主题的独立功能</p>
-            </div>
-          </header>
-          <div className="config-row">
-            <div className="config-copy">
-              <span>舒适输入框</span>
-              <small>默认三行高度，工具栏移到右下角并保留原生展开</small>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-label="舒适输入框"
-              aria-checked={composerEnhancement}
-              className={`switch${composerEnhancement ? ' switch-on' : ''}`}
-              disabled={loading}
-              onClick={toggleComposerEnhancement}
-            >
-              <span className="switch-knob" />
-            </button>
-          </div>
-          {themeId === 'qq2014' && (
-            <div className="config-row">
-              <div className="config-copy">
-                <span>自己的消息靠左</span>
-                <small>QQ 2014 主题专属布局</small>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-label="自己的消息靠左"
-                aria-checked={qqSelfLeft}
-                className={`switch${qqSelfLeft ? ' switch-on' : ''}`}
-                disabled={loading}
-                onClick={toggleQqSelfLeft}
-              >
-                <span className="switch-knob" />
-              </button>
-            </div>
-          )}
-          <div className="config-row">
-            <div className="config-copy">
-              <span>显示已撤回的消息</span>
-              <small>将“撤回了一条消息”还原为原文并标注</small>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-label="显示已撤回的消息"
-              aria-checked={enabled}
-              className={`switch${enabled ? ' switch-on' : ''}`}
-              disabled={loading}
-              onClick={toggleRecall}
-            >
-              <span className="switch-knob" />
-            </button>
-          </div>
-        </section>
+        <FeatureSection
+          icon="⌶"
+          iconClass="is-message"
+          title="舒适输入框"
+          summary={composerEnhancement ? '三行编辑区 · 工具栏在右下角' : '已关闭，保持 Octo 原始输入框'}
+          enabled={composerEnhancement}
+          onToggleEnabled={toggleComposerEnhancement}
+          open={openFeature === 'composer'}
+          onToggleOpen={() => toggleFeature('composer')}
+          disabled={loading}
+        >
+          <p className="feature-note">
+            默认提供三行编辑空间，把工具栏移到右下角，同时保留 Octo 原生的附件、快捷键和全屏展开。
+            只调整布局样式，不接管编辑器事件。
+          </p>
+        </FeatureSection>
+
+        <FeatureSection
+          icon="↺"
+          iconClass="is-message"
+          title="显示已撤回的消息"
+          summary={enabled ? '还原原文并标注「已撤回」' : '已关闭'}
+          enabled={enabled}
+          onToggleEnabled={toggleRecall}
+          open={openFeature === 'recall'}
+          onToggleOpen={() => toggleFeature('recall')}
+          disabled={loading}
+        >
+          <p className="feature-note">
+            Octo 撤回消息时并不删除原文，它仍在页面内存里。开启后会把「撤回了一条消息」还原成正常气泡并加上标注，
+            全程只读页面数据，关闭即完全还原。
+          </p>
+        </FeatureSection>
       </div>
 
       <p className="footnote">仅在 im.deepminer.com.cn 生效 · 所有处理均在本地完成</p>

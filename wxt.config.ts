@@ -26,13 +26,19 @@ export default defineConfig({
   },
   manifest: {
     name: 'Octo 聊天增强',
-    description: '增强 Octo 网页聊天：消息美化、舒适输入框、输入框宠物、GitHub 快捷入口和本地桌面宠物。',
+    description: '增强 Octo 网页聊天：消息美化、舒适输入框、输入框宠物、AI 余额、GitHub 快捷入口和本地桌面宠物。',
     minimum_chrome_version: '114',
     action: {
       default_title: '打开 Octo 聊天增强设置',
     },
-    permissions: ['storage', 'unlimitedStorage'],
-    host_permissions: [...OCTO_MATCHES],
+    permissions: ['storage', 'unlimitedStorage', 'alarms'],
+    // `<all_urls>` is here for the AI balance endpoint, which is whatever gateway
+    // the user happens to use and cannot be enumerated up front. It is a broad
+    // grant (Chrome will say "all sites" at install time), so note what it does
+    // NOT change: the content script still only matches OCTO_MATCHES, and the
+    // only cross-origin request the extension ever makes is the balance fetch in
+    // the background, to the single URL the user configured.
+    host_permissions: ['<all_urls>'],
     web_accessible_resources: [
       {
         // MAIN-world scripts plus assets referenced from the page context.

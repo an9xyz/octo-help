@@ -1,5 +1,7 @@
 import {
+  AI_BALANCE_PAGE_STORAGE_KEY,
   BALL_CURSOR_STORAGE_KEY,
+  BEAUTIFY_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
@@ -14,6 +16,7 @@ import {
   QQ_SELF_LEFT_STORAGE_KEY,
   STORAGE_KEY,
   THEME_STORAGE_KEY,
+  type AiBalancePageState,
   type BuiltInCompanionId,
   type DesktopPetPlacement,
   type DesktopPetPosition,
@@ -52,9 +55,31 @@ export type SettingValues = Record<string, unknown>;
 
 // ---- settings whose rule is identical on both paths -----------------------
 
+/**
+ * AI balance, already formatted by the background.
+ *
+ * Deliberately the only balance rule in this file: the endpoint and the API key
+ * live in a different storage key that the content script never reads, so no
+ * balance logic (and none of its bundle weight) belongs here.
+ */
+export function readAiBalancePage(v: SettingValues): AiBalancePageState {
+  const value = v[AI_BALANCE_PAGE_STORAGE_KEY];
+  if (!value || typeof value !== 'object') return { text: '', low: false };
+  const state = value as Record<string, unknown>;
+  return {
+    text: typeof state.text === 'string' ? state.text.slice(0, 40) : '',
+    low: state.low === true,
+  };
+}
+
 /** Master switch. Missing means ON, so existing users are unaffected. */
 export function readMaster(v: SettingValues): boolean {
   return v[MASTER_STORAGE_KEY] !== false;
+}
+
+/** Beautify + theme engine toggle. Missing means ON, so nothing changes on upgrade. */
+export function readBeautifyEnabled(v: SettingValues): boolean {
+  return v[BEAUTIFY_STORAGE_KEY] !== false;
 }
 
 /** "Show recalled messages" toggle. Missing means OFF. */
@@ -174,6 +199,7 @@ export function readDesktopPetEnabledFromChange(v: SettingValues): boolean {
 export const RELAYED_STORAGE_KEYS = [
   MASTER_STORAGE_KEY,
   STORAGE_KEY,
+  BEAUTIFY_STORAGE_KEY,
   THEME_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
@@ -187,6 +213,7 @@ export const RELAYED_STORAGE_KEYS = [
   DESKTOP_PET_PLACEMENT_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
+  AI_BALANCE_PAGE_STORAGE_KEY,
 ] as const;
 
 /**
@@ -199,6 +226,7 @@ export const RELAYED_STORAGE_KEYS = [
  */
 export const SIMPLE_RELAY_KEYS = [
   STORAGE_KEY,
+  BEAUTIFY_STORAGE_KEY,
   THEME_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
@@ -206,6 +234,7 @@ export const SIMPLE_RELAY_KEYS = [
   BALL_CURSOR_STORAGE_KEY,
   QQ_SELF_LEFT_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
+  AI_BALANCE_PAGE_STORAGE_KEY,
 ] as const;
 
 export type SimpleRelayKey = (typeof SIMPLE_RELAY_KEYS)[number];
@@ -220,6 +249,8 @@ export const DESKTOP_PET_KEYS = [
 ] as const;
 
 export type DesktopPetKey = (typeof DESKTOP_PET_KEYS)[number];
+
+
 
 /**
  * The legacy key is read once for migration and is never written, so it has no

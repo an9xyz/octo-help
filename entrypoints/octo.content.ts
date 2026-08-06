@@ -1,5 +1,6 @@
 import { browser, defineContentScript, injectScript } from '#imports';
 import {
+  AI_BALANCE_PAGE_STORAGE_KEY,
   COMPAT_REPORT_STORAGE_KEY,
   DESKTOP_PET_POSITION_STORAGE_KEY,
   MASTER_STORAGE_KEY,
@@ -7,6 +8,7 @@ import {
   MESSAGE_TYPE,
   OCTO_MATCHES,
   PLAYER_WATERMARK_STORAGE_KEY,
+  type AiBalanceMessage,
   type CompatReportMessage,
   type DesktopPetMessage,
   type DesktopPetPositionMessage,
@@ -16,6 +18,7 @@ import {
 } from '@/utils/octoRecall';
 import {
   BALL_CURSOR_STORAGE_KEY,
+  BEAUTIFY_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
@@ -31,7 +34,9 @@ import {
   DESKTOP_PET_KEYS,
   RELAYED_STORAGE_KEYS,
   SIMPLE_RELAY_KEYS,
+  readAiBalancePage,
   readBallCursor,
+  readBeautifyEnabled,
   readBuiltInCompanionFromChange,
   readBuiltInCompanionInitial,
   readComposerEnhancement,
@@ -85,6 +90,8 @@ export default defineContentScript({
       postToPage({ type: MESSAGE_TYPE.master, enabled });
     const postToggle = (enabled: boolean) =>
       postToPage({ type: MESSAGE_TYPE.toggle, enabled });
+    const postBeautify = (enabled: boolean) =>
+      postToPage({ type: MESSAGE_TYPE.beautify, enabled });
     const postTheme = (themeId: string) =>
       postToPage({ type: MESSAGE_TYPE.theme, themeId });
     const postGlobalTheme = (themeId: string) =>
@@ -128,6 +135,21 @@ export default defineContentScript({
       } satisfies Omit<DesktopPetMessage, 'source'>);
     }
 
+    /**
+     * AI balance: only the formatted string and the low flag are sent.
+     *
+     * The endpoint and the API key live in a storage key this script does not
+     * even read — the MAIN world shares a realm with Octo, so anything relayed
+     * here is effectively public. The background precomputes the display state.
+     */
+    function postAiBalance(state = aiBalancePage) {
+      postToPage({
+        type: MESSAGE_TYPE.aiBalance,
+        text: state.text,
+        low: state.low,
+      } satisfies Omit<AiBalanceMessage, 'source'>);
+    }
+
     // ---- current state -----------------------------------------------------
 
     const stored = (await browser.storage.local.get([
@@ -136,6 +158,7 @@ export default defineContentScript({
 
     let currentMaster = readMaster(stored);
     let currentEnabled = readRecallEnabled(stored);
+    let beautifyEnabled = readBeautifyEnabled(stored);
     let currentTheme = readTheme(stored);
     let currentGlobalTheme = readGlobalTheme(stored);
     let currentKick = readKickStyle(stored);
@@ -148,11 +171,15 @@ export default defineContentScript({
     let desktopPetPlacement = readDesktopPetPlacement(stored);
     let builtInCompanion = readBuiltInCompanionInitial(stored);
     let desktopPetEnabled = readDesktopPetEnabledInitial(stored);
+    let aiBalancePage = readAiBalancePage(stored);
 
     // MAIN world ignores settings while suspended. Keep the latest values here
     // and replay them after the master switch reboots the page-side engines.
     // Order is preserved from the original implementation.
     const pushSettings = () => {
+      // Beautify first: while it is off the page-side engine drops theme, kick,
+      // watermark and cursor messages, so its state has to be known before them.
+      postBeautify(beautifyEnabled);
       postKickStyle(currentKick);
       postGlobalTheme(currentGlobalTheme);
       postTheme(currentTheme);
@@ -162,6 +189,7 @@ export default defineContentScript({
       postToggle(currentEnabled);
       postComposerEnhancement(composerEnhancementEnabled);
       postDesktopPet();
+      postAiBalance();
     };
 
     // Push current state once the injected script is listening. It registers
@@ -186,6 +214,13 @@ export default defineContentScript({
      */
     const SIMPLE_RELAYS: Record<SimpleRelayKey, (values: SettingValues) => void> = {
       [STORAGE_KEY]: (v) => postToggle((currentEnabled = readRecallEnabled(v))),
+      [BEAUTIFY_STORAGE_KEY]: (v) => {
+        beautifyEnabled = readBeautifyEnabled(v);
+        postBeautify(beautifyEnabled);
+        // Turning it back on has to replay the theme family, which the page
+        // dropped while the engine was down — same reason master replays.
+        if (beautifyEnabled) pushSettings();
+      },
       [THEME_STORAGE_KEY]: (v) => postTheme((currentTheme = readTheme(v))),
       [GLOBAL_THEME_STORAGE_KEY]: (v) =>
         postGlobalTheme((currentGlobalTheme = readGlobalTheme(v))),
@@ -196,6 +231,7 @@ export default defineContentScript({
       [QQ_SELF_LEFT_STORAGE_KEY]: (v) => postQQSelfLeft((currentQQSelfLeft = readQQSelfLeft(v))),
       [COMPOSER_ENHANCEMENT_STORAGE_KEY]: (v) =>
         postComposerEnhancement((composerEnhancementEnabled = readComposerEnhancement(v))),
+      [AI_BALANCE_PAGE_STORAGE_KEY]: (v) => postAiBalance((aiBalancePage = readAiBalancePage(v))),
     };
 
     /**

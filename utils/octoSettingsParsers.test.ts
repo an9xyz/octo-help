@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AI_BALANCE_PAGE_STORAGE_KEY,
   BALL_CURSOR_STORAGE_KEY,
+  BEAUTIFY_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
@@ -19,7 +21,9 @@ import {
   MIGRATION_ONLY_KEYS,
   RELAYED_STORAGE_KEYS,
   SIMPLE_RELAY_KEYS,
+  readAiBalancePage,
   readBallCursor,
+  readBeautifyEnabled,
   readBuiltInCompanionFromChange,
   readBuiltInCompanionInitial,
   readComposerEnhancement,
@@ -249,3 +253,39 @@ function validPet() {
     importedAt: 1,
   };
 }
+
+describe('readAiBalancePage', () => {
+  it('defaults to showing nothing', () => {
+    expect(readAiBalancePage({})).toEqual({ text: '', low: false });
+    expect(readAiBalancePage({ [AI_BALANCE_PAGE_STORAGE_KEY]: 'nope' })).toEqual({
+      text: '',
+      low: false,
+    });
+  });
+
+  it('relays the precomputed string and the low flag', () => {
+    expect(
+      readAiBalancePage({ [AI_BALANCE_PAGE_STORAGE_KEY]: { text: '12.35 美元💵', low: true } }),
+    ).toEqual({ text: '12.35 美元💵', low: true });
+  });
+
+  it('bounds the text, since it ends up in the page DOM', () => {
+    const long = 'x'.repeat(200);
+    expect(readAiBalancePage({ [AI_BALANCE_PAGE_STORAGE_KEY]: { text: long } }).text).toHaveLength(
+      40,
+    );
+  });
+});
+
+describe('readBeautifyEnabled', () => {
+  it('defaults to on so upgrading does not turn the themes off', () => {
+    expect(readBeautifyEnabled({})).toBe(true);
+    expect(readBeautifyEnabled({ [BEAUTIFY_STORAGE_KEY]: true })).toBe(true);
+  });
+
+  it('is off only when explicitly false', () => {
+    expect(readBeautifyEnabled({ [BEAUTIFY_STORAGE_KEY]: false })).toBe(false);
+    // A removed key means "back to default", not "off".
+    expect(readBeautifyEnabled({ [BEAUTIFY_STORAGE_KEY]: undefined })).toBe(true);
+  });
+});
