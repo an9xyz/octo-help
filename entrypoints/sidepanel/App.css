@@ -1315,3 +1315,48 @@ select:disabled {
   font-size: 11px;
   line-height: 1.55;
 }
+
+/* ─── Export feature ──────────────────────────────── */
+
+.export-done {
+  padding: 12px 13px;
+}
+
+.export-success {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.export-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+

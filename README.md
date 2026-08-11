@@ -21,6 +21,8 @@
 - **开卡抽卡**：Bot 资料卡弹窗挂载时，美化引擎的 `sync()` 按加权概率 `Math.random()` 抽一个稀有度，写到 `.wk-modal-shell` / `.wk-bot-detail-content` 的 `data-octo-rarity` 上——卡框配色、角标文字（`content: attr(...)`）、辉光强度全部由 CSS 据此渲染。抽卡是「每个卡片实例一次」：同一弹窗重渲染沿用已抽结果，关闭重开则是新实例、重新抽。揭晓特效节点注入 `<body>`（在弹窗 React 树之外，避免被 reconcile 清掉），播完自移除。只读随机 + 自身属性写入，不改源码、不改 React 状态。
 - **桌面宠物**：Side Panel 使用 JSZip 本地校验并解压宠物包，把 manifest 与 spritesheet data URL 存入 `browser.storage.local`；内容脚本把状态转发到 MAIN world，页面脚本按 manifest 播放动作状态机，并把拖拽位置回写 storage。Codex v1 `8 × 9` 与 v2 `8 × 11` atlas 使用官方动作行和逐帧时长；无动画配置的旧 Octo 包仍按 `12 × 13` 第一行播放。
 - **输入区增强**：舒适模式只通过 scoped CSS 调整 Octo 的 `.wk-messageinput-*` 布局，不接管 Tiptap 编辑器事件；宠物输入框模式用 `ResizeObserver`、滚动监听和批量定位跟随当前会话输入框。
+- **会话列表按重要性排序**：整个功能是一张样式表，**没有 JS 逻辑、没有 MutationObserver、不动 DOM**。因为 Octo 自己已经把需要的信号渲染成了 class：它对「群里 @我」和「私聊有未读」输出同一个 `.wk-mention`（渲染条件是 `hasMention || (unread && !muted)`，所以它穿透免打扰），置顶是 `-top`，免打扰（含子区继承父群）是 `-muted`。于是「谁在等我回」就是 `:has(.wk-mention)`，排序交给 CSS `order`，随 React 更新自动自愈。**想在这个文件里加 JS 前先读它的头注释** —— 盖章式的 pass 必须跟着每次渲染重跑，而它能算的东西 class 里已经有了。用 `order` 而不搬 DOM，是因为 React 每次 commit 都会重新强加自己的子节点顺序（搬进自己的分组 wrapper 更糟：`removeChild` 会对着 React 记录的父节点调用，直接抛 `NotFoundError`）。作用域用 `:has(> .wk-conversationlist-item)` 限定，恰好等价于「只在最近栏」——因为 `compact` 是整表级 prop，关注栏渲染的是 `.wk-conv-compact-item`，一个普通行都没有，所以它的拖拽排序完全不受影响。四级阶梯之间用 `:not()` 互斥而不靠层叠：`:has()` 会继承其参数的优先级，一条朴素的 mention 规则会盖过置顶规则、把预期次序反过来。
+- **会话行四级精简 + 只看最近一周**：一行最多九个信号，真正回答「要不要我现在处理」的只有两个。L1 纯 CSS 删冗余装饰；L2 用 grid 把面包屑从独占一行改成标题前缀，并归并「一次子区活动占两行」（只在那行没有未读时才归并，绝不隐藏在等人处理的会话）；**L3 单行是重点 —— 预览文本就是那个「信息流」**，删掉它列表才从「推内容」变成「报状态」，未读数字同时收成圆点（99+ 和 19 导向同一个决定），时间移到悬停；L4 把连续同父群折成分组表头，表头文字用 `content: attr()` 从盖的属性里取，不注入任何节点。L3 靠 `display: contents` 把第二行从布局里摘掉、让未读点落到第一行右侧 —— 这是不搬 DOM 就能跨行搬子节点的唯一办法。**一周过滤不需要时间戳**：Octo 自己的 `getTimeStringAutoShort2` 正好在 7×24 小时处切换格式，判据是「时间文字含 4 位连续数字」（不用斜杠，因为非中文 locale 会输出 `03.08.2026`）；置顶和有未读的永不折叠，其余收进一个 `order: 9999` 的脚注（大 order 是为了在排序把容器变成 flex 后仍留在最后）。状态一律写 `data-octo-*` 属性而非 class：行的 `className` 会被 React 在每次未读/选中/免打扰翻转时整体重写。**只有 L4 与「按重要性排序」互斥**（折叠要按 DOM 顺序判断上一行，而排序只改视觉顺序），阶梯刻意这么排，好让真正管用的 L3 永远不被这个冲突禁掉。多级门控统一由 `at(levels, ...)` 生成，每条规则自带完整后代选择器——手写 `body[..='2'],body[..='3'] .item` 会因逗号退化成一个裸 `body[..='2']`，曾经因此在 L2 把整个页面 `display:none`。
 
 美化/换肤逻辑移植自油猴脚本 [an9xyz/octo-script](https://github.com/an9xyz/octo-script)（MIT），改为由扩展 Side Panel + `browser.storage` 驱动，去掉了原脚本页面内的 NavRail 菜单。
 
@@ -45,6 +47,9 @@
 - `utils/octoBuiltInCompanion.ts` — 四只内置输入框宠物的巡游、定位和消息唤醒。
 - `utils/octoGithubLink.ts` — GitHub URL 边界识别、分类和消息快捷入口。
 - `utils/octoComposerEnhancer.ts` — 三行舒适输入框样式和完整还原，并挂载快捷 @ 头像条。
+- `utils/octoConvSort.ts` — 会话列表按重要性排序：一张样式表，无 JS 逻辑、无 observer。
+- `utils/octoConvCompact.ts` — 会话行四级精简（减装饰 / 收面包屑 / 单行 / 连续折叠）+ 只看最近一周，CSS + 属性盖章。
+- `utils/octoConvGroup.ts` — 精简的纯规则：父群通知行归并、连续同父群成组、一周以外判定。
 - `utils/octoApi.ts` — **只读** Octo API 客户端：sid/token 解析（鉴权是 `token` 请求头，不是 cookie）、`/api/v1/` 拼接、超时、错误分类。凭证不落扩展存储、不打日志、只发同源。
 - `utils/octoMembers.ts` — 群成员名册（`membersync` + TTL/增量/并发去重缓存）、展示名规则、候选排序、同步查名。
 - `utils/octoMentionTargets.ts` — 从会话历史的 `payload.mention.uids` 统计「谁最常被 @」，供头像条排序。

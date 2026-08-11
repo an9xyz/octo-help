@@ -1,6 +1,6 @@
 /**
- * Quick-@ strip: a row of small member avatars under the comfortable composer.
- * Click one and that person is mentioned for real.
+ * Quick-@ strip: a row of small member avatars above the composer.
+ * Click one (or press Alt+1~5) and that person is mentioned for real.
  *
  * Why it exists: Octo's own shortcut is "right-click someone's avatar in the
  * message list → @TA", which only works for people who happen to have spoken
@@ -45,6 +45,21 @@ import {
 } from './octoMentionTargets';
 import { OCTO_SELECTORS } from './octoSelectors';
 
+/**
+ * Trigger a mention for the chip at the given index (0-4).
+ * Exported for use by octo-main-world.ts (keyboard shortcut handler).
+ */
+export function handleQuickMention(index: number): void {
+  const chip = currentChips[index];
+  if (!chip) return;
+  if (!insertMention(chip.uid, chip.label)) {
+    removeBar();
+    return;
+  }
+  const channel = readCurrentChannel();
+  if (channel) bumpMentionTarget(channel.channelId, chip.uid);
+}
+
 const BAR_CLASS = 'octo-mention-bar';
 const CHIP_CLASS = 'octo-mention-chip';
 const STYLE_ID = 'octo-mention-bar-style';
@@ -73,6 +88,10 @@ let renderedGroupId: string | null = null;
 let renderedSignature = '';
 /** Group we are currently loading, so a channel switch can ignore a late reply. */
 let pendingGroupId: string | null = null;
+/** Currently rendered chips for keyboard shortcut dispatch. */
+let currentChips: Array<{ uid: string; label: string }> = [];
+
+// ─── Keyboard shortcuts ─────────────────────────────────────────────────
 
 function ensureStyle(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -87,9 +106,9 @@ function ensureStyle(): void {
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;
-      padding: 6px 2px 2px;
-      margin-top: 2px;
-      border-top: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+      padding: 8px 4px 8px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
     }
     .${BAR_CLASS}::-webkit-scrollbar { height: 0; display: none; }
     .${BAR_CLASS}-label {
@@ -171,14 +190,15 @@ function signatureOf(members: readonly GroupMember[]): string {
   return members.map((m) => `${m.uid}:${m.label}`).join('|');
 }
 
-function buildChip(member: GroupMember, channelId: string): HTMLButtonElement {
+function buildChip(member: GroupMember, channelId: string, index: number): HTMLButtonElement {
+  const keyHint = `Ctrl+Shift+${index + 1}`;
   const chip = document.createElement('button');
   chip.type = 'button';
   chip.className = CHIP_CLASS;
   chip.dataset.octoUid = member.uid;
   if (member.isBot) chip.dataset.octoBot = 'true';
-  chip.title = `@${member.label}`;
-  chip.setAttribute('aria-label', `@${member.label}`);
+  chip.title = `@${member.label} (${keyHint})`;
+  chip.setAttribute('aria-label', `@${member.label} (${keyHint})`);
 
   const avatar = document.createElement('img');
   avatar.className = `${CHIP_CLASS}-avatar`;
@@ -242,8 +262,14 @@ function renderBar(
   label.textContent = '@';
   bar.appendChild(label);
 
-  for (const member of members) bar.appendChild(buildChip(member, channelId));
-  card.appendChild(bar);
+  // Track chips for keyboard shortcut dispatch
+  currentChips = [];
+  for (const member of members) {
+    const idx = currentChips.length;
+    currentChips.push({ uid: member.uid, label: member.label });
+    bar.appendChild(buildChip(member, channelId, idx));
+  }
+  card.prepend(bar);
   renderedGroupId = groupId;
   renderedSignature = signature;
 }

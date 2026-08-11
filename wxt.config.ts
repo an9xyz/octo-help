@@ -44,7 +44,46 @@ export default defineConfig({
     action: {
       default_title: '打开 Octo 聊天增强设置',
     },
-    permissions: ['storage', 'unlimitedStorage'],
+    commands: {
+      'activate-octo': {
+        suggested_key: {
+          default: 'Alt+O',
+          mac: 'Alt+O',
+        },
+        description: '切换到 Octo 标签页并聚焦输入框',
+      },
+      'quick-mention-1': {
+        suggested_key: {
+          default: 'Ctrl+Shift+1',
+          mac: 'Ctrl+Shift+1',
+        },
+        description: '快捷 @ 第1人',
+      },
+      'quick-mention-2': {
+        suggested_key: {
+          default: 'Ctrl+Shift+2',
+          mac: 'Ctrl+Shift+2',
+        },
+        description: '快捷 @ 第2人',
+      },
+      'quick-mention-3': {
+        suggested_key: {
+          default: 'Ctrl+Shift+3',
+          mac: 'Ctrl+Shift+3',
+        },
+        description: '快捷 @ 第3人',
+      },
+      'quick-mention-4': {
+        description: '快捷 @ 第4人',
+      },
+      'quick-mention-5': {
+        description: '快捷 @ 第5人',
+      },
+    },
+    omnibox: {
+      keyword: 'octo',
+    },
+    permissions: ['storage', 'unlimitedStorage', 'tabs'],
     host_permissions: [...OCTO_MATCHES],
     web_accessible_resources: [
       {

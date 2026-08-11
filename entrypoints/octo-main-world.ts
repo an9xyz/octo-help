@@ -20,9 +20,17 @@ import {
   setComposerEnhancement,
   teardownComposerEnhancement,
 } from '@/utils/octoComposerEnhancer';
+import { setConvSort, teardownConvSort } from '@/utils/octoConvSort';
+import {
+  setConvCompact,
+  setConvRecentOnly,
+  setConvSortActive,
+  teardownConvCompact,
+} from '@/utils/octoConvCompact';
 import { applyDesktopPetState, teardownDesktopPet } from '@/utils/octoPetRenderer';
 import { startOctoPetSpeech } from '@/utils/octoPetSpeech';
 import { startOctoGithubLinks } from '@/utils/octoGithubLink';
+import { handleQuickMention } from '@/utils/octoMentionBar';
 import {
   startFeatures,
   stopAllFeatures,
@@ -143,6 +151,16 @@ export default defineUnlistedScript(() => {
     },
     {
       // Started by its setting message, not by the master switch.
+      id: 'conversationSort',
+      stop: teardownConvSort,
+    },
+    {
+      // Started by its setting message, not by the master switch.
+      id: 'conversationCompact',
+      stop: teardownConvCompact,
+    },
+    {
+      // Started by its setting message, not by the master switch.
       id: 'desktopPet',
       stop: teardownDesktopPet,
     },
@@ -194,6 +212,8 @@ export default defineUnlistedScript(() => {
   const FEATURE_START_ORDER = [
     'beautify',
     'composerEnhancement',
+    'conversationSort',
+    'conversationCompact',
     'petSpeech',
     'githubLinks',
     'compatCheck',
@@ -245,6 +265,15 @@ export default defineUnlistedScript(() => {
     [MESSAGE_TYPE.ballCursor]: (m) => setBallCursor(!!m.enabled),
     [MESSAGE_TYPE.qqSelfLeft]: (m) => setQQSelfLeft(!!m.enabled),
     [MESSAGE_TYPE.composerEnhancement]: (m) => setComposerEnhancement(!!m.enabled),
+    [MESSAGE_TYPE.convSort]: (m) => {
+      setConvSort(!!m.enabled);
+      // Compaction's L3 groups by "same parent as the previous row", which only
+      // means anything in DOM order — and the sort reorders visually with CSS
+      // `order`. Telling it lets L3 step down to L2 instead of mis-grouping.
+      setConvSortActive(!!m.enabled);
+    },
+    [MESSAGE_TYPE.convCompact]: (m) => setConvCompact(m.level),
+    [MESSAGE_TYPE.convRecentOnly]: (m) => setConvRecentOnly(!!m.enabled),
     [MESSAGE_TYPE.desktopPet]: (m) => applyDesktopPetState(m),
   };
 
@@ -266,6 +295,13 @@ export default defineUnlistedScript(() => {
     // the torn-down engine, and applying them would re-inject its styles. The
     // content script replays them when the switch comes back on.
     if (!beautifyEnabled && BEAUTIFY_DRIVEN_TYPES.has(data.type)) return;
+
+    // Quick mention from keyboard shortcut
+    const rawData = event.data as Record<string, unknown>;
+    if (rawData.type === 'quickMention' && typeof rawData.index === 'number') {
+      handleQuickMention(rawData.index as number);
+      return;
+    }
 
     const handler = SETTING_HANDLERS[data.type] as ((message: OctoMessage) => void) | undefined;
     handler?.(data);

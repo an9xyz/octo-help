@@ -1,10 +1,124 @@
 import { browser, defineBackground } from '#imports';
+import { MESSAGE_SOURCE, OCTO_MATCHES } from '@/utils/octoShared';
+
+const OCTO_URL_PREFIX = OCTO_MATCHES[0].replace('/*', '');
+
+/**
+ * Find an Octo tab in any window, activate it, then send a message to focus the composer.
+ * If no Octo tab exists, open one.
+ */
+async function activateOctoTab(query?: string): Promise<void> {
+  const tabs = await browser.tabs.query({ url: OCTO_MATCHES as unknown as string[] });
+  let targetTab = tabs[0];
+
+  if (targetTab) {
+    // Tab exists — activate it
+    await browser.tabs.update(targetTab.id, { active: true });
+    await browser.windows.update(targetTab.windowId, { focused: true });
+  } else {
+    // No Octo tab — open one
+    targetTab = await browser.tabs.create({ url: OCTO_URL_PREFIX, active: true });
+  }
+
+  // Send focus message to the content script (wait a moment for tab to be ready)
+  if (targetTab.id) {
+    setTimeout(async () => {
+      try {
+        await browser.tabs.sendMessage(targetTab.id!, { type: 'octo:focus-input' });
+      } catch {
+        // Content script might not be loaded yet — that's fine
+      }
+    }, query ? 500 : 300);
+  }
+}
 
 export default defineBackground(() => {
-  // Clicking the extension action opens the global Chrome side panel.
+  // ─── Cross-origin fetch for link previews ────────────────────────────
+  // Extension background scripts can fetch any URL without CORS restrictions.
+  browser.runtime.onMessage.addListener((message) => {
+    const msg = message as Record<string, unknown>;
+    if (msg?.source === MESSAGE_SOURCE && msg?.type === 'fetchUrl') {
+      const url = msg.url as string;
+      if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
+      const requestId = msg.requestId as string;
+
+      return fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(5000),
+      })
+        .then(async (response) => {
+          if (!response.ok)
+            return { source: MESSAGE_SOURCE, type: 'fetchUrlResult' as const, requestId, html: null };
+          const html = await response.text();
+          return { source: MESSAGE_SOURCE, type: 'fetchUrlResult' as const, requestId, html };
+        })
+        .catch(() => ({ source: MESSAGE_SOURCE, type: 'fetchUrlResult' as const, requestId, html: null }));
+    }
+  });
+
+  // ─── Clicking the extension action opens the side panel ──────────────────
   if (browser.sidePanel?.setPanelBehavior) {
     void browser.sidePanel
       .setPanelBehavior({ openPanelOnActionClick: true })
       .catch((error) => console.warn('Unable to enable side panel action click', error));
   }
+
+  // ─── Keyboard shortcuts ────────────────────────────────────────────
+  browser.commands.onCommand.addListener((command) => {
+    if (command === 'activate-octo') {
+      void activateOctoTab();
+      return;
+    }
+    // Quick mention: Ctrl+Shift+1~5
+    const mentionMatch = /^quick-mention-(\d)$/.exec(command);
+    if (mentionMatch) {
+      const index = parseInt(mentionMatch[1], 10) - 1;
+      // Send to the active Octo tab's content script
+      browser.tabs.query({ url: OCTO_MATCHES as unknown as string[], active: true }).then((tabs) => {
+        const tab = tabs[0];
+        if (!tab?.id) return;
+        browser.tabs.sendMessage(tab.id, { type: 'octo:quick-mention', index }).catch(() => {
+          // Tab not ready yet
+        });
+      });
+    }
+  });
+
+  // ─── Omnibox: type "octo" in address bar ────────────────────────────────
+  browser.omnibox.onInputChanged.addListener((text, suggest) => {
+    if (!text.trim()) {
+      suggest([
+        {
+          content: 'open',
+          description: '打开 Octo 工作台',
+        },
+      ]);
+      return;
+    }
+
+    suggest([
+      {
+        content: `search:${text}`,
+        description: `🔍 搜索「${text}」`,
+        deletable: false,
+      },
+      {
+        content: 'open',
+        description: '↗ 打开 Octo 工作台',
+        deletable: false,
+      },
+    ]);
+  });
+
+  browser.omnibox.onInputEntered.addListener((text) => {
+    if (text.startsWith('search:')) {
+      const query = text.slice('search:'.length).trim();
+      void activateOctoTab(query);
+    } else {
+      void activateOctoTab();
+    }
+  });
 });

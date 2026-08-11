@@ -3,6 +3,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type ChangeEvent,
@@ -17,7 +18,13 @@ import {
   DESKTOP_PET_PLACEMENT_STORAGE_KEY,
   DESKTOP_PET_POSITION_STORAGE_KEY,
   DESKTOP_PET_STORAGE_KEY,
+  EXPORT_REQUEST_KEY,
+  EXPORT_RESULT_KEY,
   GLOBAL_THEME_STORAGE_KEY,
+  CONV_COMPACT_STORAGE_KEY,
+  CONV_RECENT_ONLY_STORAGE_KEY,
+  CONV_SORT_STORAGE_KEY,
+  LINK_PREVIEW_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
   MASTER_STORAGE_KEY,
   MESSI_WATERMARK_STORAGE_KEY,
@@ -25,6 +32,8 @@ import {
   QQ_SELF_LEFT_STORAGE_KEY,
   COMPAT_REPORT_STORAGE_KEY,
   THEME_STORAGE_KEY,
+  type ConvCompactLevel,
+  type ExportFormat,
   type PlayerWatermarkId,
   type BuiltInCompanionId,
   type DesktopPetPlacement,
@@ -43,6 +52,7 @@ import {
   type ThemeDef,
 } from '@/utils/octoThemeCatalog';
 import { isBuiltInCompanionId, isStoredDesktopPet } from '@/utils/octoPetState';
+import { isConvCompactLevel } from '@/utils/octoSettingsParsers';
 import { FeatureSection } from './FeatureSection';
 import './App.css';
 
@@ -64,6 +74,22 @@ const BUILT_IN_COMPANIONS: Array<{
   { id: 'zombie', label: '散步僵尸', icon: '🧟', description: '摇晃前进' },
 ];
 
+/**
+ * 会话行精简的四级。累进而非四个独立开关：L2 的标题前缀要先有 L1 删掉子区图标才
+ * 讲得通，L3 收掉 L2 刚排好的第二行，L4 的分组表头又替换掉 L2 的前缀。做成一个有序
+ * 选择，让非法组合压根表达不出来。
+ *
+ * 顺序是刻意的：只有最后一级和「按重要性排序」冲突，而真正解决「别把消息内容推给我」
+ * 的是 L3 —— 它必须能和排序共存。
+ */
+const CONV_COMPACT_OPTIONS: Array<{ id: ConvCompactLevel; label: string; summary: string }> = [
+  { id: 'off', label: '关闭', summary: '保持 Octo 原样' },
+  { id: 'l1', label: '减装饰', summary: '删掉子区图标、AI 徽章和头像小角标' },
+  { id: 'l2', label: '收面包屑', summary: '父群名并进标题行，全表统一两行' },
+  { id: 'l3', label: '单行', summary: '不显示消息内容，一行一个会话' },
+  { id: 'l4', label: '连续折叠', summary: '连续同父群折成一个分组表头' },
+];
+
 type ThemeChoice = ThemeDef | GlobalThemeDef;
 type ThemeFilter = 'all' | ThemeCategory;
 
@@ -74,6 +100,117 @@ const THEME_FILTERS: Array<{ id: ThemeFilter; label: string }> = [
   { id: 'classic', label: '经典' },
   { id: 'special', label: '特色' },
 ];
+
+// ─── State + Reducer ─────────────────────────────────────────────────────
+
+type ExportResultValue = { summary: string; fileName: string; content: string };
+
+type BooleanSettingKey =
+  | 'masterEnabled'
+  | 'beautifyEnabled'
+  | 'ballCursor'
+  | 'qqSelfLeft'
+  | 'composerEnhancement'
+  | 'convSortEnabled'
+  | 'convRecentOnly'
+  | 'linkPreviewEnabled'
+  | 'desktopPetEnabled';
+
+interface AppState {
+  masterEnabled: boolean;
+  beautifyEnabled: boolean;
+  themeId: string;
+  globalThemeId: string;
+  kickStyle: string;
+  playerWatermark: PlayerWatermarkId;
+  ballCursor: boolean;
+  qqSelfLeft: boolean;
+  desktopPet: StoredDesktopPet | null;
+  desktopPetEnabled: boolean;
+  builtInCompanion: BuiltInCompanionId | null;
+  desktopPetPlacement: DesktopPetPlacement;
+  composerEnhancement: boolean;
+  convSortEnabled: boolean;
+  convCompactLevel: ConvCompactLevel;
+  convRecentOnly: boolean;
+  linkPreviewEnabled: boolean;
+  // UI
+  loading: boolean;
+  petBusy: boolean;
+  petError: string;
+  settingsError: string;
+  compatReport: StoredCompatReport | null;
+  exportBusy: boolean;
+  exportResult: ExportResultValue | null;
+  exportError: string;
+  activeThemePicker: 'message' | 'global' | null;
+  openFeature: string | null;
+}
+
+type AppAction =
+  | { type: 'TOGGLE'; key: BooleanSettingKey }
+  | { type: 'SET'; key: string; value: unknown }
+  | { type: 'SET_MULTI'; updates: Partial<AppState> }
+  | { type: 'SET_ERROR'; errorKey: 'petError' | 'settingsError' | 'exportError'; message: string }
+  | { type: 'SET_BUSY'; key: 'loading' | 'petBusy' | 'exportBusy'; value: boolean }
+  | { type: 'SET_RESULT'; value: ExportResultValue | null }
+  | { type: 'SET_COMPAT'; value: StoredCompatReport | null }
+  | { type: 'INIT'; state: Partial<AppState> };
+
+const APP_INITIAL_STATE: AppState = {
+  masterEnabled: true,
+  beautifyEnabled: true,
+  themeId: DEFAULT_THEME,
+  globalThemeId: DEFAULT_GLOBAL_THEME,
+  kickStyle: DEFAULT_KICK_STYLE,
+  playerWatermark: 'none',
+  ballCursor: true,
+  qqSelfLeft: false,
+  desktopPet: null,
+  desktopPetEnabled: false,
+  builtInCompanion: null,
+  desktopPetPlacement: 'desktop',
+  composerEnhancement: true,
+  convSortEnabled: false,
+  convCompactLevel: 'off',
+  convRecentOnly: false,
+  linkPreviewEnabled: true,
+  loading: true,
+  petBusy: false,
+  petError: '',
+  settingsError: '',
+  compatReport: null,
+  exportBusy: false,
+  exportResult: null,
+  exportError: '',
+  activeThemePicker: null,
+  openFeature: null,
+};
+
+function appReducer(state: AppState, action: AppAction): AppState {
+  switch (action.type) {
+    case 'TOGGLE':
+      return { ...state, [action.key]: !(state[action.key] as boolean) };
+    case 'SET':
+      return { ...state, [action.key]: action.value };
+    case 'SET_MULTI':
+      return { ...state, ...action.updates };
+    case 'SET_ERROR':
+      return { ...state, [action.errorKey]: action.message };
+    case 'SET_BUSY':
+      return { ...state, [action.key]: action.value };
+    case 'SET_RESULT':
+      return { ...state, exportResult: action.value };
+    case 'SET_COMPAT':
+      return { ...state, compatReport: action.value };
+    case 'INIT':
+      return { ...state, ...action.state };
+    default:
+      return state;
+  }
+}
+
+// ─── Theme helpers ────────────────────────────────────────────────────────
 
 function ThemeSwatch({ theme, compact = false }: { theme: ThemeChoice; compact?: boolean }) {
   const style = {
@@ -275,7 +412,7 @@ function ThemePicker({
             <div className="theme-empty">
               <span aria-hidden="true">◌</span>
               <strong>换个关键词试试</strong>
-              <small>可以搜索“深色”、“QQ”或“足球”</small>
+              <small>可以搜索"深色"、"QQ"或"足球"</small>
             </div>
           )}
         </div>
@@ -299,12 +436,6 @@ function normalizeStoredId(
     : fallback;
 }
 
-/**
- * Validate a persisted compatibility report before trusting it in the UI.
- *
- * The value originates in the MAIN world (page context), so it is treated as
- * untrusted input even though the content script already filtered it.
- */
 function readCompatReport(value: unknown): StoredCompatReport | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<StoredCompatReport>;
@@ -323,43 +454,84 @@ function readCompatReport(value: unknown): StoredCompatReport | null {
   };
 }
 
+// ─── App component ────────────────────────────────────────────────────────
+
 function App() {
-  const [masterEnabled, setMasterEnabled] = useState(true);
-  const [themeId, setThemeId] = useState(DEFAULT_THEME);
-  const [globalThemeId, setGlobalThemeId] = useState(DEFAULT_GLOBAL_THEME);
-  const [kickStyle, setKick] = useState(DEFAULT_KICK_STYLE);
-  const [playerWatermark, setPlayerWatermark] = useState<PlayerWatermarkId>('none');
-  const [ballCursor, setBallCursor] = useState(true);
-  const [qqSelfLeft, setQqSelfLeft] = useState(false);
-  const [desktopPet, setDesktopPet] = useState<StoredDesktopPet | null>(null);
-  const [desktopPetEnabled, setDesktopPetEnabled] = useState(false);
-  const [builtInCompanion, setBuiltInCompanion] =
-    useState<BuiltInCompanionId | null>(null);
-  const [desktopPetPlacement, setDesktopPetPlacement] =
-    useState<DesktopPetPlacement>('desktop');
-  const [composerEnhancement, setComposerEnhancement] = useState(true);
-  const [petBusy, setPetBusy] = useState(false);
-  const [petError, setPetError] = useState('');
-  const [settingsError, setSettingsError] = useState('');
-  const [compatReport, setCompatReport] = useState<StoredCompatReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeThemePicker, setActiveThemePicker] = useState<'message' | 'global' | null>(null);
-  const [beautifyEnabled, setBeautifyEnabled] = useState(true);
-  /**
-   * Which feature is expanded. One at a time on purpose: the panel's problem was
-   * that every knob of every feature was on screen at once.
-   */
-  const [openFeature, setOpenFeature] = useState<string | null>(null);
-  /** Restores the previous shooter when the football switch is flipped back on. */
+  const [state, dispatch] = useReducer(appReducer, APP_INITIAL_STATE);
+
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   const lastPlayer = useRef<PlayerWatermarkId>('messi');
   const petFileInput = useRef<HTMLInputElement>(null);
-  const closeThemePicker = useCallback(() => setActiveThemePicker(null), []);
 
-  const selectedMessageTheme = THEMES.find((theme) => theme.id === themeId) ?? THEMES[0];
-  const selectedGlobalTheme = GLOBAL_THEMES.find((theme) => theme.id === globalThemeId) ?? GLOBAL_THEMES[0];
-  const selectedBuiltInCompanion = BUILT_IN_COMPANIONS.find(
-    (companion) => companion.id === builtInCompanion,
+  const {
+    masterEnabled,
+    beautifyEnabled,
+    themeId,
+    globalThemeId,
+    kickStyle,
+    playerWatermark,
+    ballCursor,
+    qqSelfLeft,
+    desktopPet,
+    desktopPetEnabled,
+    builtInCompanion,
+    desktopPetPlacement,
+    composerEnhancement,
+    convSortEnabled,
+    convCompactLevel,
+    convRecentOnly,
+    linkPreviewEnabled,
+    loading,
+    petBusy,
+    petError,
+    settingsError,
+    compatReport,
+    exportBusy,
+    exportResult,
+    exportError,
+    activeThemePicker,
+    openFeature,
+  } = state;
+
+  // ── Stable setting helpers (ref-based, no deps needed) ──────────────────
+
+  const toggleSetting = useCallback(async (storageKey: string, stateKey: BooleanSettingKey) => {
+    const prev = stateRef.current[stateKey] as boolean;
+    const next = !prev;
+    dispatch({ type: 'TOGGLE', key: stateKey });
+    try {
+      await browser.storage.local.set({ [storageKey]: next });
+    } catch {
+      dispatch({ type: 'SET', key: stateKey, value: prev });
+      dispatch({ type: 'SET_ERROR', errorKey: 'settingsError', message: '设置保存失败，请重试' });
+    }
+  }, []);
+
+  const chooseSetting = useCallback(async (storageKey: string, stateKey: string, next: unknown) => {
+    const prev = stateRef.current[stateKey as keyof AppState];
+    dispatch({ type: 'SET', key: stateKey, value: next });
+    try {
+      await browser.storage.local.set({ [storageKey]: next });
+    } catch {
+      dispatch({ type: 'SET', key: stateKey, value: prev });
+      dispatch({ type: 'SET_ERROR', errorKey: 'settingsError', message: '设置保存失败，请重试' });
+    }
+  }, []);
+
+  const closeThemePicker = useCallback(
+    () => dispatch({ type: 'SET', key: 'activeThemePicker', value: null }),
+    [],
   );
+
+  // ── Derived values ──────────────────────────────────────────────────────
+
+  const selectedMessageTheme = THEMES.find((t) => t.id === themeId) ?? THEMES[0];
+  const selectedGlobalTheme = GLOBAL_THEMES.find((t) => t.id === globalThemeId) ?? GLOBAL_THEMES[0];
+  const selectedBuiltInCompanion = BUILT_IN_COMPANIONS.find((c) => c.id === builtInCompanion);
+
+  // ── Init: read storage once on mount ────────────────────────────────────
 
   useEffect(() => {
     let mounted = true;
@@ -378,212 +550,208 @@ function App() {
         DESKTOP_PET_ENABLED_STORAGE_KEY,
         DESKTOP_PET_PLACEMENT_STORAGE_KEY,
         COMPOSER_ENHANCEMENT_STORAGE_KEY,
+        CONV_SORT_STORAGE_KEY,
+        CONV_COMPACT_STORAGE_KEY,
+        CONV_RECENT_ONLY_STORAGE_KEY,
+        LINK_PREVIEW_STORAGE_KEY,
         BUILT_IN_COMPANION_STORAGE_KEY,
         COMPAT_REPORT_STORAGE_KEY,
       ])
       .then((res) => {
         if (!mounted) return;
-        // Missing key means enabled so existing users keep the current behavior.
-        setMasterEnabled(res[MASTER_STORAGE_KEY] !== false);
-        setBeautifyEnabled(res[BEAUTIFY_STORAGE_KEY] !== false);
-        setThemeId(normalizeStoredId(res[THEME_STORAGE_KEY], THEMES, DEFAULT_THEME));
-        setGlobalThemeId(
-          normalizeStoredId(res[GLOBAL_THEME_STORAGE_KEY], GLOBAL_THEMES, DEFAULT_GLOBAL_THEME),
-        );
-        setKick(normalizeStoredId(res[KICK_STYLE_STORAGE_KEY], KICK_STYLES, DEFAULT_KICK_STYLE));
+
         const storedPlayer = res[PLAYER_WATERMARK_STORAGE_KEY];
-        if (storedPlayer === 'none' || storedPlayer === 'messi' || storedPlayer === 'mbappe') {
-          setPlayerWatermark(storedPlayer);
-        } else if (res[MESSI_WATERMARK_STORAGE_KEY] === true) {
-          setPlayerWatermark('messi');
+        const playerWatermark: PlayerWatermarkId =
+          storedPlayer === 'none' || storedPlayer === 'messi' || storedPlayer === 'mbappe'
+            ? storedPlayer
+            : res[MESSI_WATERMARK_STORAGE_KEY] === true
+              ? 'messi'
+              : 'none';
+        if (playerWatermark === 'messi' || playerWatermark === 'mbappe') {
+          lastPlayer.current = playerWatermark;
         }
-        if (storedPlayer === 'messi' || storedPlayer === 'mbappe') lastPlayer.current = storedPlayer;
-        // Default ON (missing key => enabled).
-        setBallCursor(res[BALL_CURSOR_STORAGE_KEY] !== false);
-        setQqSelfLeft(res[QQ_SELF_LEFT_STORAGE_KEY] === true);
-        setCompatReport(readCompatReport(res[COMPAT_REPORT_STORAGE_KEY]));
+
         const storedDesktopPet = isStoredDesktopPet(res[DESKTOP_PET_STORAGE_KEY])
           ? res[DESKTOP_PET_STORAGE_KEY]
           : null;
-        const storedBuiltInCompanion = res[BUILT_IN_COMPANION_STORAGE_KEY];
-        const nextBuiltInCompanion: BuiltInCompanionId | null = isBuiltInCompanionId(
-          storedBuiltInCompanion,
-        )
-          ? storedBuiltInCompanion
-          : storedBuiltInCompanion === undefined && !storedDesktopPet
+        const storedBuiltInValue = res[BUILT_IN_COMPANION_STORAGE_KEY];
+        const nextBuiltInCompanion: BuiltInCompanionId | null = isBuiltInCompanionId(storedBuiltInValue)
+          ? storedBuiltInValue
+          : storedBuiltInValue === undefined && !storedDesktopPet
             ? 'wizard'
             : null;
-        setDesktopPet(storedDesktopPet);
-        setDesktopPetEnabled(
-          res[DESKTOP_PET_ENABLED_STORAGE_KEY] === true ||
-          (res[DESKTOP_PET_ENABLED_STORAGE_KEY] === undefined && nextBuiltInCompanion !== null),
-        );
-        setDesktopPetPlacement(
-          res[DESKTOP_PET_PLACEMENT_STORAGE_KEY] === 'composer' ? 'composer' : 'desktop',
-        );
-        setComposerEnhancement(res[COMPOSER_ENHANCEMENT_STORAGE_KEY] !== false);
-        setBuiltInCompanion(nextBuiltInCompanion);
+
+        dispatch({
+          type: 'INIT',
+          state: {
+            loading: false,
+            masterEnabled: res[MASTER_STORAGE_KEY] !== false,
+            beautifyEnabled: res[BEAUTIFY_STORAGE_KEY] !== false,
+            themeId: normalizeStoredId(res[THEME_STORAGE_KEY], THEMES, DEFAULT_THEME),
+            globalThemeId: normalizeStoredId(
+              res[GLOBAL_THEME_STORAGE_KEY],
+              GLOBAL_THEMES,
+              DEFAULT_GLOBAL_THEME,
+            ),
+            kickStyle: normalizeStoredId(res[KICK_STYLE_STORAGE_KEY], KICK_STYLES, DEFAULT_KICK_STYLE),
+            linkPreviewEnabled: res[LINK_PREVIEW_STORAGE_KEY] !== false,
+            convSortEnabled: res[CONV_SORT_STORAGE_KEY] === true,
+            convCompactLevel: isConvCompactLevel(res[CONV_COMPACT_STORAGE_KEY])
+              ? res[CONV_COMPACT_STORAGE_KEY]
+              : 'off',
+            convRecentOnly: res[CONV_RECENT_ONLY_STORAGE_KEY] === true,
+            playerWatermark,
+            ballCursor: res[BALL_CURSOR_STORAGE_KEY] !== false,
+            qqSelfLeft: res[QQ_SELF_LEFT_STORAGE_KEY] === true,
+            compatReport: readCompatReport(res[COMPAT_REPORT_STORAGE_KEY]),
+            desktopPet: storedDesktopPet,
+            builtInCompanion: nextBuiltInCompanion,
+            desktopPetEnabled:
+              res[DESKTOP_PET_ENABLED_STORAGE_KEY] === true ||
+              (res[DESKTOP_PET_ENABLED_STORAGE_KEY] === undefined && nextBuiltInCompanion !== null),
+            desktopPetPlacement:
+              res[DESKTOP_PET_PLACEMENT_STORAGE_KEY] === 'composer' ? 'composer' : 'desktop',
+            composerEnhancement: res[COMPOSER_ENHANCEMENT_STORAGE_KEY] !== false,
+          },
+        });
       })
       .catch(() => {
-        if (mounted) setPetError('读取本地设置失败，请重新打开扩展');
-      })
-      .finally(() => {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '读取本地设置失败，请重新打开扩展' });
+          dispatch({ type: 'SET_BUSY', key: 'loading', value: false });
+        }
       });
     return () => {
       mounted = false;
     };
   }, []);
 
-  // The compatibility verdict is produced by the Octo page 1.5-15s after it
-  // boots, which is usually *after* the panel has already loaded. Watch for it
-  // instead of only reading once on mount, or the warning would never appear in
-  // the session where it matters.
+  // ── Storage change listeners (compat report + export result) ────────────
+
   useEffect(() => {
     const onChanged = (changes: Record<string, { newValue?: unknown }>) => {
-      if (!(COMPAT_REPORT_STORAGE_KEY in changes)) return;
-      setCompatReport(readCompatReport(changes[COMPAT_REPORT_STORAGE_KEY].newValue));
+      const compatValue = changes[COMPAT_REPORT_STORAGE_KEY]?.newValue;
+      if (compatValue !== undefined) {
+        dispatch({ type: 'SET_COMPAT', value: readCompatReport(compatValue) });
+      }
+
+      const exportValue = changes[EXPORT_RESULT_KEY]?.newValue as
+        | { content?: string; fileName?: string; summary?: string }
+        | undefined;
+      if (exportValue !== undefined && typeof exportValue.content === 'string') {
+        if (exportValue.content) {
+          dispatch({
+            type: 'SET_RESULT',
+            value: {
+              summary: exportValue.summary ?? '',
+              fileName: exportValue.fileName ?? 'export',
+              content: exportValue.content,
+            },
+          });
+          dispatch({ type: 'SET_ERROR', errorKey: 'exportError', message: '' });
+        } else {
+          dispatch({ type: 'SET_ERROR', errorKey: 'exportError', message: exportValue.summary || '导出失败' });
+          dispatch({ type: 'SET_RESULT', value: null });
+        }
+        dispatch({ type: 'SET_BUSY', key: 'exportBusy', value: false });
+      }
     };
     browser.storage.local.onChanged.addListener(onChanged);
     return () => browser.storage.local.onChanged.removeListener(onChanged);
   }, []);
 
-  const persistSetting = useCallback(async <T,>(
-    key: string,
-    previous: T,
-    next: T,
-    apply: (value: T) => void,
-  ) => {
-    apply(next);
-    setSettingsError('');
-    try {
-      await browser.storage.local.set({ [key]: next });
-    } catch {
-      apply(previous);
-      setSettingsError('设置保存失败，请重试');
+  const toggleFeature = useCallback(
+    (id: string) =>
+      dispatch({
+        type: 'SET',
+        key: 'openFeature',
+        value: stateRef.current.openFeature === id ? null : id,
+      }),
+    [],
+  );
+
+  const toggleFootball = useCallback(async () => {
+    const cur = stateRef.current.playerWatermark;
+    if (cur === 'none') {
+      await chooseSetting(PLAYER_WATERMARK_STORAGE_KEY, 'playerWatermark', lastPlayer.current);
+    } else {
+      lastPlayer.current = cur;
+      await chooseSetting(PLAYER_WATERMARK_STORAGE_KEY, 'playerWatermark', 'none');
     }
   }, []);
 
-  const toggleMaster = async () => {
-    const next = !masterEnabled;
-    await persistSetting(MASTER_STORAGE_KEY, masterEnabled, next, setMasterEnabled);
-  };
-
-  const toggleBeautify = async () => {
-    const next = !beautifyEnabled;
-    await persistSetting(BEAUTIFY_STORAGE_KEY, beautifyEnabled, next, setBeautifyEnabled);
-  };
-
-  /**
-   * The football feature has no boolean of its own — "no shooter" *is* off — so
-   * the switch maps onto the watermark choice and remembers the last shooter.
-   */
-  const toggleFootball = async () => {
-    if (playerWatermark === 'none') {
-      await choosePlayerWatermark(lastPlayer.current);
-      return;
+  const triggerExport = useCallback(async (format: ExportFormat) => {
+    dispatch({ type: 'SET_BUSY', key: 'exportBusy', value: true });
+    dispatch({ type: 'SET_RESULT', value: null });
+    dispatch({ type: 'SET_ERROR', errorKey: 'exportError', message: '' });
+    const requestId = `${format}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    try {
+      await browser.storage.local.set({ [EXPORT_REQUEST_KEY]: { format, requestId } });
+    } catch {
+      dispatch({ type: 'SET_BUSY', key: 'exportBusy', value: false });
+      dispatch({ type: 'SET_ERROR', errorKey: 'exportError', message: '请求导出失败，请重试' });
     }
-    lastPlayer.current = playerWatermark;
-    await choosePlayerWatermark('none');
-  };
+  }, []);
 
-  const toggleFeature = (id: string) =>
-    setOpenFeature((current) => (current === id ? null : id));
+  const downloadExport = useCallback(() => {
+    if (!stateRef.current.exportResult) return;
+    const { content, fileName } = stateRef.current.exportResult;
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${fileName}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
 
+  const dismissExport = useCallback(() => {
+    dispatch({ type: 'SET_RESULT', value: null });
+    dispatch({ type: 'SET_ERROR', errorKey: 'exportError', message: '' });
+    void browser.storage.local.remove(EXPORT_RESULT_KEY);
+  }, []);
 
-  const chooseTheme = async (id: string) => {
-    await persistSetting(THEME_STORAGE_KEY, themeId, id, setThemeId);
-  };
-
-  const chooseGlobalTheme = async (id: string) => {
-    await persistSetting(GLOBAL_THEME_STORAGE_KEY, globalThemeId, id, setGlobalThemeId);
-  };
-
-  const chooseKick = async (id: string) => {
-    await persistSetting(KICK_STYLE_STORAGE_KEY, kickStyle, id, setKick);
-  };
-
-  const choosePlayerWatermark = async (id: PlayerWatermarkId) => {
-    if (id !== 'none') lastPlayer.current = id;
-    await persistSetting(
-      PLAYER_WATERMARK_STORAGE_KEY,
-      playerWatermark,
-      id,
-      setPlayerWatermark,
-    );
-  };
-
-  const toggleBallCursor = async () => {
-    const next = !ballCursor;
-    await persistSetting(BALL_CURSOR_STORAGE_KEY, ballCursor, next, setBallCursor);
-  };
-
-  const toggleQqSelfLeft = async () => {
-    const next = !qqSelfLeft;
-    await persistSetting(QQ_SELF_LEFT_STORAGE_KEY, qqSelfLeft, next, setQqSelfLeft);
-  };
-
-  const toggleComposerEnhancement = async () => {
-    const next = !composerEnhancement;
-    await persistSetting(
-      COMPOSER_ENHANCEMENT_STORAGE_KEY,
-      composerEnhancement,
-      next,
-      setComposerEnhancement,
-    );
-  };
-
-  const chooseDesktopPetPlacement = async (placement: DesktopPetPlacement) => {
-    await persistSetting(
-      DESKTOP_PET_PLACEMENT_STORAGE_KEY,
-      desktopPetPlacement,
-      placement,
-      setDesktopPetPlacement,
-    );
-  };
-
-  const chooseBuiltInCompanion = async (id: BuiltInCompanionId) => {
-    setPetError('');
+  const chooseBuiltInCompanion = useCallback(async (id: BuiltInCompanionId) => {
+    dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '' });
     try {
       await browser.storage.local.set({
         [BUILT_IN_COMPANION_STORAGE_KEY]: id,
         [DESKTOP_PET_ENABLED_STORAGE_KEY]: true,
         [DESKTOP_PET_PLACEMENT_STORAGE_KEY]: 'composer',
       });
-      setBuiltInCompanion(id);
-      setDesktopPetEnabled(true);
-      setDesktopPetPlacement('composer');
+      dispatch({
+        type: 'SET_MULTI',
+        updates: { builtInCompanion: id, desktopPetEnabled: true, desktopPetPlacement: 'composer' },
+      });
     } catch {
-      setPetError('保存内置宠物失败');
+      dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '保存内置宠物失败' });
     }
-  };
+  }, []);
 
-  const chooseCustomPet = async () => {
-    if (!desktopPet) return;
-    setPetError('');
+  const chooseCustomPet = useCallback(async () => {
+    if (!stateRef.current.desktopPet) return;
+    dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '' });
     try {
       await browser.storage.local.set({
         [BUILT_IN_COMPANION_STORAGE_KEY]: null,
         [DESKTOP_PET_ENABLED_STORAGE_KEY]: true,
       });
-      setBuiltInCompanion(null);
-      setDesktopPetEnabled(true);
+      dispatch({ type: 'SET_MULTI', updates: { builtInCompanion: null, desktopPetEnabled: true } });
     } catch {
-      setPetError('切换自定义宠物失败');
+      dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '切换自定义宠物失败' });
     }
-  };
+  }, []);
 
-  const importDesktopPet = async (event: ChangeEvent<HTMLInputElement>) => {
+  const importDesktopPet = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.zip')) {
-      setPetError('请选择 .zip 或 .codex-pet.zip 文件');
+      dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '请选择 .zip 或 .codex-pet.zip 文件' });
       return;
     }
-
-    setPetBusy(true);
-    setPetError('');
+    dispatch({ type: 'SET_BUSY', key: 'petBusy', value: true });
+    dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '' });
     try {
       const { parsePetPackage } = await import('@/utils/octoPet');
       const pet = await parsePetPackage(file);
@@ -592,59 +760,59 @@ function App() {
         [DESKTOP_PET_ENABLED_STORAGE_KEY]: true,
         [BUILT_IN_COMPANION_STORAGE_KEY]: null,
       });
-      setDesktopPet(pet);
-      setDesktopPetEnabled(true);
-      setBuiltInCompanion(null);
+      dispatch({
+        type: 'SET_MULTI',
+        updates: { desktopPet: pet, desktopPetEnabled: true, builtInCompanion: null },
+      });
     } catch (error) {
-      setPetError(error instanceof Error ? error.message : '导入宠物失败');
+      dispatch({
+        type: 'SET_ERROR',
+        errorKey: 'petError',
+        message: error instanceof Error ? error.message : '导入宠物失败',
+      });
     } finally {
-      setPetBusy(false);
+      dispatch({ type: 'SET_BUSY', key: 'petBusy', value: false });
     }
-  };
+  }, []);
 
-  const toggleDesktopPet = async () => {
-    if ((!desktopPet && !builtInCompanion) || petBusy) return;
-    const next = !desktopPetEnabled;
-    setPetError('');
+  const toggleDesktopPet = useCallback(async () => {
+    const s = stateRef.current;
+    if ((!s.desktopPet && !s.builtInCompanion) || s.petBusy) return;
+    const next = !s.desktopPetEnabled;
+    dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '' });
     try {
       await browser.storage.local.set({ [DESKTOP_PET_ENABLED_STORAGE_KEY]: next });
-      setDesktopPetEnabled(next);
+      dispatch({ type: 'SET', key: 'desktopPetEnabled', value: next });
     } catch {
-      setPetError('保存宠物开关失败');
+      dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '保存宠物开关失败' });
     }
-  };
+  }, []);
 
-  const deleteDesktopPet = async () => {
-    if (!desktopPet || petBusy) return;
-    setPetBusy(true);
-    setPetError('');
+  const deleteDesktopPet = useCallback(async () => {
+    const s = stateRef.current;
+    if (!s.desktopPet || s.petBusy) return;
+    dispatch({ type: 'SET_BUSY', key: 'petBusy', value: true });
+    dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '' });
     try {
-      const keysToRemove = [
-        DESKTOP_PET_STORAGE_KEY,
-        DESKTOP_PET_POSITION_STORAGE_KEY,
-      ];
-      if (!builtInCompanion) {
-        keysToRemove.push(
-          DESKTOP_PET_ENABLED_STORAGE_KEY,
-          DESKTOP_PET_PLACEMENT_STORAGE_KEY,
-        );
+      const keysToRemove = [DESKTOP_PET_STORAGE_KEY, DESKTOP_PET_POSITION_STORAGE_KEY];
+      if (!s.builtInCompanion) {
+        keysToRemove.push(DESKTOP_PET_ENABLED_STORAGE_KEY, DESKTOP_PET_PLACEMENT_STORAGE_KEY);
       }
       await browser.storage.local.remove(keysToRemove);
-      setDesktopPet(null);
-      if (!builtInCompanion) setDesktopPetEnabled(false);
+      const updates: Partial<AppState> = { desktopPet: null };
+      if (!s.builtInCompanion) updates.desktopPetEnabled = false;
+      dispatch({ type: 'SET_MULTI', updates });
     } catch {
-      setPetError('删除宠物失败');
+      dispatch({ type: 'SET_ERROR', errorKey: 'petError', message: '删除宠物失败' });
     } finally {
-      setPetBusy(false);
+      dispatch({ type: 'SET_BUSY', key: 'petBusy', value: false });
     }
-  };
+  }, []);
+
+  // ── Render ──────────────────────────────────────────────────────────────
 
   return (
     <main className="panel">
-      {/* The master switch belongs to the app bar, not to the feature list: it is
-          not "one more toggle" — off is supposed to look like the extension is
-          not installed. Keeping it in the same stack as the per-feature rows made
-          it read as a peer of them. */}
       <header className={`brand${masterEnabled ? '' : ' is-paused'}`}>
         <img className="brand-logo" src="/logo.png" alt="" />
         <div className="brand-copy">
@@ -662,7 +830,7 @@ function App() {
             aria-checked={masterEnabled}
             className={`switch master-switch${masterEnabled ? ' switch-on' : ''}`}
             disabled={loading}
-            onClick={toggleMaster}
+            onClick={() => toggleSetting(MASTER_STORAGE_KEY, 'masterEnabled')}
           >
             <span className="switch-knob" />
           </button>
@@ -703,7 +871,7 @@ function App() {
               : '已关闭，页面保持 Octo 原样'
           }
           enabled={beautifyEnabled}
-          onToggleEnabled={toggleBeautify}
+          onToggleEnabled={() => toggleSetting(BEAUTIFY_STORAGE_KEY, 'beautifyEnabled')}
           open={openFeature === 'appearance'}
           onToggleOpen={() => toggleFeature('appearance')}
           disabled={loading}
@@ -713,7 +881,7 @@ function App() {
             className="choice-row"
             aria-haspopup="dialog"
             disabled={loading}
-            onClick={() => setActiveThemePicker('message')}
+            onClick={() => dispatch({ type: 'SET', key: 'activeThemePicker', value: 'message' })}
           >
             <ThemeSwatch theme={selectedMessageTheme} compact />
             <span className="choice-copy">
@@ -728,7 +896,7 @@ function App() {
             className="choice-row"
             aria-haspopup="dialog"
             disabled={loading}
-            onClick={() => setActiveThemePicker('global')}
+            onClick={() => dispatch({ type: 'SET', key: 'activeThemePicker', value: 'global' })}
           >
             <ThemeSwatch theme={selectedGlobalTheme} compact />
             <span className="choice-copy">
@@ -751,7 +919,7 @@ function App() {
                 aria-checked={qqSelfLeft}
                 className={`switch${qqSelfLeft ? ' switch-on' : ''}`}
                 disabled={loading}
-                onClick={toggleQqSelfLeft}
+                onClick={() => toggleSetting(QQ_SELF_LEFT_STORAGE_KEY, 'qqSelfLeft')}
               >
                 <span className="switch-knob" />
               </button>
@@ -777,7 +945,7 @@ function App() {
           disabled={loading}
         >
           {themeId !== 'worldcup' && (
-            <p className="context-note"><span aria-hidden="true">i</span>气泡射门动画需要选用“美加墨世界杯”消息主题</p>
+            <p className="context-note"><span aria-hidden="true">i</span>气泡射门动画需要选用"美加墨世界杯"消息主题</p>
           )}
           <div className="config-row">
             <div className="config-copy">
@@ -786,7 +954,7 @@ function App() {
             </div>
             <label className="select-wrap">
               <span className="sr-only">射门动画</span>
-              <select value={kickStyle} disabled={loading} onChange={(event) => chooseKick(event.currentTarget.value)}>
+              <select value={kickStyle} disabled={loading} onChange={(event) => chooseSetting(KICK_STYLE_STORAGE_KEY, 'kickStyle', event.currentTarget.value)}>
                 {KICK_STYLES.map((style) => (
                   <option key={style.id} value={style.id}>{style.icon} {style.label}</option>
                 ))}
@@ -807,7 +975,7 @@ function App() {
                   className={`player-option${playerWatermark === player.id ? ' is-active' : ''}`}
                   aria-checked={playerWatermark === player.id}
                   disabled={loading}
-                  onClick={() => choosePlayerWatermark(player.id)}
+                  onClick={() => chooseSetting(PLAYER_WATERMARK_STORAGE_KEY, 'playerWatermark', player.id)}
                 >
                   <span aria-hidden="true">{player.icon}</span>
                   <span>{player.label}</span>
@@ -827,7 +995,7 @@ function App() {
               aria-checked={ballCursor}
               className={`switch${ballCursor ? ' switch-on' : ''}`}
               disabled={loading || playerWatermark === 'none'}
-              onClick={toggleBallCursor}
+              onClick={() => toggleSetting(BALL_CURSOR_STORAGE_KEY, 'ballCursor')}
             >
               <span className="switch-knob" />
             </button>
@@ -944,7 +1112,7 @@ function App() {
                   className={`player-option${desktopPetPlacement === 'desktop' ? ' is-active' : ''}`}
                   aria-checked={desktopPetPlacement === 'desktop'}
                   disabled={loading || petBusy}
-                  onClick={() => chooseDesktopPetPlacement('desktop')}
+                  onClick={() => chooseSetting(DESKTOP_PET_PLACEMENT_STORAGE_KEY, 'desktopPetPlacement', 'desktop')}
                 >
                   自由拖拽
                 </button>
@@ -954,7 +1122,7 @@ function App() {
                   className={`player-option${desktopPetPlacement === 'composer' ? ' is-active' : ''}`}
                   aria-checked={desktopPetPlacement === 'composer'}
                   disabled={loading || petBusy}
-                  onClick={() => chooseDesktopPetPlacement('composer')}
+                  onClick={() => chooseSetting(DESKTOP_PET_PLACEMENT_STORAGE_KEY, 'desktopPetPlacement', 'composer')}
                 >
                   输入框陪伴
                 </button>
@@ -993,7 +1161,7 @@ function App() {
           title="舒适输入框"
           summary={composerEnhancement ? '三行编辑区 · 工具栏在右下角' : '已关闭，保持 Octo 原始输入框'}
           enabled={composerEnhancement}
-          onToggleEnabled={toggleComposerEnhancement}
+          onToggleEnabled={() => toggleSetting(COMPOSER_ENHANCEMENT_STORAGE_KEY, 'composerEnhancement')}
           open={openFeature === 'composer'}
           onToggleOpen={() => toggleFeature('composer')}
           disabled={loading}
@@ -1002,6 +1170,190 @@ function App() {
             默认提供三行编辑空间，把工具栏移到右下角，同时保留 Octo 原生的附件、快捷键和全屏展开。
             只调整布局样式，不接管编辑器事件。
           </p>
+        </FeatureSection>
+
+        <FeatureSection
+          icon="📌"
+          title="会话列表按重要性排序"
+          summary={
+            convSortEnabled
+              ? '@我 和私聊未读置顶，免打扰的沉到底部'
+              : '已关闭，「最近」保持纯时间顺序'
+          }
+          enabled={convSortEnabled}
+          onToggleEnabled={() => toggleSetting(CONV_SORT_STORAGE_KEY, 'convSortEnabled')}
+          open={openFeature === 'convSort'}
+          onToggleOpen={() => toggleFeature('convSort')}
+          disabled={loading}
+        >
+          <p className="feature-note">
+            只作用于「最近」这一栏，顺序变成：置顶 → @我 或私聊未读 → 其余按时间 → 免打扰。
+            这样不用再为了找一条消息在「关注」和「最近」之间来回切：未关注的会话照样在列表里，
+            有人 @ 你就会自己冒到最上面。
+          </p>
+          <p className="feature-note">
+            顺带让免打扰变得能用：设了免打扰的群会沉到底部，但里面有人 @ 你时依旧会置顶，
+            所以可以放心把刷屏的机器人群静音。「关注」栏完全不受影响，手动拖拽排序照常。
+          </p>
+        </FeatureSection>
+
+        <FeatureSection
+          icon="🗂"
+          title="会话行精简"
+          summary={
+            convCompactLevel === 'off'
+              ? '已关闭，保持 Octo 原样'
+              : CONV_COMPACT_OPTIONS.find((o) => o.id === convCompactLevel)?.summary ?? ''
+          }
+          enabled={convCompactLevel !== 'off'}
+          onToggleEnabled={() =>
+            chooseSetting(
+              CONV_COMPACT_STORAGE_KEY,
+              'convCompactLevel',
+              convCompactLevel === 'off' ? 'l2' : 'off',
+            )
+          }
+          open={openFeature === 'convCompact'}
+          onToggleOpen={() => toggleFeature('convCompact')}
+          disabled={loading}
+        >
+          <p className="feature-note">
+            一行最多塞了 9 个信号，真正回答「要不要我现在处理」的只有 2 个。
+            三级逐层递进，等级越高删得越多。
+          </p>
+          <div className="config-row is-stacked">
+            <div className="config-copy">
+              <span>精简等级</span>
+              <small>越往后越省地方，也越依赖 Octo 的结构</small>
+            </div>
+            <div className="player-selector" role="radiogroup" aria-label="精简等级">
+              {CONV_COMPACT_OPTIONS.map((option) => {
+                // L3 按「上一行是不是同一个父群」分组，只在 DOM 顺序下成立；而重要性
+                // 排序是用 CSS order 改视觉顺序的。两个同时开会让折叠隐藏错误的行，
+                // 所以这里直接禁用并说明原因，而不是悄悄降级让人以为坏了。
+                const blocked = option.id === 'l4' && convSortEnabled;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    className={`player-option${convCompactLevel === option.id ? ' is-active' : ''}`}
+                    aria-checked={convCompactLevel === option.id}
+                    disabled={loading || blocked}
+                    title={blocked ? '与「按重要性排序」冲突，需先关掉排序' : option.summary}
+                    onClick={() =>
+                      chooseSetting(CONV_COMPACT_STORAGE_KEY, 'convCompactLevel', option.id)
+                    }
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {convSortEnabled && (
+            <p className="feature-note">
+              「连续折叠」当前不可选：它和上面的「按重要性排序」互斥。排序用 CSS 改的是视觉顺序、
+              DOM 顺序不变，而折叠要判断「上一行是不是同一个父群」，只能按 DOM 顺序判断——
+              两个同时开会折叠错行。想用折叠请先关掉排序。其余各级不受影响，
+              包括真正管用的「单行」。
+            </p>
+          )}
+          <p className="feature-note">
+            删掉的都是重复表达：子区图标（面包屑已说明所属）、AI 徽章（头像已够辨识）、
+            头像上 14px 的小角标。父群名从独占一行改成标题前缀。
+            还会合掉「一次子区活动占两行」——子区来消息时父群也会跟着上榜，
+            同一个名字出现两次、时间还不同；只在那一行没有未读时才合，绝不隐藏在等人处理的行。
+          </p>
+          <p className="feature-note">
+            「单行」这一级是重点：不再显示消息内容。列表于是只回答「谁在动、有没有在等我」，
+            想知道说了什么再点进去。未读数字也收成一个圆点——99+ 和 19 都是「进去看」，
+            数字只多添一份催促感。时间移到悬停。
+          </p>
+          <div className="config-row is-stacked">
+            <div className="config-copy">
+              <span>只看最近一周</span>
+              <small>更早的收进底部一行，点开即展开；置顶和有未读的永不收起</small>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-label="只看最近一周"
+              aria-checked={convRecentOnly}
+              className={`switch${convRecentOnly ? ' switch-on' : ''}`}
+              disabled={loading}
+              onClick={() => toggleSetting(CONV_RECENT_ONLY_STORAGE_KEY, 'convRecentOnly')}
+            >
+              <span className="switch-knob" />
+            </button>
+          </div>
+        </FeatureSection>
+
+        <FeatureSection
+          icon="🔗"
+          title="链接预览"
+          summary={linkPreviewEnabled ? '自动预览所有链接（标题、描述、图片）' : '已关闭，链接保持原样'}
+          enabled={linkPreviewEnabled}
+          onToggleEnabled={() => toggleSetting(LINK_PREVIEW_STORAGE_KEY, 'linkPreviewEnabled')}
+          open={openFeature === 'linkPreview'}
+          onToggleOpen={() => toggleFeature('linkPreview')}
+          disabled={loading}
+        >
+          <p className="feature-note">
+            检测消息中的链接，自动抓取页面标题、描述和预览图，渲染为富卡片。
+            GitHub PR/Issue 还会展示状态、作者和标签。点击卡片可直接跳转。
+          </p>
+        </FeatureSection>
+
+        <FeatureSection
+          icon="📥"
+          title="导出对话"
+          summary={
+            exportResult
+              ? exportResult.summary
+              : exportError
+                ? exportError
+                : '导出当前会话为 Markdown'
+          }
+          open={openFeature === 'export'}
+          onToggleOpen={() => toggleFeature('export')}
+        >
+          {exportResult ? (
+            <div className="export-done">
+              <p className="export-success">✅ {exportResult.summary}</p>
+              <div className="export-actions">
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={downloadExport}
+                >
+                  下载 Markdown (.md)
+                </button>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={dismissExport}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="feature-note">
+                把当前对话导出为 Markdown 文件，方便分享给没有 Octo 账号的人，或存档备份。
+              </p>
+              {exportError && <p className="pet-error" role="alert">{exportError}</p>}
+              <button
+                type="button"
+                className="primary-button"
+                disabled={exportBusy}
+                onClick={() => triggerExport('markdown')}
+              >
+                {exportBusy ? '正在读取…' : '📄 导出为 Markdown'}
+              </button>
+            </>
+          )}
         </FeatureSection>
 
       </div>
@@ -1015,7 +1367,7 @@ function App() {
         themes={THEMES}
         selectedId={themeId}
         appliesImmediately={masterEnabled}
-        onSelect={chooseTheme}
+        onSelect={(id) => chooseSetting(THEME_STORAGE_KEY, 'themeId', id)}
         onClose={closeThemePicker}
       />
       <ThemePicker
@@ -1025,7 +1377,7 @@ function App() {
         themes={GLOBAL_THEMES}
         selectedId={globalThemeId}
         appliesImmediately={masterEnabled}
-        onSelect={chooseGlobalTheme}
+        onSelect={(id) => chooseSetting(GLOBAL_THEME_STORAGE_KEY, 'globalThemeId', id)}
         onClose={closeThemePicker}
       />
     </main>

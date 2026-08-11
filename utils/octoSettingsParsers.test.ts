@@ -4,6 +4,8 @@ import {
   BEAUTIFY_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
+  CONV_COMPACT_STORAGE_KEY,
+  CONV_SORT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
   DESKTOP_PET_PLACEMENT_STORAGE_KEY,
   DESKTOP_PET_STORAGE_KEY,
@@ -24,6 +26,8 @@ import {
   readBuiltInCompanionFromChange,
   readBuiltInCompanionInitial,
   readComposerEnhancement,
+  readConvCompactLevel,
+  readConvSortEnabled,
   readDesktopPetEnabledFromChange,
   readDesktopPetEnabledInitial,
   readDesktopPetPlacement,
@@ -57,11 +61,26 @@ describe('defaults that keep existing users unaffected', () => {
 
   it.each([
     ['qq self-left', readQQSelfLeft, QQ_SELF_LEFT_STORAGE_KEY],
+    // Conversation sort must stay OFF by default: it visibly rearranges the
+    // list the user navigates by muscle memory, so an upgrade must never turn
+    // it on for them.
+    ['conversation sort', readConvSortEnabled, CONV_SORT_STORAGE_KEY],
   ] as const)('%s defaults OFF when the key is missing', (_l, read, key) => {
     expect(read({})).toBe(false);
     expect(read({ [key]: true })).toBe(true);
     // Only an explicit `true` enables it.
     expect(read({ [key]: 'true' })).toBe(false);
+  });
+
+  it('只接受白名单里的精简等级，其余一律读成 off', () => {
+    expect(readConvCompactLevel({})).toBe('off');
+    expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: 'l1' })).toBe('l1');
+    expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: 'l4' })).toBe('l4');
+    // 非法值不能猜：猜错会把每一行都重排，而 off 是唯一无害的兜底。
+    expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: 'l9' })).toBe('off');
+    expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: 2 })).toBe('off');
+    expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: true })).toBe('off');
+    expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: null })).toBe('off');
   });
 
   it('falls back to the default theme for a non-string value', () => {

@@ -3,18 +3,23 @@ import {
   BEAUTIFY_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
+  CONV_COMPACT_STORAGE_KEY,
+  CONV_RECENT_ONLY_STORAGE_KEY,
+  CONV_SORT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
   DESKTOP_PET_PLACEMENT_STORAGE_KEY,
   DESKTOP_PET_POSITION_STORAGE_KEY,
   DESKTOP_PET_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
+  LINK_PREVIEW_STORAGE_KEY,
   MASTER_STORAGE_KEY,
   MESSI_WATERMARK_STORAGE_KEY,
   PLAYER_WATERMARK_STORAGE_KEY,
   QQ_SELF_LEFT_STORAGE_KEY,
   THEME_STORAGE_KEY,
   type BuiltInCompanionId,
+  type ConvCompactLevel,
   type DesktopPetPlacement,
   type DesktopPetPosition,
   type PlayerWatermarkId,
@@ -91,6 +96,45 @@ export function readQQSelfLeft(v: SettingValues): boolean {
 /** Comfortable composer. Missing means ON. */
 export function readComposerEnhancement(v: SettingValues): boolean {
   return v[COMPOSER_ENHANCEMENT_STORAGE_KEY] !== false;
+}
+
+/**
+ * Attention-sorted conversation list. Missing means OFF — the opposite of most
+ * settings here, because this one rearranges the list the user navigates from
+ * memory. Opting in has to be deliberate.
+ */
+export function readConvSortEnabled(v: SettingValues): boolean {
+  return v[CONV_SORT_STORAGE_KEY] === true;
+}
+
+/** Valid compaction levels, in ascending order. */
+const CONV_COMPACT_LEVELS: readonly ConvCompactLevel[] = ['off', 'l1', 'l2', 'l3', 'l4'];
+
+export function isConvCompactLevel(value: unknown): value is ConvCompactLevel {
+  return typeof value === 'string' && (CONV_COMPACT_LEVELS as readonly string[]).includes(value);
+}
+
+/**
+ * Conversation-list compaction level. Anything unrecognised reads as 'off' rather
+ * than as a guess: a bad value here would restructure every row, and the level is
+ * a whitelist, so falling back to "do nothing" is the only safe default.
+ */
+export function readConvCompactLevel(v: SettingValues): ConvCompactLevel {
+  const value = v[CONV_COMPACT_STORAGE_KEY];
+  return isConvCompactLevel(value) ? value : 'off';
+}
+
+/**
+ * Only show conversations from the last week. Missing means OFF — hiding rows the
+ * user did not ask to hide is the change most likely to read as a bug.
+ */
+export function readConvRecentOnly(v: SettingValues): boolean {
+  return v[CONV_RECENT_ONLY_STORAGE_KEY] === true;
+}
+
+/** Link preview. Missing means ON. */
+export function readLinkPreviewEnabled(v: SettingValues): boolean {
+  return v[LINK_PREVIEW_STORAGE_KEY] !== false;
 }
 
 export function readDesktopPet(v: SettingValues): StoredDesktopPet | null {
@@ -187,6 +231,10 @@ export const RELAYED_STORAGE_KEYS = [
   DESKTOP_PET_POSITION_STORAGE_KEY,
   DESKTOP_PET_PLACEMENT_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
+  CONV_SORT_STORAGE_KEY,
+  CONV_COMPACT_STORAGE_KEY,
+  CONV_RECENT_ONLY_STORAGE_KEY,
+  LINK_PREVIEW_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
 ] as const;
 
@@ -207,6 +255,10 @@ export const SIMPLE_RELAY_KEYS = [
   BALL_CURSOR_STORAGE_KEY,
   QQ_SELF_LEFT_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
+  CONV_SORT_STORAGE_KEY,
+  CONV_COMPACT_STORAGE_KEY,
+  CONV_RECENT_ONLY_STORAGE_KEY,
+  LINK_PREVIEW_STORAGE_KEY,
 ] as const;
 
 export type SimpleRelayKey = (typeof SIMPLE_RELAY_KEYS)[number];

@@ -10,6 +10,7 @@ import {
   type CompatReportMessage,
   type DesktopPetMessage,
   type DesktopPetPositionMessage,
+  type ConvCompactLevel,
   type PlayerWatermarkId,
   type RequestKickScriptMessage,
   type StoredCompatReport,
@@ -19,11 +20,15 @@ import {
   BEAUTIFY_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
+  CONV_COMPACT_STORAGE_KEY,
+  CONV_RECENT_ONLY_STORAGE_KEY,
+  CONV_SORT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
   DESKTOP_PET_PLACEMENT_STORAGE_KEY,
   DESKTOP_PET_STORAGE_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   KICK_STYLE_STORAGE_KEY,
+  LINK_PREVIEW_STORAGE_KEY,
   QQ_SELF_LEFT_STORAGE_KEY,
   THEME_STORAGE_KEY,
 } from '@/utils/octoShared';
@@ -36,6 +41,9 @@ import {
   readBuiltInCompanionFromChange,
   readBuiltInCompanionInitial,
   readComposerEnhancement,
+  readConvCompactLevel,
+  readConvRecentOnly,
+  readConvSortEnabled,
   readDesktopPet,
   readDesktopPetEnabledFromChange,
   readDesktopPetEnabledInitial,
@@ -43,6 +51,7 @@ import {
   readDesktopPetPosition,
   readGlobalTheme,
   readKickStyle,
+  readLinkPreviewEnabled,
   readMaster,
   readPlayerWatermarkFromChange,
   readPlayerWatermarkInitial,
@@ -97,6 +106,14 @@ export default defineContentScript({
       postToPage({ type: MESSAGE_TYPE.qqSelfLeft, enabled });
     const postComposerEnhancement = (enabled: boolean) =>
       postToPage({ type: MESSAGE_TYPE.composerEnhancement, enabled });
+    const postConvSort = (enabled: boolean) =>
+      postToPage({ type: MESSAGE_TYPE.convSort, enabled });
+    const postConvCompact = (level: ConvCompactLevel) =>
+      postToPage({ type: MESSAGE_TYPE.convCompact, level });
+    const postConvRecentOnly = (enabled: boolean) =>
+      postToPage({ type: MESSAGE_TYPE.convRecentOnly, enabled });
+    const postLinkPreview = (enabled: boolean) =>
+      postToPage({ type: MESSAGE_TYPE.linkPreview, enabled });
 
     /**
      * The page cannot resolve extension URLs itself, so the asset paths are
@@ -143,6 +160,9 @@ export default defineContentScript({
     let currentBallCursor = readBallCursor(stored);
     let currentQQSelfLeft = readQQSelfLeft(stored);
     let composerEnhancementEnabled = readComposerEnhancement(stored);
+    let convSortEnabled = readConvSortEnabled(stored);
+    let convCompactLevel = readConvCompactLevel(stored);
+    let convRecentOnly = readConvRecentOnly(stored);
     let desktopPet = readDesktopPet(stored);
     let desktopPetPosition = readDesktopPetPosition(stored);
     let desktopPetPlacement = readDesktopPetPlacement(stored);
@@ -163,6 +183,9 @@ export default defineContentScript({
       postBallCursor(currentBallCursor);
       postQQSelfLeft(currentQQSelfLeft);
       postComposerEnhancement(composerEnhancementEnabled);
+      postConvSort(convSortEnabled);
+      postConvCompact(convCompactLevel);
+      postConvRecentOnly(convRecentOnly);
       postDesktopPet();
     };
 
@@ -204,6 +227,13 @@ export default defineContentScript({
       [QQ_SELF_LEFT_STORAGE_KEY]: (v) => postQQSelfLeft((currentQQSelfLeft = readQQSelfLeft(v))),
       [COMPOSER_ENHANCEMENT_STORAGE_KEY]: (v) =>
         postComposerEnhancement((composerEnhancementEnabled = readComposerEnhancement(v))),
+      [CONV_SORT_STORAGE_KEY]: (v) =>
+        postConvSort((convSortEnabled = readConvSortEnabled(v))),
+      [CONV_COMPACT_STORAGE_KEY]: (v) =>
+        postConvCompact((convCompactLevel = readConvCompactLevel(v))),
+      [CONV_RECENT_ONLY_STORAGE_KEY]: (v) =>
+        postConvRecentOnly((convRecentOnly = readConvRecentOnly(v))),
+      [LINK_PREVIEW_STORAGE_KEY]: (v) => postLinkPreview(readLinkPreviewEnabled(v)),
     };
 
     /**
@@ -316,6 +346,24 @@ export default defineContentScript({
       void browser.storage.local.set({
         [DESKTOP_PET_POSITION_STORAGE_KEY]: data.position,
       });
+    });
+
+    // ---- incoming messages from the background/extension ----------------
+    browser.runtime.onMessage.addListener((message) => {
+      const msg = message as Record<string, unknown>;
+      if (msg?.type === 'octo:focus-input') {
+        window.postMessage(
+          { source: MESSAGE_SOURCE, type: 'focusInput' },
+          '*',
+        );
+        return;
+      }
+      if (msg?.type === 'octo:quick-mention' && typeof msg.index === 'number') {
+        window.postMessage(
+          { source: MESSAGE_SOURCE, type: 'quickMention', index: msg.index },
+          '*',
+        );
+      }
     });
   },
 });

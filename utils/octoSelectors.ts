@@ -27,6 +27,72 @@ export const OCTO_SELECTORS = {
   /** Highlighted row in the conversation list. Its avatar `<img src>` is today's
    *  only plain-DOM source for the open conversation's channel id. */
   conversationListSelected: '.wk-conversationlist-item-selected',
+  /** Channel name inside a selected conversation list row. */
+  conversationListName: '.wk-conversationlist-item-name, [class*="name"]',
+  /**
+   * The sidebar conversation list and its rows — the attention-sort feature's
+   * whole surface. It reorders rows with CSS `order`, so it needs the scroll
+   * container and the three state classes Octo already maintains on each row.
+   *
+   * Deliberately absent from COMPAT_CHECKS below: on the 关注 tab the list
+   * renders compact rows instead (`.wk-conv-compact-item`), so
+   * `conversationListItem` legitimately matches nothing there. `requires` can
+   * only name another selector, not "we are on the 最近 tab", so a check here
+   * would fire on every visit to 关注 — a false-alarm generator. The tradeoff is
+   * accepted: a rename fails silently rather than crying wolf.
+   */
+  conversationList: '.wk-conversationlist',
+  conversationListItem: '.wk-conversationlist-item',
+  /** Row variant: pinned to the top by the user (`channelInfo.top`). */
+  conversationListItemTop: '.wk-conversationlist-item-top',
+  /** Row variant: muted, including a subchannel inheriting its parent group. */
+  conversationListItemMuted: '.wk-conversationlist-item-muted',
+  /**
+   * "Someone is waiting on me" marker inside a row. Octo emits this same span for
+   * both a group @me and an unread 1v1 (the `hasMention` and `is1v1Priority`
+   * branches), and it survives mute — which is why the sort needs no JS to
+   * compute urgency.
+   */
+  conversationListMention: '.wk-mention',
+  /**
+   * Row internals used by the compaction levels. `-right` is the re-layout target
+   * (breadcrumb becomes a title-row prefix via grid), and the rest are either
+   * deleted outright or read as facts.
+   *
+   * Note `.wk-conversationlist-item-time` lives *inside* `-name`, not beside it —
+   * the time is already on the title row, so compaction never has to move it.
+   */
+  conversationListItemRight: '.wk-conversationlist-item-right',
+  conversationListItemFirstLine: '.wk-conversationlist-item-right-first-line',
+  /** Title row contents: the name `<h3>` plus badges and the timestamp. */
+  conversationListItemName: '.wk-conversationlist-item-name',
+  conversationListItemSecondLine: '.wk-conversationlist-item-right-second-line',
+  conversationListBreadcrumb: '.wk-conv-breadcrumb',
+  conversationListLastMsg: '.wk-conversationlist-item-lastmsg',
+  conversationListIndicators: '.wk-conversationlist-item-indicators',
+  /** Unread count pill inside the indicators. Becomes a plain dot when compacted. */
+  conversationListUnreadNum: '.wk-conv-unread-num',
+  /** Muted variant of the unread pill — stays grey when collapsed to a dot. */
+  conversationListUnreadNumMuted: '.wk-conv-unread-num--muted',
+  /** Timestamp. Nested inside `-name`, not beside it. */
+  conversationListTime: '.wk-conversationlist-item-time',
+  conversationListAvatarBox: '.wk-conversationlist-item-avatar-box',
+  /** The avatar image itself. Sized by compaction — its siblings must not be. */
+  avatarImage: '.wk-avatar',
+  /**
+   * Presence dot / status pill overlaid on the avatar (absolutely positioned,
+   * 9px, `--wk-color-success` green). It is a *sibling* of the avatar image
+   * inside the box, so any rule that sizes `avatar-box > *` inflates it into a
+   * green disc that covers the whole avatar — see the L3 comment in
+   * octoConvCompact.
+   */
+  conversationListOnlineBadge: '.wk-onlinestatusbadge',
+  /** The dot-only variant of the badge (no text), the one shown in list rows. */
+  conversationListOnlineBadgeEmpty: '.wk-onlinestatusbadge-empty',
+  /** Subchannel glyph in the title. Redundant once the breadcrumb is a prefix. */
+  conversationListThreadIcon: '.wk-conv-thread-icon',
+  /** "This group has subchannels" dot on the avatar; unreadable at 40px. */
+  conversationListGroupHashBadge: '.wk-conv-group-hash-badge',
   /** Broader message-area match, used when watching for new messages. */
   messageArea: '.wk-conversation-messages, .wk-conversation-content',
   /** One logical message (may render as a normal row or a system notice). */
@@ -47,6 +113,8 @@ export const OCTO_SELECTORS = {
   anyMessageBody: '.wk-markdown, .wk-fold-msg-text',
   /** Sender name inside a row. */
   messageRowSender: '.wk-msg-row-sender',
+  /** Timestamp inside a message row: explicit class, native <time>, or data attribute. */
+  messageRowTime: '.wk-msg-row-time, time, [data-time]',
   /** Where a link shortcut is appended, in normal and folded contexts. */
   linkShortcutHost: '.wk-msg-row-content, .wk-fold-msg-body',
   /** Links inside a message body — the input to the link-card passes. */

@@ -64,6 +64,48 @@ export type BuiltInCompanionId = 'ant' | 'snail' | 'wizard' | 'zombie';
 export const COMPOSER_ENHANCEMENT_STORAGE_KEY = 'octoComposerEnhancementEnabled';
 
 /**
+ * storage.local key for sorting the sidebar conversation list by attention
+ * instead of by time.
+ *
+ * Default OFF, unlike most features here. This one visibly reorders the list the
+ * user navigates by muscle memory, so it must never switch itself on during an
+ * upgrade — it has to be a choice.
+ */
+export const CONV_SORT_STORAGE_KEY = 'octoConvSortEnabled';
+
+/**
+ * storage.local key for the conversation-list compaction level.
+ *
+ * Cumulative rather than independent switches, because the levels build on each
+ * other: L2's title-row prefix only makes sense once L1 has removed the
+ * subchannel glyph, L3 drops the preview line that L2 just re-laid out, and L4's
+ * group headers replace L2's prefix. Modelling it as one ordered choice makes the
+ * invalid combinations unrepresentable.
+ *
+ *   l1  减装饰      delete redundant decoration
+ *   l2  收面包屑    breadcrumb becomes a title prefix, parent-notice rows merged
+ *   l3  单行        drop the preview and the timestamp — one line per row
+ *   l4  连续折叠    consecutive same-parent rows collapse under a header
+ *
+ * Ordered so that only the LAST rung conflicts with the attention sort. L3 is the
+ * rung that actually answers "stop streaming message content at me", so it must
+ * stay usable alongside the sort; only L4 needs DOM order.
+ *
+ * Default 'off' — it restructures rows the user reads by muscle memory.
+ */
+export const CONV_COMPACT_STORAGE_KEY = 'octoConvCompactLevel';
+export type ConvCompactLevel = 'off' | 'l1' | 'l2' | 'l3' | 'l4';
+
+/**
+ * storage.local key for "only show conversations from the last week".
+ *
+ * Orthogonal to the compaction level: one is about how much each row shows, this
+ * is about which rows exist at all. Default OFF — hiding rows without being asked
+ * is the one change a user is guaranteed to notice and mistrust.
+ */
+export const CONV_RECENT_ONLY_STORAGE_KEY = 'octoConvRecentOnly';
+
+/**
  * storage.local key holding the last Octo DOM compatibility report.
  *
  * Octo is a moving target: when a redesign renames the classes we hook into, the
@@ -72,6 +114,16 @@ export const COMPOSER_ENHANCEMENT_STORAGE_KEY = 'octoComposerEnhancementEnabled'
  * Panel can say which capability broke instead of leaving the user guessing.
  */
 export const COMPAT_REPORT_STORAGE_KEY = 'octoCompatReport';
+
+/** Default true: link previews are on. */
+export const LINK_PREVIEW_STORAGE_KEY = 'octoLinkPreviewEnabled';
+
+/** storage.local key for triggering a message export from the MAIN world. */
+export const EXPORT_REQUEST_KEY = 'octoExportRequest';
+/** storage.local key where the export result is stored for the side panel. */
+export const EXPORT_RESULT_KEY = 'octoExportResult';
+
+export type ExportFormat = 'markdown';
 
 export interface DesktopPetAnimationManifest {
   row: number;
@@ -131,10 +183,16 @@ export const MESSAGE_TYPE = {
   ballCursor: 'ballCursor',
   qqSelfLeft: 'qqSelfLeft',
   composerEnhancement: 'composerEnhancement',
+  convSort: 'convSort',
+  convCompact: 'convCompact',
+  convRecentOnly: 'convRecentOnly',
   desktopPet: 'desktopPet',
   desktopPetPosition: 'desktopPetPosition',
   requestKickScript: 'requestKickScript',
   compatReport: 'compatReport',
+  exportRequest: 'exportRequest',
+  exportResult: 'exportResult',
+  linkPreview: 'linkPreview',
 } as const;
 
 export interface MasterMessage {
@@ -209,6 +267,27 @@ export interface ComposerEnhancementMessage {
   enabled: boolean;
 }
 
+/** Sort the sidebar conversation list by attention rather than recency. */
+export interface ConvSortMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.convSort;
+  enabled: boolean;
+}
+
+/** Conversation-list compaction level (see CONV_COMPACT_STORAGE_KEY). */
+export interface ConvCompactMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.convCompact;
+  level: ConvCompactLevel;
+}
+
+/** Hide conversations older than a week (see CONV_RECENT_ONLY_STORAGE_KEY). */
+export interface ConvRecentOnlyMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.convRecentOnly;
+  enabled: boolean;
+}
+
 /** Drag result sent from the MAIN world back to the content script for storage. */
 export interface DesktopPetPositionMessage {
   source: typeof MESSAGE_SOURCE;
@@ -258,6 +337,41 @@ export interface CompatReportMessage {
   report: StoredCompatReport;
 }
 
+// ─── Export request/result ───────────────────────────────────────────────
+
+/** Side panel -> MAIN world: request to export the current conversation. */
+export interface ExportRequestMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.exportRequest;
+  format: ExportFormat;
+  /** Unique id per request so the panel can match responses. */
+  requestId: string;
+}
+
+/** MAIN world -> side panel: export result. */
+export interface ExportResultMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.exportResult;
+  format: ExportFormat;
+  requestId: string;
+  /** The exported content (markdown text, or later a data URL for images). */
+  content: string;
+  /** Suggested file name (without extension). */
+  fileName: string;
+  /** Number of messages exported. */
+  messageCount: number;
+  /** Human-readable summary, e.g. "导出了 23 条消息" */
+  summary: string;
+}
+
+// ─── Link preview ────────────────────────────────────────────────────────
+
+export interface LinkPreviewMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.linkPreview;
+  enabled: boolean;
+}
+
 export type OctoMessage =
   | MasterMessage
   | BeautifyMessage
@@ -268,7 +382,13 @@ export type OctoMessage =
   | BallCursorMessage
   | QQSelfLeftMessage
   | ComposerEnhancementMessage
+  | ConvSortMessage
+  | ConvCompactMessage
+  | ConvRecentOnlyMessage
   | DesktopPetMessage
   | DesktopPetPositionMessage
   | RequestKickScriptMessage
-  | CompatReportMessage;
+  | CompatReportMessage
+  | ExportRequestMessage
+  | ExportResultMessage
+  | LinkPreviewMessage;

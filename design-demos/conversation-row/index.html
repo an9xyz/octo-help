@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>会话行信息架构 · 拆解与三级方案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0b0f0e;
+  --ink-2:#121817;
+  --ink-3:#1a2221;
+  --line:rgba(255,255,255,.10);
+  --line-2:rgba(255,255,255,.055);
+  --fg:#e8ece9;
+  --fg-dim:#8e9a96;
+  --fg-faint:#5d6764;
+  --red:#ff3b1f;
+  --mint:#4de0b0;
+  --amber:#ffb84d;
+
+  /* Octo 真实取色，供样本使用 */
+  --o-bg:#ffffff;
+  --o-sel:#eaebed;
+  --o-name:#1d2129;
+  --o-sub:#86909c;
+  --o-time:#a9aeb8;
+  --o-badge-bg:#ffece8;
+  --o-badge-fg:#f53f3f;
+  --o-div:#f2f3f5;
+}
+*{box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased}
+body{
+  margin:0;background:var(--ink);color:var(--fg);
+  font-family:"JetBrains Mono",ui-monospace,monospace;
+  font-size:13px;line-height:1.65;
+  background-image:
+    linear-gradient(var(--line-2) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line-2) 1px,transparent 1px);
+  background-size:32px 32px,32px 32px;
+  background-position:-1px -1px,-1px -1px;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
+  opacity:.035;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.wrap{max-width:1360px;margin:0 auto;padding:0 40px 140px}
+
+/* ── 头 ─────────────────────────────────────────── */
+header{padding:96px 0 72px;border-bottom:1px solid var(--line);position:relative}
+.eyebrow{
+  font-size:11px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--red);display:flex;align-items:center;gap:14px;
+}
+.eyebrow::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,var(--red),transparent)}
+h1{
+  font-family:"Instrument Serif",Georgia,serif;font-weight:400;
+  font-size:clamp(44px,6.2vw,86px);line-height:.98;letter-spacing:-.02em;
+  margin:26px 0 0;max-width:20ch;
+}
+h1 em{font-style:italic;color:var(--mint)}
+.lede{
+  margin-top:34px;max-width:62ch;color:var(--fg-dim);font-size:13.5px;line-height:1.85;
+}
+.lede b{color:var(--fg);font-weight:500}
+
+.metrics{display:flex;flex-wrap:wrap;gap:1px;margin-top:56px;background:var(--line)}
+.metric{flex:1 1 190px;background:var(--ink);padding:22px 24px}
+.metric dt{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-faint)}
+.metric dd{
+  margin:10px 0 0;font-family:"Instrument Serif",serif;font-size:38px;line-height:1;
+  letter-spacing:-.01em;
+}
+.metric dd small{font-size:14px;color:var(--fg-dim);font-family:"JetBrains Mono",monospace;margin-left:6px}
+.metric .to{color:var(--mint)}
+.metric .from{color:var(--fg-faint);text-decoration:line-through;text-decoration-color:var(--red);text-decoration-thickness:2px}
+.metric .sep{
+  font-family:"JetBrains Mono",monospace;font-size:15px;color:var(--fg-faint);
+  margin:0 9px;vertical-align:2px;
+}
+
+/* ── 章节 ────────────────────────────────────────── */
+section{padding:88px 0;border-bottom:1px solid var(--line)}
+.sec-head{display:flex;align-items:baseline;gap:18px;margin-bottom:14px}
+.sec-num{
+  font-size:11px;letter-spacing:.2em;color:var(--red);
+  border:1px solid var(--red);border-radius:99px;padding:3px 11px;flex:none;
+}
+h2{
+  font-family:"Instrument Serif",serif;font-weight:400;font-size:clamp(28px,3.4vw,42px);
+  line-height:1.1;margin:0;letter-spacing:-.01em;
+}
+.sec-note{color:var(--fg-dim);max-width:64ch;margin:0 0 44px;line-height:1.85}
+.sec-note code{
+  background:var(--ink-3);border:1px solid var(--line);border-radius:4px;
+  padding:1px 6px;font-size:12px;color:var(--mint);
+}
+
+/* ── 样本容器：像钉在板上的印样 ───────────────────── */
+.panel{
+  width:314px;background:var(--o-bg);border-radius:12px;overflow:hidden;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.07);
+  font-family:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  color:var(--o-name);
+}
+.panel-cap{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-bottom:14px;
+}
+.panel-cap .t{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg)}
+.panel-cap .h{font-size:11px;color:var(--fg-faint)}
+.tag-risk{
+  font-size:10px;letter-spacing:.08em;padding:2px 8px;border-radius:99px;
+  border:1px solid currentColor;
+}
+.r-none{color:var(--mint)}
+.r-low{color:var(--amber)}
+.r-conflict{color:var(--red)}
+
+/* tab 条 */
+.tabs{display:flex;gap:4px;padding:8px;background:#f7f8fa}
+.tab{
+  flex:1;text-align:center;padding:7px 0;border-radius:99px;font-size:13.5px;
+  color:var(--o-sub);display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.tab.on{background:#fff;color:var(--o-name);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tab .pill{
+  background:var(--o-badge-bg);color:var(--o-badge-fg);font-size:10.5px;
+  padding:1px 6px;border-radius:99px;font-weight:600;
+}
+
+.list{height:600px;overflow:hidden;position:relative}
+.list::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:56px;pointer-events:none;
+  background:linear-gradient(transparent,#fff);
+}
+
+/* ── 行：公共 ─────────────────────────────────────── */
+.row{display:flex;gap:10px;padding:9px 12px;align-items:flex-start;position:relative}
+.row.sel{background:var(--o-sel)}
+.av{
+  width:40px;height:40px;border-radius:50%;flex:none;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:600;color:#fff;
+}
+.av.ring{background:#fff;border:2px solid var(--ring);color:#5a6b1f}
+.av .dot{
+  position:absolute;right:0;bottom:0;width:9px;height:9px;border-radius:50%;
+  background:#00b42a;border:2px solid #fff;
+}
+.av .subbadge{
+  position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border-radius:50%;
+  background:#fff;border:1px solid #e5e6eb;display:flex;align-items:center;
+  justify-content:center;font-size:8px;color:#86909c;
+}
+.body{flex:1;min-width:0}
+.crumb{font-size:12px;color:var(--o-sub);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.l1{display:flex;align-items:baseline;gap:6px}
+.nm{font-size:15px;font-weight:600;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.tm{font-size:12px;color:var(--o-time);flex:none}
+.l2{display:flex;align-items:center;gap:6px;margin-top:1px}
+.pv{font-size:13px;color:var(--o-sub);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.ub{
+  background:var(--o-badge-bg);color:var(--o-badge-fg);font-size:10.5px;font-weight:600;
+  padding:1px 6px;border-radius:99px;flex:none;
+}
+.thr{color:#4e5969;flex:none;font-size:12px}
+.ai{
+  background:#e9e3ff;color:#7c5cff;font-size:10px;font-weight:700;
+  padding:1px 5px;border-radius:4px;flex:none;letter-spacing:.02em;
+}
+.right-stack{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
+
+/* 现状：时间与角标竖直堆叠 */
+.v-cur .row{padding:9px 12px}
+.v-cur .l1{margin-top:0}
+
+/* L2：面包屑并入标题行 */
+.pfx{font-size:11.5px;color:#b8bec9;flex:none;font-weight:400}
+.pfx::after{content:" ›";color:#d4d8de}
+
+/* L3：连续同父群折叠 */
+.grp-head{
+  display:flex;align-items:center;gap:8px;padding:7px 12px;
+  font-size:11.5px;letter-spacing:.02em;color:#4e5969;font-weight:600;
+  background:#fafbfc;border-top:1px solid var(--o-div);border-bottom:1px solid var(--o-div);
+}
+.grp-head .cnt{color:#b8bec9;font-weight:400}
+.grp-head .line{flex:1;height:1px;background:var(--o-div)}
+.row.child{padding-left:12px}
+.row.child .body{border-left:2px solid #dcdfe5;padding-left:11px;margin-left:3px}
+/* 只在头像确实冗余时才隐藏它 —— 同一父群的多个子区共用一个头像，隐藏是净收益。
+   但 AI 助手各自有不同头像，那是它们唯一的身份，隐藏会让几行变成空白。
+   所以分组折叠只吃掉「重复的」头像，不吃掉「有区分度的」。 */
+.row.child.no-av .av{display:none}
+.row.child.mini-av .av{width:26px;height:26px;font-size:12px}
+.row.child.mini-av .av .dot{width:7px;height:7px;border-width:1.5px}
+.row.child.mini-av .body{border-left:0;padding-left:0;margin-left:0}
+.merged{
+  font-size:11px;color:#c9cdd4;padding:2px 12px 8px 36px;
+}
+
+/* ── 拆解图 ──────────────────────────────────────── */
+.teardown{display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr);gap:60px;align-items:start}
+/* 放大样本用真实的大字号，不用 transform:scale —— 缩放会把标注一起缩掉，
+   之前那版就是这么坏的：标注全部叠在文字上。 */
+.blow{
+  background:#fff;border-radius:12px;padding:6px 0;
+  box-shadow:0 30px 60px -22px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.08);
+  font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;color:var(--o-name);
+}
+.brow{display:flex;gap:13px;padding:11px 15px;align-items:flex-start}
+.brow + .brow{border-top:1px solid var(--o-div)}
+.bav{
+  width:52px;height:52px;border-radius:50%;flex:none;position:relative;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#fff;
+}
+.bav.ring{background:#fff;border:2px solid var(--ring);color:#5a6b1f}
+.bav .subbadge{width:18px;height:18px;font-size:10px}
+.bav .dot{width:12px;height:12px}
+.bbody{flex:1;min-width:0}
+.bline{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;min-width:0}
+.bcrumb{font-size:15px;color:var(--o-sub)}
+.bnm{font-size:19px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bpv{font-size:16px;color:var(--o-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btm{font-size:15px;color:var(--o-time);flex:none}
+.bthr{font-size:15px;color:#4e5969}
+.bub{
+  background:var(--o-badge-bg);color:var(--o-badge-fg);font-size:13px;font-weight:600;
+  padding:1px 8px;border-radius:99px;flex:none;
+}
+.bai{background:#e9e3ff;color:#7c5cff;font-size:12px;font-weight:700;padding:1px 6px;border-radius:4px;flex:none}
+.push{flex:1}
+/* 被点名的信号：红色虚线框 + 紧邻的编号，位置由文档流决定，不会错位 */
+.sig{outline:1px dashed rgba(255,59,31,.55);outline-offset:2px;border-radius:3px;flex:none}
+.mk{
+  display:inline-flex;width:17px;height:17px;border-radius:50%;flex:none;
+  background:var(--red);color:#fff;font-family:"JetBrains Mono",monospace;
+  font-size:10px;font-weight:700;align-items:center;justify-content:center;
+  margin-left:3px;
+}
+.findings{list-style:none;margin:0;padding:0}
+.findings li{
+  display:grid;grid-template-columns:22px 1fr;gap:16px;
+  padding:16px 0;border-top:1px solid var(--line-2);
+}
+.findings li:first-child{border-top:0;padding-top:0}
+.findings .n{
+  width:19px;height:19px;border-radius:50%;background:var(--red);color:#fff;
+  font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  margin-top:2px;
+}
+.findings h3{margin:0 0 5px;font-size:13.5px;font-weight:500;color:var(--fg);letter-spacing:.01em}
+.findings p{margin:0;color:var(--fg-dim);font-size:12.5px;line-height:1.8}
+.findings .verdict{color:var(--mint)}
+.findings .verdict.keep{color:var(--amber)}
+
+/* ── 并排 ────────────────────────────────────────── */
+/* 全出血：4×314 + 3×28 = 1340，装不进 1360 的 wrap（减去 padding 只剩 1280），
+   之前第四栏被裁掉了。让这一条脱离 wrap 自己排版。 */
+.compare{
+  display:flex;gap:28px;justify-content:center;
+  width:100vw;margin-left:calc(-50vw + 50%);padding:0 24px 22px;
+  overflow-x:auto;scrollbar-width:thin;
+}
+.col{flex:none;width:314px}
+.col-notes{margin-top:20px;list-style:none;padding:0;font-size:12px;color:var(--fg-dim);line-height:1.75}
+.col-notes li{padding-left:16px;position:relative;margin-bottom:5px}
+.col-notes li::before{content:"−";position:absolute;left:0;color:var(--red)}
+.col-notes li.add::before{content:"+";color:var(--mint)}
+
+/* ── 归并案例 ────────────────────────────────────── */
+.dup{display:grid;grid-template-columns:1fr auto 1fr;gap:40px;align-items:center}
+.dup .arrow{
+  font-family:"Instrument Serif",serif;font-size:40px;color:var(--red);
+}
+.case{
+  background:var(--o-bg);border-radius:10px;overflow:hidden;
+  box-shadow:0 22px 44px -20px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.07);
+  font-family:-apple-system,"PingFang SC","Noto Sans SC",sans-serif;color:var(--o-name);
+}
+.case-cap{font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px;color:var(--fg-faint)}
+.hl{box-shadow:inset 3px 0 0 var(--red);background:#fff8f7!important}
+.hl-ok{box-shadow:inset 3px 0 0 var(--mint);background:#f6fffb!important}
+
+/* ── 取舍 ────────────────────────────────────────── */
+.tradeoff{
+  border:1px solid var(--red);border-radius:10px;padding:30px 32px;
+  background:linear-gradient(180deg,rgba(255,59,31,.06),transparent);
+  max-width:78ch;
+}
+.tradeoff h3{margin:0 0 14px;font-family:"Instrument Serif",serif;font-size:24px;font-weight:400}
+.tradeoff p{margin:0 0 12px;color:var(--fg-dim);line-height:1.85;font-size:12.5px}
+.tradeoff p:last-child{margin-bottom:0}
+.tradeoff code{background:var(--ink-3);border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--amber);font-size:12px}
+
+footer{padding:70px 0 0;color:var(--fg-faint);font-size:11.5px;line-height:1.9}
+
+/* 载入 */
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.anim{animation:rise .8s cubic-bezier(.16,1,.3,1) both}
+@media (prefers-reduced-motion:reduce){.anim{animation:none}}
+@media(max-width:1100px){
+  .teardown{grid-template-columns:1fr;gap:96px}
+  .dup{grid-template-columns:1fr;gap:24px}
+  .dup .arrow{transform:rotate(90deg)}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">octo-help · 侧边栏会话行 · 信息架构审计</div>
+  <h1>一行里说了<br>七遍<em>同一件事</em></h1>
+  <p class="lede">
+    「最近」栏每行最多承载 <b>7 个信号</b>：面包屑父群名、头像、头像子角标、子区图标、标题、时间、
+    未读角标、发送者名、预览文本。其中真正回答「要不要我现在处理」的只有 <b>2 个</b>。
+    本文档拆解现状的冗余来源，给出三级递进方案，并标出与已实现的
+    <b>「按重要性排序」</b>功能互斥的那一级。样本数据与配色取自真实截图，
+    行高为实测值（三行子区行 68px / 两行普通行 52px）。
+  </p>
+  <dl class="metrics">
+    <div class="metric"><dt>子区行高</dt><dd><span class="from">68</span><span class="sep">→</span><span class="to">48</span><small>px</small></dd></div>
+    <div class="metric"><dt>一屏行数</dt><dd><span class="from">11</span><span class="sep">→</span><span class="to">14</span><small>行</small></dd></div>
+    <div class="metric"><dt>每行信号</dt><dd><span class="from">9</span><span class="sep">→</span><span class="to">5</span><small>个</small></dd></div>
+    <div class="metric"><dt>父群名重复</dt><dd><span class="from">3</span><span class="sep">→</span><span class="to">1</span><small>次</small></dd></div>
+  </dl>
+</header>
+
+<!-- ═══════════ 1 · 拆解 ═══════════ -->
+<section>
+  <div class="sec-head"><span class="sec-num">01</span><h2>现状拆解</h2></div>
+  <p class="sec-note">
+    放大一个真实的子区行。红点是可删除或可降级的信号；判定依据是它是否回答
+    「是谁 / 发生了什么 / 要不要我现在处理」这三个问题之一。
+  </p>
+
+  <div class="teardown">
+    <div>
+      <div class="blow">
+        <div class="brow">
+          <span class="sig"><span class="bav ring" style="--ring:#c0ca33">产研<span class="subbadge">👥</span></span></span><i class="mk">3</i>
+          <div class="bbody">
+            <div class="bline"><span class="sig"><span class="bcrumb">octo - matter v2 产研</span></span><i class="mk">1</i></div>
+            <div class="bline">
+              <span class="sig"><span class="bthr">〰</span></span><i class="mk">2</i>
+              <span class="bnm">[服务] 测试</span>
+              <span class="push"></span>
+              <span class="sig"><span class="btm">23:05</span></span><i class="mk">6</i>
+            </div>
+            <div class="bline">
+              <span class="sig"><span class="bpv" style="max-width:150px">牛奶:</span></span><i class="mk">5</i>
+              <span class="bpv">我先刷新远端并确认…</span>
+              <span class="bub">19</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="brow">
+          <span class="sig"><span class="bav ring" style="--ring:#c0ca33">产研<span class="subbadge">👥</span></span></span><i class="mk">4</i>
+          <div class="bbody">
+            <div class="bline"><span class="sig"><span class="bcrumb">octo - matter v2 产研</span></span><i class="mk">1</i></div>
+            <div class="bline">
+              <span class="bthr">〰</span>
+              <span class="bnm">octo multica 代码拆分</span>
+              <span class="push"></span>
+              <span class="btm">23:01</span>
+            </div>
+            <div class="bline"><span class="bpv">牛奶: 我会基于 Fleet 最新…</span><span class="bub">99+</span></div>
+          </div>
+        </div>
+
+        <div class="brow">
+          <span class="bav" style="background:#2e7d32">🤖<span class="dot"></span></span>
+          <div class="bbody">
+            <div class="bline">
+              <span class="bnm">行政小太阳</span>
+              <span class="sig"><span class="bai">AI</span></span><i class="mk">7</i>
+              <span class="push"></span>
+              <span class="btm">14:26</span>
+            </div>
+            <div class="bline"><span class="bpv">等一下，我刚才已经发出了…</span></div>
+          </div>
+        </div>
+      </div>
+      <p style="color:var(--fg-faint);font-size:11.5px;margin:18px 0 0;line-height:1.8">
+        样本按 1.3× 呈现以便标注。取三行而非一行，是因为
+        <span style="color:var(--red)">1</span> 与
+        <span style="color:var(--red)">4</span> 讲的是「跨行重复」，
+        单行看不出来。
+      </p>
+    </div>
+
+    <ol class="findings">
+      <li><span class="n">1</span><div>
+        <h3>面包屑父群名独占一整行，且连续重复</h3>
+        <p><code>octo - matter v2 产研</code> 在截图里连续出现 <b>3 次</b>，各占一整行 18px。
+        它回答「在哪里」，但连续三行答案相同，第二三次是纯噪音。
+        <span class="verdict">→ 降级为标题行前缀（L2）／连续折叠（L3）</span></p>
+      </div></li>
+
+      <li><span class="n">2</span><div>
+        <h3>「这是子区」被编码了三遍</h3>
+        <p>面包屑有父群名、标题前有 <code>〰</code> 图标、另一类行还在预览里写 <code>[子区]</code>。
+        三个信号同义。<span class="verdict">→ 删图标与文字前缀，位置和前缀已足够表达</span></p>
+      </div></li>
+
+      <li><span class="n">3</span><div>
+        <h3>头像子角标在 40px 下不可读</h3>
+        <p>右下角 14px 的群组小图标，在实际尺寸下只是一团灰点，且与面包屑重复表达「这是群里的」。
+        <span class="verdict">→ 删</span></p>
+      </div></li>
+
+      <li><span class="n">4</span><div>
+        <h3>同父群的头像完全相同</h3>
+        <p>三个子区行共用一个 <code>产研</code> 头像，重复三次却不提供区分度。
+        <span class="verdict">→ L3 折叠后子行不再重复头像，改用一条缩进竖线</span></p>
+      </div></li>
+
+      <li><span class="n">5</span><div>
+        <h3>发送者前缀规则不统一</h3>
+        <p>群与子区行有 <code>牛奶:</code>，AI 助手行没有。同一列出现两种语义，
+        读者要先判断这段文字是「谁说的」还是「说了什么」。
+        <span class="verdict keep">→ 保留但统一：仅多人会话显示</span></p>
+      </div></li>
+
+      <li><span class="n">6</span><div>
+        <h3>时间与未读角标竖直堆叠</h3>
+        <p>右侧两行各放一个，吃掉整行高度。但时间是背景信息、角标才是行动信号，
+        两者优先级不同却给了同等空间。
+        <span class="verdict">→ 同行右对齐；有未读时角标压过时间</span></p>
+      </div></li>
+
+      <li><span class="n">7</span><div>
+        <h3>AI 徽章连续出现四次</h3>
+        <p>四个 AI 助手连续排列，每个都挂 <code>AI</code> 标签，而它们的头像本身已高度可辨识。
+        <span class="verdict">→ 删标签；如需分区，用一条分组标题代替四个徽章</span></p>
+      </div></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════ 2 · 归并 ═══════════ -->
+<section>
+  <div class="sec-head"><span class="sec-num">02</span><h2>一次活动，两行上榜</h2></div>
+  <p class="sec-note">
+    这不是啰嗦，是会让人点错的结构问题。子区里来了消息，会同时产生
+    <b>子区自己的行</b> 和 <b>父群的行</b>（父群的「最后一条消息」正是那条子区通知）。
+    于是 <code>web ui 回滚</code> 以两种身份、两个时间出现，读者无法判断该点哪一个。
+  </p>
+
+  <div class="dup">
+    <div>
+      <div class="case-cap">现状 · 两行</div>
+      <div class="case">
+        <div class="row hl">
+          <div class="av ring" style="--ring:#c0ca33">产研</div>
+          <div class="body">
+            <div class="crumb">octo - matter v2 产研</div>
+            <div class="l1"><span class="nm"><span class="thr">〰</span> web ui 回滚</span><span class="tm">18:15</span></div>
+            <div class="l2"><span class="pv">沈鑫: [图片]线上这个icon没更新是对的吗</span></div>
+          </div>
+        </div>
+        <div class="row hl">
+          <div class="av ring" style="--ring:#c0ca33">产研<span class="subbadge">👥</span></div>
+          <div class="body">
+            <div class="l1"><span class="nm">octo - matter v2 产研</span><span class="tm">14:29</span></div>
+            <div class="l2"><span class="pv">[子区] web ui 回滚</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div>
+      <div class="case-cap">归并后 · 一行</div>
+      <div class="case">
+        <div class="row hl-ok">
+          <div class="av ring" style="--ring:#c0ca33">产研</div>
+          <div class="body">
+            <div class="l1"><span class="pfx">产研</span><span class="nm">web ui 回滚</span><span class="tm">18:15</span></div>
+            <div class="l2"><span class="pv">沈鑫: [图片]线上这个icon没更新是对的吗</span></div>
+          </div>
+        </div>
+      </div>
+      <ul class="col-notes">
+        <li>父群行的预览若只是子区通知，则不单独成行</li>
+        <li class="add">保留最新时间与真实预览，点击目标唯一</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 3 · 三级方案 ═══════════ -->
+<section>
+  <div class="sec-head"><span class="sec-num">03</span><h2>三级递进方案</h2></div>
+  <p class="sec-note">
+    同一份数据、四种呈现。逐级递进，每一级都可独立发布；风险标签说明它与既有
+    「按重要性排序」功能能否共存。
+  </p>
+
+  <div class="compare">
+
+    <!-- 现状 -->
+    <div class="col anim" style="animation-delay:0s">
+      <div class="panel-cap">
+        <span class="t">现状</span>
+        <span class="h">68 / 52 px · 11 行</span>
+      </div>
+      <div class="panel v-cur">
+        <div class="tabs"><div class="tab">关注</div><div class="tab on">最近 <span class="pill">99+</span></div></div>
+        <div class="list">
+          <div class="row sel">
+            <div class="av" style="background:#7e57c2">奥</div>
+            <div class="body">
+              <div class="l1"><span class="nm">都是管理员</span><span class="tm">刚刚</span></div>
+              <div class="l2"><span class="pv">沈鑫: 晚上看这个头像容易饿</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="crumb">octo - matter v2 产研</div>
+              <div class="l1"><span class="nm"><span class="thr">〰</span> [服务] 测试</span><span class="tm">23:05</span></div>
+              <div class="l2"><span class="pv">牛奶: 我先刷新远端并确认“修复”落…</span><span class="ub">19</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="crumb">octo - matter v2 产研</div>
+              <div class="l1"><span class="nm"><span class="thr">〰</span> octo multica 代码拆分</span><span class="tm">23:01</span></div>
+              <div class="l2"><span class="pv">牛奶: 我会基于 Fleet 最新 test，…</span><span class="ub">99+</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="crumb">octo - matter v2 产研</div>
+              <div class="l1"><span class="nm"><span class="thr">〰</span> web ui 回滚</span><span class="tm">18:15</span></div>
+              <div class="l2"><span class="pv">沈鑫: [图片]线上这个icon没更新是对的吗</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#26c6da;color:#0e7490">👥</div>
+            <div class="body">
+              <div class="crumb">FT-OctoCore小分队</div>
+              <div class="l1"><span class="nm"><span class="thr">〰</span> 子区聊天面板信息展示</span><span class="tm">14:29</span></div>
+              <div class="l2"><span class="pv">魏娇莹: [图片] 这是现在在线上的</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研<span class="subbadge">👥</span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">octo - matter v2 产研</span><span class="tm">14:29</span></div>
+              <div class="l2"><span class="pv">[子区] web ui 回滚</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#26c6da;color:#0e7490">👥<span class="subbadge">👥</span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">FT-OctoCore小分队</span><span class="tm">14:26</span></div>
+              <div class="l2"><span class="pv">[子区] 子区聊天信息面板信息展示</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#2e7d32">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">行政小太阳</span><span class="ai">AI</span><span class="tm">14:26</span></div>
+              <div class="l2"><span class="pv">等一下，我刚才已经发出了错误的回复，…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#388e3c">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">IT 助手</span><span class="ai">AI</span><span class="tm">14:21</span></div>
+              <div class="l2"><span class="pv">沈鑫你好～关于电脑卡顿想申请新电脑，…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#ef6c00">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">OKR 助手</span><span class="ai">AI</span><span class="tm">14:21</span></div>
+              <div class="l2"><span class="pv">🎯 你好！我是 OKR 小助手。我可以帮你…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#c62828">🐒<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">孙悟空</span><span class="ai">AI</span><span class="tm">14:01</span></div>
+              <div class="l2"><span class="pv">嘿，沈鑫！下午好 😊 有啥事直接说，随…</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- L1 -->
+    <div class="col anim" style="animation-delay:.1s">
+      <div class="panel-cap">
+        <span class="t">L1 · 减装饰</span>
+        <span class="tag-risk r-none">零风险 · 可共存</span>
+      </div>
+      <div class="panel">
+        <div class="tabs"><div class="tab">关注</div><div class="tab on">最近 <span class="pill">99+</span></div></div>
+        <div class="list">
+          <div class="row sel">
+            <div class="av" style="background:#7e57c2">奥</div>
+            <div class="body">
+              <div class="l1"><span class="nm">都是管理员</span><span class="tm">刚刚</span></div>
+              <div class="l2"><span class="pv">沈鑫: 晚上看这个头像容易饿</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="crumb">octo - matter v2 产研</div>
+              <div class="l1"><span class="nm">[服务] 测试</span><span class="ub">19</span><span class="tm">23:05</span></div>
+              <div class="l2"><span class="pv">牛奶: 我先刷新远端并确认“修复”落…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="crumb">octo - matter v2 产研</div>
+              <div class="l1"><span class="nm">octo multica 代码拆分</span><span class="ub">99+</span><span class="tm">23:01</span></div>
+              <div class="l2"><span class="pv">牛奶: 我会基于 Fleet 最新 test，…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="crumb">octo - matter v2 产研</div>
+              <div class="l1"><span class="nm">web ui 回滚</span><span class="tm">18:15</span></div>
+              <div class="l2"><span class="pv">沈鑫: [图片]线上这个icon没更新是对的吗</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#26c6da;color:#0e7490">👥</div>
+            <div class="body">
+              <div class="crumb">FT-OctoCore小分队</div>
+              <div class="l1"><span class="nm">子区聊天面板信息展示</span><span class="tm">14:29</span></div>
+              <div class="l2"><span class="pv">魏娇莹: [图片] 这是现在在线上的</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="l1"><span class="nm">octo - matter v2 产研</span><span class="tm">14:29</span></div>
+              <div class="l2"><span class="pv">子区「web ui 回滚」有新消息</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#26c6da;color:#0e7490">👥</div>
+            <div class="body">
+              <div class="l1"><span class="nm">FT-OctoCore小分队</span><span class="tm">14:26</span></div>
+              <div class="l2"><span class="pv">子区「子区聊天信息面板」有新消息</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#2e7d32">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">行政小太阳</span><span class="tm">14:26</span></div>
+              <div class="l2"><span class="pv">等一下，我刚才已经发出了错误的回复，…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#388e3c">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">IT 助手</span><span class="tm">14:21</span></div>
+              <div class="l2"><span class="pv">沈鑫你好～关于电脑卡顿想申请新电脑，…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#ef6c00">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">OKR 助手</span><span class="tm">14:21</span></div>
+              <div class="l2"><span class="pv">🎯 你好！我是 OKR 小助手。我可以帮你…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#c62828">🐒<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">孙悟空</span><span class="tm">14:01</span></div>
+              <div class="l2"><span class="pv">嘿，沈鑫！下午好 😊 有啥事直接说，随…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#8e9a96">…</div>
+            <div class="body">
+              <div class="l1"><span class="nm">多出一行可见</span><span class="tm">13:52</span></div>
+              <div class="l2"><span class="pv">删掉装饰换来的空间</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="col-notes">
+        <li>删 <code>〰</code> 子区图标</li>
+        <li>删 AI 徽章</li>
+        <li>删头像子角标</li>
+        <li>删预览里的 <code>[子区]</code> 前缀，改为人话</li>
+        <li class="add">时间与未读角标同行，角标在前</li>
+      </ul>
+    </div>
+
+    <!-- L2 -->
+    <div class="col anim" style="animation-delay:.2s">
+      <div class="panel-cap">
+        <span class="t">L2 · 收面包屑</span>
+        <span class="tag-risk r-low">低风险 · 可共存</span>
+      </div>
+      <div class="panel">
+        <div class="tabs"><div class="tab">关注</div><div class="tab on">最近 <span class="pill">99+</span></div></div>
+        <div class="list">
+          <div class="row sel">
+            <div class="av" style="background:#7e57c2">奥</div>
+            <div class="body">
+              <div class="l1"><span class="nm">都是管理员</span><span class="tm">刚刚</span></div>
+              <div class="l2"><span class="pv">沈鑫: 晚上看这个头像容易饿</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="l1"><span class="pfx">产研</span><span class="nm">[服务] 测试</span><span class="ub">19</span><span class="tm">23:05</span></div>
+              <div class="l2"><span class="pv">牛奶: 我先刷新远端并确认“修复”落…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="l1"><span class="pfx">产研</span><span class="nm">octo multica 代码拆分</span><span class="ub">99+</span><span class="tm">23:01</span></div>
+              <div class="l2"><span class="pv">牛奶: 我会基于 Fleet 最新 test，…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="l1"><span class="pfx">产研</span><span class="nm">web ui 回滚</span><span class="tm">18:15</span></div>
+              <div class="l2"><span class="pv">沈鑫: [图片]线上这个icon没更新是对的吗</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#26c6da;color:#0e7490">👥</div>
+            <div class="body">
+              <div class="l1"><span class="pfx">OctoCore</span><span class="nm">子区聊天面板信息展示</span><span class="tm">14:29</span></div>
+              <div class="l2"><span class="pv">魏娇莹: [图片] 这是现在在线上的</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#2e7d32">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">行政小太阳</span><span class="tm">14:26</span></div>
+              <div class="l2"><span class="pv">等一下，我刚才已经发出了错误的回复，…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#388e3c">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">IT 助手</span><span class="tm">14:21</span></div>
+              <div class="l2"><span class="pv">沈鑫你好～关于电脑卡顿想申请新电脑，…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#ef6c00">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">OKR 助手</span><span class="tm">14:21</span></div>
+              <div class="l2"><span class="pv">🎯 你好！我是 OKR 小助手。我可以帮你…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#c62828">🐒<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">孙悟空</span><span class="tm">14:01</span></div>
+              <div class="l2"><span class="pv">嘿，沈鑫！下午好 😊 有啥事直接说，随…</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#c0ca33">产研</div>
+            <div class="body">
+              <div class="l1"><span class="pfx">产研</span><span class="nm">发布流程确认</span><span class="tm">13:52</span></div>
+              <div class="l2"><span class="pv">牛奶: 那我先合到 main</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#455a64">周</div>
+            <div class="body">
+              <div class="l1"><span class="nm">周会通知</span><span class="tm">11:20</span></div>
+              <div class="l2"><span class="pv">下周一挪到 14:00</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#6d4c41">设</div>
+            <div class="body">
+              <div class="l1"><span class="nm">设计评审</span><span class="tm">10:05</span></div>
+              <div class="l2"><span class="pv">魏娇莹: 稿子放在 figma 了</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av ring" style="--ring:#8e9a96">…</div>
+            <div class="body">
+              <div class="l1"><span class="nm">再多两行</span><span class="tm">09:41</span></div>
+              <div class="l2"><span class="pv">全表统一 52px</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="col-notes">
+        <li>面包屑不再独占一行，缩短后并入标题行前缀</li>
+        <li>父群通知行归并进对应子区行（见 02）</li>
+        <li class="add">全表统一两行 52px，无 68px 异类</li>
+        <li class="add">一屏 11 → 13 行</li>
+      </ul>
+    </div>
+
+    <!-- L3 -->
+    <div class="col anim" style="animation-delay:.3s">
+      <div class="panel-cap">
+        <span class="t">L3 · 连续折叠</span>
+        <span class="tag-risk r-conflict">与排序互斥</span>
+      </div>
+      <div class="panel">
+        <div class="tabs"><div class="tab">关注</div><div class="tab on">最近 <span class="pill">99+</span></div></div>
+        <div class="list">
+          <div class="row sel">
+            <div class="av" style="background:#7e57c2">奥</div>
+            <div class="body">
+              <div class="l1"><span class="nm">都是管理员</span><span class="tm">刚刚</span></div>
+              <div class="l2"><span class="pv">沈鑫: 晚上看这个头像容易饿</span></div>
+            </div>
+          </div>
+
+          <div class="grp-head">
+            <span>octo - matter v2 产研</span><span class="cnt">3 个子区</span>
+            <span class="line"></span><span class="ub">99+</span>
+          </div>
+          <div class="row child no-av">
+            <div class="body">
+              <div class="l1"><span class="nm">[服务] 测试</span><span class="ub">19</span><span class="tm">23:05</span></div>
+              <div class="l2"><span class="pv">牛奶: 我先刷新远端并确认“修复”落…</span></div>
+            </div>
+          </div>
+          <div class="row child no-av">
+            <div class="body">
+              <div class="l1"><span class="nm">octo multica 代码拆分</span><span class="ub">99+</span><span class="tm">23:01</span></div>
+              <div class="l2"><span class="pv">牛奶: 我会基于 Fleet 最新 test，…</span></div>
+            </div>
+          </div>
+          <div class="row child no-av">
+            <div class="body">
+              <div class="l1"><span class="nm">web ui 回滚</span><span class="tm">18:15</span></div>
+              <div class="l2"><span class="pv">沈鑫: [图片]线上这个icon没更新是对的吗</span></div>
+            </div>
+          </div>
+
+          <div class="grp-head">
+            <span>FT-OctoCore小分队</span><span class="cnt">1 个子区</span>
+            <span class="line"></span>
+          </div>
+          <div class="row child no-av">
+            <div class="body">
+              <div class="l1"><span class="nm">子区聊天面板信息展示</span><span class="tm">14:29</span></div>
+              <div class="l2"><span class="pv">魏娇莹: [图片] 这是现在在线上的</span></div>
+            </div>
+          </div>
+
+          <div class="grp-head">
+            <span>AI 助手</span><span class="cnt">4 个</span>
+            <span class="line"></span>
+          </div>
+          <div class="row child mini-av">
+            <div class="av" style="background:#2e7d32">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">行政小太阳</span><span class="tm">14:26</span></div>
+              <div class="l2"><span class="pv">等一下，我刚才已经发出了错误的回复，…</span></div>
+            </div>
+          </div>
+          <div class="row child mini-av">
+            <div class="av" style="background:#388e3c">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">IT 助手</span><span class="tm">14:21</span></div>
+              <div class="l2"><span class="pv">沈鑫你好～关于电脑卡顿想申请新电脑，…</span></div>
+            </div>
+          </div>
+          <div class="row child mini-av">
+            <div class="av" style="background:#ef6c00">🤖<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">OKR 助手</span><span class="tm">14:21</span></div>
+              <div class="l2"><span class="pv">🎯 你好！我是 OKR 小助手。我可以帮你…</span></div>
+            </div>
+          </div>
+          <div class="row child mini-av">
+            <div class="av" style="background:#c62828">🐒<span class="dot"></span></div>
+            <div class="body">
+              <div class="l1"><span class="nm">孙悟空</span><span class="tm">14:01</span></div>
+              <div class="l2"><span class="pv">嘿，沈鑫！下午好 😊 有啥事直接说，随…</span></div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="av" style="background:#455a64">周</div>
+            <div class="body">
+              <div class="l1"><span class="nm">周会通知</span><span class="tm">11:20</span></div>
+              <div class="l2"><span class="pv">下周一挪到 14:00</span></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="av" style="background:#6d4c41">设</div>
+            <div class="body">
+              <div class="l1"><span class="nm">设计评审</span><span class="tm">10:05</span></div>
+              <div class="l2"><span class="pv">魏娇莹: 稿子放在 figma 了</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="col-notes">
+        <li>连续同父群只显示一次表头，子行缩进 + 竖线</li>
+        <li>同父群子区的头像重复，隐藏</li>
+        <li class="add">AI 助手各自头像有区分度，缩小保留</li>
+        <li class="add">表头聚合未读，折叠后仍知道有事</li>
+        <li class="add">一屏 11 → 14 行</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════ 4 · 取舍 ═══════════ -->
+<section style="border-bottom:0">
+  <div class="sec-head"><span class="sec-num">04</span><h2>L3 与已实现的排序功能互斥</h2></div>
+
+  <div class="tradeoff">
+    <h3>只能二选一，原因在 CSS 而不在设计</h3>
+    <p>
+      已实现的「按重要性排序」用 <code>order</code> 改变视觉顺序，<b>DOM 顺序保持不变</b>。
+      而 L3 的「连续同父群折叠」必须知道「上一行是不是同一个父群」，
+      这在 CSS 里只能用相邻兄弟选择器表达，<b>而它看的是 DOM 顺序</b>。
+    </p>
+    <p>
+      两者同开会错位：DOM 里相邻的两行，视觉上可能被 <code>order</code> 拆到列表两端，
+      于是折叠会隐藏错误的行——用户看到的是「某个子区莫名没有父群名」。
+    </p>
+    <p>
+      L1 与 L2 都只改行内表达、不依赖行间关系，因此与排序功能完全兼容。
+      <b>建议先发 L1 + L2</b>，把 L3 作为「排序关闭时才可用」的互斥选项，或等确认分组比排序更有价值再取舍。
+    </p>
+  </div>
+</section>
+
+<footer>
+  样本数据、配色与行高取自 2026-08-10 的真实截图（628×1360 @2x，面板 314px）。<br>
+  行高为实测：三行子区行 68px、两行普通行 52px、列表可视高约 640px。<br>
+  本页为设计原型，不含插件实现代码。
+</footer>
+
+</div>
+</body>
+</html>
