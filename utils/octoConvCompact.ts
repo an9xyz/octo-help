@@ -15,7 +15,8 @@ import type { ConvCompactLevel } from './octoShared';
  *                 unreadable 14px avatar sub-badge). Pure CSS.
  *   L2  收面包屑  the breadcrumb stops owning a line and becomes a title prefix,
  *                 and parent-group rows that only restate a subchannel are merged.
- *   L3  单行      drop the preview text and the timestamp. One line per row.
+ *   L3  单行      drop the preview text, the timestamp and the breadcrumb. One
+ *                 line per row.
  *   L4  连续折叠  consecutive same-parent rows collapse under one header.
  *
  * L3 is the rung that matters most, and it is worth being explicit about why:
@@ -25,6 +26,16 @@ import type { ConvCompactLevel } from './octoShared';
  * who is active", which is the whole point of the feature. The unread count goes
  * with it, collapsed to a dot: 99+ and 19 lead to the same decision, and the big
  * number only adds urgency the user did not ask for.
+ *
+ * The breadcrumb goes too, and that is a reversal of what L2 does on purpose. At
+ * L2 the parent group earns its place because the row still shows content, so you
+ * are reading the row anyway. At L3 the row is one line whose only job is "who is
+ * active" — and at 291 px of sidebar the prefix eats ~90 px to render
+ * "FT-OctoCore…", which identifies nothing. The subchannel name is what you click;
+ * which group it hangs under is not a decision input. It stays recoverable: L3
+ * stamps `父群 · 名称 · 时间` into the row's `title`, so hovering gives back
+ * everything the rung took away. L4 is where parent identity comes back for real,
+ * as a header that pays for itself across several rows.
  *
  * ## Why only L4 conflicts with the attention sort
  *
@@ -69,6 +80,12 @@ const MERGED_ATTRIBUTE = 'data-octo-conv-merged';
 const RUN_ATTRIBUTE = 'data-octo-conv-run';
 const RUN_LABEL_ATTRIBUTE = 'data-octo-conv-run-label';
 const STALE_ATTRIBUTE = 'data-octo-conv-stale';
+/**
+ * Marks a `title` we wrote ourselves, so cleanup never eats one of Octo's.
+ * Octo puts no `title` on these rows today (checked on a live build), but "today"
+ * is not something this module gets to assume.
+ */
+const TITLE_ATTRIBUTE = 'data-octo-conv-title';
 
 /** The one node this feature injects: the "older conversations" reveal. */
 const FOOTER_CLASS = 'octo-conv-stale-foot';
@@ -213,8 +230,13 @@ function ensureStyle(): void {
       margin-left: 6px;
     }
 
+    /* 面包屑：子区挂在哪个群下不是一个决策输入，而它要吃掉侧边栏近三成宽度
+       去渲染一个被截成「FT-OctoCore…」的前缀。标题拿回整行宽度，父群名进 title。
+       L4 才是父群真正回来的地方 —— 以一个能摄住好几行的分组表头的形式。 */
+    ${at(L3, item, S.conversationListBreadcrumb)} { display: none; }
+
     /* 时间：顺序已经表达新旧，精确到分钟只在引用某条消息时才有用 —— 那时已经点进去了。
-       仍然可达：盖章时会把「名称 · 时间」写进 title，悬停可见。 */
+       仍然可达：盖章时会把「父群 · 名称 · 时间」写进 title，悬停可见。 */
     ${at(L3, item, S.conversationListTime)} { display: none; }
 
     /*
@@ -266,8 +288,7 @@ function ensureStyle(): void {
 
     /* ═══ L4 — 连续同父群折叠 ═══ */
 
-    /* 组内所有行：隐藏面包屑，靠表头 + 缩进表达归属 */
-    ${at(L4, `${item}[${RUN_ATTRIBUTE}]`, S.conversationListBreadcrumb)} { display: none; }
+    /* 面包屑在 L3 就已经收掉了（见上），组内归属由表头 + 缩进表达。 */
 
     /* 缩进轨：让组内行明显挂在表头下面 */
     ${at(L4, `${item}[${RUN_ATTRIBUTE}]`, S.conversationListItemRight)} {
@@ -375,11 +396,51 @@ function rowsOf(list: Element): Element[] {
   return Array.from(list.querySelectorAll(`:scope > ${OCTO_SELECTORS.conversationListItem}`));
 }
 
+/**
+ * Hover text carrying everything L3 took off the row: parent group, name, time.
+ *
+ * The name is read off the `<h3>` rather than off `-name`, because Octo nests the
+ * timestamp *inside* `-name` — `textContent` there would yield "Code Review刚刚".
+ * Returns '' when there is no name to anchor the tooltip on, which is also how a
+ * lower level asks for the title to be dropped again.
+ */
+function titleOf(row: Element): string {
+  const name = text(row, `${OCTO_SELECTORS.conversationListItemName} > h3`);
+  if (!name) return '';
+  const crumb = text(row, OCTO_SELECTORS.conversationListBreadcrumb);
+  const time = text(row, OCTO_SELECTORS.conversationListTime);
+  return [crumb, name, time].filter(Boolean).join(' · ');
+}
+
+/**
+ * Write (or drop) our hover text on one row.
+ *
+ * Guarded by `TITLE_ATTRIBUTE` so removal only ever touches a title we wrote, and
+ * by an equality check so a re-stamp of an unchanged row performs no DOM write at
+ * all — the observer ignores attributes, but a pointless write is still a write.
+ */
+function stampTitle(row: Element, title: string): void {
+  const owned = row.hasAttribute(TITLE_ATTRIBUTE);
+  if (title) {
+    // A title that was there before we ever stamped is Octo's. Overwriting it
+    // would replace information we do not own — and leave nothing to restore on
+    // teardown — so those rows simply keep theirs.
+    if (!owned && row.hasAttribute('title')) return;
+    if (row.getAttribute('title') !== title) row.setAttribute('title', title);
+    if (!owned) row.setAttribute(TITLE_ATTRIBUTE, 'true');
+    return;
+  }
+  if (!owned) return;
+  row.removeAttribute('title');
+  row.removeAttribute(TITLE_ATTRIBUTE);
+}
+
 function clearRowStamps(row: Element): void {
   row.removeAttribute(MERGED_ATTRIBUTE);
   row.removeAttribute(RUN_ATTRIBUTE);
   row.removeAttribute(RUN_LABEL_ATTRIBUTE);
   row.removeAttribute(STALE_ATTRIBUTE);
+  stampTitle(row, '');
 }
 
 // ─── the folded-away footer ───────────────────────────────────────────────
@@ -466,6 +527,9 @@ function stampAll(): void {
           row.removeAttribute(RUN_ATTRIBUTE);
           row.removeAttribute(RUN_LABEL_ATTRIBUTE);
         }
+        // L3 hid the breadcrumb and the timestamp; the tooltip is where they stay
+        // reachable. Below L3 nothing is hidden, so nothing needs a tooltip.
+        stampTitle(row, appliedLevel >= 3 ? titleOf(row) : '');
       }
     }
     refreshFooters();
@@ -479,7 +543,7 @@ function stampAll(): void {
 
 function clearAllStamps(): void {
   for (const row of document.querySelectorAll(
-    `[${MERGED_ATTRIBUTE}],[${RUN_ATTRIBUTE}],[${RUN_LABEL_ATTRIBUTE}],[${STALE_ATTRIBUTE}]`,
+    `[${MERGED_ATTRIBUTE}],[${RUN_ATTRIBUTE}],[${RUN_LABEL_ATTRIBUTE}],[${STALE_ATTRIBUTE}],[${TITLE_ATTRIBUTE}]`,
   )) {
     clearRowStamps(row);
   }

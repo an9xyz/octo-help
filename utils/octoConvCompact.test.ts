@@ -33,6 +33,10 @@ import {
 
 let elementsById: Map<string, any>;
 let bodyAttrs: Map<string, string>;
+/** Callbacks handed to requestAnimationFrame, run on demand by `flushFrames`. */
+let frames: FrameRequestCallback[];
+/** Conversation lists `document.querySelectorAll` should return. */
+let lists: any[];
 
 function mockEl(tag: string): any {
   const self: any = {
@@ -67,6 +71,46 @@ function mockEl(tag: string): any {
 
 let mockDoc: any;
 
+/**
+ * A row that answers just enough of the DOM surface `factsOf`/`titleOf` touch.
+ * Attribute writes are recorded so the stamps can be asserted.
+ */
+function fakeRow(parts: { crumb?: string; name?: string; time?: string } = {}): any {
+  const attrs = new Map<string, string>();
+  const texts: Record<string, string | undefined> = {
+    '.wk-conv-breadcrumb': parts.crumb,
+    '.wk-conversationlist-item-name > h3': parts.name,
+    '.wk-conversationlist-item-time': parts.time,
+  };
+  return {
+    attrs,
+    querySelector: (selector: string) =>
+      texts[selector] != null ? { textContent: texts[selector] } : null,
+    matches: () => false,
+    getAttribute: (n: string) => attrs.get(n) ?? null,
+    hasAttribute: (n: string) => attrs.has(n),
+    setAttribute: (n: string, v: string) => attrs.set(n, v),
+    removeAttribute: (n: string) => attrs.delete(n),
+  };
+}
+
+/** A list container holding `rows`, shaped for the `:scope >` queries. */
+function fakeList(rows: any[]): any {
+  return {
+    querySelector: (selector: string) =>
+      selector.includes('wk-conversationlist-item') ? (rows[0] ?? null) : null,
+    querySelectorAll: (selector: string) =>
+      selector.includes('wk-conversationlist-item') ? rows : [],
+    appendChild: vi.fn(),
+  };
+}
+
+function flushFrames(): void {
+  const queued = frames;
+  frames = [];
+  for (const callback of queued) callback(0);
+}
+
 function css(): string {
   return (elementsById.get('octo-conv-compact-style')?.textContent as string) ?? '';
 }
@@ -74,16 +118,26 @@ function css(): string {
 beforeEach(() => {
   elementsById = new Map();
   bodyAttrs = new Map();
+  frames = [];
+  lists = [];
   mockDoc = {
     createElement: vi.fn((tag: string) => mockEl(tag)),
     getElementById: vi.fn((id: string) => elementsById.get(id) ?? null),
-    querySelectorAll: vi.fn(() => []),
+    querySelectorAll: vi.fn((selector: string) =>
+      selector === '.wk-conversationlist' ? lists : [],
+    ),
     body: mockEl('body'),
     head: mockEl('head'),
     documentElement: mockEl('html'),
   };
   vi.stubGlobal('document', mockDoc);
-  vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1));
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn((callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    }),
+  );
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
 });
 
@@ -151,6 +205,72 @@ describe('the generated stylesheet', () => {
     for (const level of ["compact='2']", "compact='3']", "compact='4']"]) {
       expect(merged.some((s) => s.includes(level))).toBe(true);
     }
+  });
+
+  it('promotes the breadcrumb at L2 and drops it from L3 up', () => {
+    setConvCompact('l4');
+    const crumb = selectorParts().filter((s) => s.endsWith('.wk-conv-breadcrumb'));
+    // L2 lays it out as a title prefix; L3 turns the row into one line where the
+    // parent group is no longer a decision input, so it goes away entirely.
+    expect(crumb.some((s) => s.includes("compact='2']"))).toBe(true);
+    for (const level of ["compact='3']", "compact='4']"]) {
+      expect(crumb.some((s) => s.includes(level))).toBe(true);
+    }
+  });
+});
+
+describe('the hover text L3 leaves behind', () => {
+  it('carries parent, name and time once the row is one line', () => {
+    lists = [fakeList([fakeRow({ crumb: 'FT-OctoCore小分队', name: 'octo-设置中心', time: '星期三 16:54' })])];
+    setConvCompact('l3');
+    flushFrames();
+    const row = lists[0].querySelectorAll('.wk-conversationlist-item')[0];
+    // Everything L3 hid — breadcrumb and timestamp — stays one hover away.
+    expect(row.getAttribute('title')).toBe('FT-OctoCore小分队 · octo-设置中心 · 星期三 16:54');
+    expect(row.getAttribute('data-octo-conv-title')).toBe('true');
+  });
+
+  it('omits the parts a row does not have', () => {
+    const row = fakeRow({ name: '孙悟空', time: '刚刚' });
+    lists = [fakeList([row])];
+    setConvCompact('l3');
+    flushFrames();
+    expect(row.getAttribute('title')).toBe('孙悟空 · 刚刚');
+  });
+
+  it('is not written below L3, where nothing is hidden', () => {
+    const row = fakeRow({ crumb: 'A', name: 'B', time: '刚刚' });
+    lists = [fakeList([row])];
+    setConvCompact('l2');
+    flushFrames();
+    expect(row.hasAttribute('title')).toBe(false);
+    expect(row.hasAttribute('data-octo-conv-title')).toBe(false);
+  });
+
+  it('drops the title again when the level steps back down', () => {
+    const row = fakeRow({ crumb: 'A', name: 'B', time: '刚刚' });
+    lists = [fakeList([row])];
+    setConvCompact('l3');
+    flushFrames();
+    expect(row.hasAttribute('title')).toBe(true);
+    setConvCompact('l2');
+    flushFrames();
+    // Only titles we stamped are ever removed — the marker attribute is the proof
+    // of ownership, so it has to go with it.
+    expect(row.hasAttribute('title')).toBe(false);
+    expect(row.hasAttribute('data-octo-conv-title')).toBe(false);
+  });
+
+  it('never touches a title Octo put there itself', () => {
+    const row = fakeRow({ crumb: 'A', name: 'B', time: '刚刚' });
+    row.setAttribute('title', 'Octo自己的');
+    lists = [fakeList([row])];
+    setConvCompact('l3');
+    flushFrames();
+    // Overwriting it would replace information we do not own — and leave us with
+    // nothing to restore on teardown.
+    expect(row.getAttribute('title')).toBe('Octo自己的');
+    expect(row.hasAttribute('data-octo-conv-title')).toBe(false);
   });
 });
 
