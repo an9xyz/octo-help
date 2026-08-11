@@ -1,5 +1,6 @@
 import { OCTO_SELECTORS } from './octoSelectors';
 import { planConvStamps, type ConvRowFacts } from './octoConvGroup';
+import { CONV_SORT_ENABLED_ATTRIBUTE } from './octoConvSort';
 import type { ConvCompactLevel } from './octoShared';
 
 /**
@@ -90,6 +91,18 @@ const TITLE_ATTRIBUTE = 'data-octo-conv-title';
 /** The one node this feature injects: the "older conversations" reveal. */
 const FOOTER_CLASS = 'octo-conv-stale-foot';
 
+/**
+ * Flex `order` for revealed "older" rows, and for the footer itself.
+ *
+ * Both must sit below every rung octoConvSort hands out, or the reveal lands
+ * above the muted rows it is older than. The relation is pinned by a test rather
+ * than by a runtime check: a thrown error here would take the content script
+ * down over a layout nit. `CONV_SORT_ORDER_MUTED` is exported and re-checked
+ * there, so the numbers cannot drift apart silently.
+ */
+const STALE_REVEAL_ORDER = 900;
+const FOOTER_ORDER = 9999;
+
 type Level = 0 | 1 | 2 | 3 | 4;
 
 const LEVEL_NUMBER: Record<ConvCompactLevel, Level> = {
@@ -153,6 +166,8 @@ function ensureStyle(): void {
   const L3: readonly Level[] = [3, 4];
   const L4: readonly Level[] = [4];
   const fold = `body[${RECENT_ATTRIBUTE}='on']`;
+  /** The user asked to see what the filter folded away. */
+  const revealed = `body[${RECENT_ATTRIBUTE}='open']`;
 
   style.textContent = `
     /* ═══ L1 — 删掉纯冗余的装饰 ═══ */
@@ -286,6 +301,18 @@ function ensureStyle(): void {
       border-width: 1.5px;
     }
 
+    /*
+     * 同一个角标的文字形态（「22分钟」= 多久前活跃）在单行档直接删掉。它宽 47px、
+     * 靠 right 定位，所以比 26px 的头像盒宽出一大截：实测它从盒子左边 11px 外一直
+     * 铺到标题下面，一个 26px 的头像旁边挂着比头像还宽的胶囊。在线与否这个信号
+     * 已经由上面那个 7px 的点表达了，精确到分钟的“多久前”在一行里不影响任何决定。
+     */
+    ${at(
+      L3,
+      item,
+      `${S.conversationListOnlineBadge}:not(${S.conversationListOnlineBadgeEmpty})`,
+    )} { display: none; }
+
     /* ═══ L4 — 连续同父群折叠 ═══ */
 
     /* 面包屑在 L3 就已经收掉了（见上），组内归属由表头 + 缩进表达。 */
@@ -339,11 +366,29 @@ function ensureStyle(): void {
     ${fold} ${item}[${STALE_ATTRIBUTE}='true'] { display: none; }
 
     /*
+     * 展开「更早的会话」时，把它们按住在列表末尾。
+     *
+     * 不加这条的话，展开会把四个月前的会话甩到列表最上面 —— 因为「按重要性排序」
+     * 的档位是 置顶 -40 / 有人等我 -30 / 其它 0 / 免打扰 10，而一条读过的老会话正好
+     * 落在「其它」，于是排在所有免打扰未读之前。脚注写着「更早的 62 个会话」，
+     * 点开却在顶部冒出 4 月的东西，这不是排序问题，是这个揭示动作违背了自己的承诺。
+     *
+     * 只在排序开着时才需要：order 要等排序把容器变成 flex 才生效，而排序关掉时
+     * DOM 顺序本来就是时间倒序，老会话自然待在下面。所以门控直接用排序自己的属性
+     * （从 octoConvSort 导入），而不是我们这边的 sortActive 镜像 —— 那份镜像只在收
+     * 到消息后才更新，CSS 门控则跟着真实状态自愈。
+     */
+    ${revealed}[${CONV_SORT_ENABLED_ATTRIBUTE}='true']
+      ${item}[${STALE_ATTRIBUTE}='true'] {
+      order: ${STALE_REVEAL_ORDER};
+    }
+
+    /*
      * 唯一注入的节点。order 给一个很大的值，这样即使「按重要性排序」把容器变成
-     * flex 并重排了所有行，它依然留在最后。
+     * flex 并重排了所有行，它依然留在最后 —— 包括排在刚展开的那批老会话后面。
      */
     .${FOOTER_CLASS} {
-      order: 9999;
+      order: ${FOOTER_ORDER};
       display: flex;
       align-items: center;
       gap: 6px;
@@ -464,6 +509,10 @@ function ensureFooter(list: Element): HTMLElement {
     staleExpanded = !staleExpanded;
     applyRecentAttribute();
     refreshFooters();
+    // The reveal inserts ~60 rows *above* this control, so without this the
+    // footer — and everything it just revealed — slides out of view and the click
+    // reads as "nothing happened". `nearest` keeps a collapse from jumping.
+    foot.scrollIntoView?.({ block: 'nearest' });
   });
   // Appending as the container's last child is safe: React only ever removes
   // children it created, so an extra sibling is left alone. Moving *its* rows

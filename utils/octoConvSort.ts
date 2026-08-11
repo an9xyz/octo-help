@@ -40,7 +40,14 @@ import { OCTO_SELECTORS } from './octoSelectors';
  */
 
 const STYLE_ID = 'octo-conv-sort-style';
-const ENABLED_ATTRIBUTE = 'data-octo-conv-sort';
+/**
+ * Attribute the whole feature is gated on. Exported because it is also the
+ * honest way for another module to ask "is the list a flex container right now?"
+ * — `order` is inert until this attribute makes it one, and octoConvCompact's
+ * reveal ordering depends on exactly that.
+ */
+export const CONV_SORT_ENABLED_ATTRIBUTE = 'data-octo-conv-sort';
+const ENABLED_ATTRIBUTE = CONV_SORT_ENABLED_ATTRIBUTE;
 
 /**
  * Order rungs. Gaps are intentional so a future rung can land between two
@@ -57,7 +64,13 @@ const ENABLED_ATTRIBUTE = 'data-octo-conv-sort';
  */
 const ORDER_PINNED = -40;
 const ORDER_NEEDS_ME = -30;
-const ORDER_MUTED = 10;
+/**
+ * Muted rows sink here — the lowest rung this module hands out. Exported so the
+ * one-week filter can park revealed "older" rows *below* it without either
+ * module guessing at the other's numbers.
+ */
+export const CONV_SORT_ORDER_MUTED = 10;
+const ORDER_MUTED = CONV_SORT_ORDER_MUTED;
 
 function ensureStyle(): void {
   if (document.getElementById(STYLE_ID)) return;

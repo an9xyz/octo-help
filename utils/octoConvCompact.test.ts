@@ -16,6 +16,7 @@ import {
   setConvSortActive,
   teardownConvCompact,
 } from './octoConvCompact';
+import { CONV_SORT_ORDER_MUTED } from './octoConvSort';
 
 /**
  * What these tests protect.
@@ -352,6 +353,34 @@ describe('the one-week filter', () => {
     setConvRecentOnly(true);
     setConvRecentOnly(false);
     expect(bodyAttrs.has('data-octo-conv-recent')).toBe(false);
+  });
+
+  it('parks the revealed older rows below every sort rung, but above the footer', () => {
+    setConvRecentOnly(true);
+    const text = css();
+    // Without this, expanding 「更早的 N 个会话」 flings four-month-old rows to the
+    // TOP of the list: a read old row lands on the sort's 「其它」 rung (0), which
+    // outranks every muted row (10). Observed on a real account.
+    const reveal = /data-octo-conv-recent='open'\]\[data-octo-conv-sort='true'\][\s\S]*?order:\s*(\d+)/.exec(
+      text,
+    );
+    expect(reveal).not.toBeNull();
+    const revealOrder = Number(reveal![1]);
+    const footerOrder = Number(/octo-conv-stale-foot\s*\{[\s\S]*?order:\s*(\d+)/.exec(text)![1]);
+    expect(revealOrder).toBeGreaterThan(CONV_SORT_ORDER_MUTED);
+    expect(footerOrder).toBeGreaterThan(revealOrder);
+  });
+
+  it('only orders the reveal while the sort has made the list a flex container', () => {
+    setConvRecentOnly(true);
+    // `order` is inert without the sort, and with the sort off DOM order already
+    // puts the older rows last — so the rule must stay gated on the sort's own
+    // attribute rather than fire on its own.
+    const revealParts = selectorParts().filter((s) => s.includes("recent='open'"));
+    expect(revealParts.length).toBeGreaterThan(0);
+    for (const part of revealParts) {
+      expect(part).toContain("data-octo-conv-sort='true'");
+    }
   });
 });
 
