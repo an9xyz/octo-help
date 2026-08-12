@@ -20,6 +20,14 @@ import {
   type SyncScope,
 } from './octoSyncScope';
 import {
+  CARD_TILT_NEUTRAL,
+  cardTiltForPointer,
+  interpolateCardTilt,
+  isCardTiltSettled,
+  type CardTilt,
+  type CardTiltRect,
+} from './octoCardTiltMath';
+import {
   setFullscreenKickBallCursor,
   setFullscreenKickPlayer,
   setFullscreenKickStyle,
@@ -706,7 +714,65 @@ function rollBotCardRarity(): void {
  * float, and glare surface are pure CSS; JS only feeds pointer position. Bound
  * once per shell (WeakSet); skipped under reduced-motion.
  */
-const botTiltBound = new WeakSet<HTMLElement>();
+const TILT_SMOOTHING = 0.22;
+
+interface BotTiltState {
+  current: CardTilt;
+  target: CardTilt;
+  rect: CardTiltRect | null;
+  frame: number | null;
+  controller: AbortController;
+}
+
+let botTiltBound = new WeakSet<HTMLElement>();
+let botTiltStates = new WeakMap<HTMLElement, BotTiltState>();
+
+function writeBotCardTilt(el: HTMLElement, tilt: CardTilt): void {
+  el.style.setProperty('--octo-card-ry', `${tilt.ry.toFixed(2)}deg`);
+  el.style.setProperty('--octo-card-rx', `${tilt.rx.toFixed(2)}deg`);
+  el.style.setProperty('--octo-card-mx', `${tilt.mx.toFixed(1)}%`);
+  el.style.setProperty('--octo-card-my', `${tilt.my.toFixed(1)}%`);
+}
+
+function scheduleBotCardTilt(el: HTMLElement, state: BotTiltState): void {
+  if (state.frame !== null) return;
+  state.frame = window.requestAnimationFrame(() => {
+    state.frame = null;
+    state.current = interpolateCardTilt(state.current, state.target, TILT_SMOOTHING);
+    writeBotCardTilt(el, state.current);
+    if (isCardTiltSettled(state.current, state.target)) {
+      state.current = { ...state.target };
+      writeBotCardTilt(el, state.current);
+      if (isCardTiltSettled(state.target, CARD_TILT_NEUTRAL)) {
+        el.removeAttribute('data-octo-card-tilting');
+      }
+      return;
+    }
+    scheduleBotCardTilt(el, state);
+  });
+}
+
+function resetBotCardTilt(el: HTMLElement): void {
+  const state = botTiltStates.get(el);
+  if (!state) return;
+  state.rect = null;
+  state.target = { ...CARD_TILT_NEUTRAL };
+  scheduleBotCardTilt(el, state);
+}
+
+function removeBotCardTilt(): void {
+  document.querySelectorAll<HTMLElement>(OCTO_SELECTORS.botCardShell).forEach((el) => {
+    const state = botTiltStates.get(el);
+    if (state) {
+      if (state.frame !== null) window.cancelAnimationFrame(state.frame);
+      state.controller.abort();
+    }
+    el.removeAttribute('data-octo-card-tilting');
+  });
+  botTiltBound = new WeakSet<HTMLElement>();
+  botTiltStates = new WeakMap<HTMLElement, BotTiltState>();
+}
+
 function bindBotCardTilt(): void {
   if (prefersReducedMotion()) return;
   document
@@ -714,19 +780,29 @@ function bindBotCardTilt(): void {
     .forEach((el) => {
       if (botTiltBound.has(el)) return;
       botTiltBound.add(el);
-      el.addEventListener('pointermove', (e) => {
-        const r = el.getBoundingClientRect();
-        if (!r.width || !r.height) return;
-        const px = (e.clientX - r.left) / r.width - 0.5; // -0.5 ~ 0.5
-        const py = (e.clientY - r.top) / r.height - 0.5;
-        el.style.setProperty('--octo-card-ry', (px * 11).toFixed(2) + 'deg'); // 左右 → rotateY
-        el.style.setProperty('--octo-card-rx', (-py * 11).toFixed(2) + 'deg'); // 上下 → rotateX
-        el.style.setProperty('--octo-card-mx', (px * 100 + 50).toFixed(1) + '%'); // 光标 X% → 跟手高光
-        el.style.setProperty('--octo-card-my', (py * 100 + 50).toFixed(1) + '%');
+      const state: BotTiltState = {
+        current: { ...CARD_TILT_NEUTRAL },
+        target: { ...CARD_TILT_NEUTRAL },
+        rect: null,
+        frame: null,
+        controller: new AbortController(),
+      };
+      botTiltStates.set(el, state);
+      const updateTarget = (event: PointerEvent) => {
+        const rect = state.rect ?? el.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        state.rect = rect;
+        state.target = cardTiltForPointer(rect, event.clientX, event.clientY);
+        el.setAttribute('data-octo-card-tilting', 'true');
+        scheduleBotCardTilt(el, state);
+      };
+      el.addEventListener('pointerenter', updateTarget, { signal: state.controller.signal });
+      el.addEventListener('pointermove', updateTarget, { signal: state.controller.signal });
+      el.addEventListener('pointerleave', () => resetBotCardTilt(el), {
+        signal: state.controller.signal,
       });
-      el.addEventListener('pointerleave', () => {
-        el.style.setProperty('--octo-card-ry', '0deg');
-        el.style.setProperty('--octo-card-rx', '0deg');
+      el.addEventListener('pointercancel', () => resetBotCardTilt(el), {
+        signal: state.controller.signal,
       });
     });
 }
@@ -1041,6 +1117,7 @@ export function teardownBeautify(): void {
 
   // Remove the worldcup corner balls and tear down the full-screen kick canvas.
   try { unmountBalls(); } catch { /* noop */ }
+  try { removeBotCardTilt(); } catch { /* noop */ }
   try { setFullscreenKickPlayer('none', ''); } catch { /* noop */ }
 
   // Stop listening for page-side interactions.
