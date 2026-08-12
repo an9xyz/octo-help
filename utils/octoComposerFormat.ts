@@ -170,7 +170,7 @@ function ensureStyle(): void {
       align-items: center;
       gap: var(--wk-sp-1, 4px);
       max-width: calc(100vw - 16px);
-      padding: var(--wk-sp-2, 8px);
+      padding: var(--wk-sp-1-5, 6px);
       border: 0;
       border-radius: var(--wk-r-md, 8px);
       background: var(--wk-text-primary);
@@ -205,8 +205,8 @@ function ensureStyle(): void {
     .${TOOLBAR_CLASS}-button {
       position: relative;
       z-index: 1;
-      min-width: var(--wk-sp-10, 40px);
-      height: var(--wk-sp-10, 40px);
+      min-width: calc(var(--wk-sp-8, 32px) + var(--wk-sp-1, 4px));
+      height: calc(var(--wk-sp-8, 32px) + var(--wk-sp-1, 4px));
       padding: 0 var(--wk-sp-2, 8px);
       border: 0;
       border-radius: var(--wk-r-sm, 5px);
