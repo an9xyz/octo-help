@@ -171,15 +171,40 @@ function ensureStyle(): void {
       gap: var(--wk-sp-1, 4px);
       max-width: calc(100vw - 16px);
       padding: var(--wk-sp-1, 4px);
-      border: 1px solid var(--wk-border, color-mix(in srgb, currentColor 16%, transparent));
+      border: 0;
       border-radius: var(--wk-r-md, 8px);
-      background: var(--wk-bg-elevated, var(--wk-bg-surface, #fff));
-      box-shadow: 0 8px 24px color-mix(in srgb, #000 18%, transparent);
-      color: var(--wk-text-primary, currentColor);
+      background: var(--wk-text-primary);
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--wk-text-primary) 35%, transparent);
+      color: var(--wk-bg-surface);
       user-select: none;
     }
+    body[theme-mode='dark'] .${TOOLBAR_CLASS} {
+      background: var(--wk-bg-deep);
+      color: var(--wk-text-primary);
+    }
     .${TOOLBAR_CLASS}[hidden] { display: none; }
+    .${TOOLBAR_CLASS}::after {
+      position: absolute;
+      z-index: 0;
+      bottom: calc(-1 * var(--wk-sp-2, 8px));
+      left: var(--octo-composer-toolbar-arrow-left, 50%);
+      width: var(--wk-sp-4, 16px);
+      height: var(--wk-sp-2, 8px);
+      content: '';
+      background: var(--wk-text-primary);
+      clip-path: polygon(0 0, 100% 0, 50% 100%);
+      pointer-events: none;
+      transform: translateX(-50%);
+    }
+    body[theme-mode='dark'] .${TOOLBAR_CLASS}::after { background: var(--wk-bg-deep); }
+    .${TOOLBAR_CLASS}[data-octo-placement='bottom']::after {
+      top: calc(-1 * var(--wk-sp-2, 8px));
+      bottom: auto;
+      transform: translateX(-50%) rotate(180deg);
+    }
     .${TOOLBAR_CLASS}-button {
+      position: relative;
+      z-index: 1;
       min-width: 30px;
       height: 30px;
       padding: 0 var(--wk-sp-2, 8px);
@@ -204,6 +229,18 @@ function ensureStyle(): void {
       font-family: var(--wk-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
       font-size: 12px;
       letter-spacing: -0.04em;
+    }
+    .${TOOLBAR_CLASS}-button[data-octo-format='quote'] {
+      margin-left: var(--wk-sp-1, 4px);
+    }
+    .${TOOLBAR_CLASS}-button[data-octo-format='quote']::before {
+      position: absolute;
+      top: var(--wk-sp-1, 4px);
+      bottom: var(--wk-sp-1, 4px);
+      left: calc(-1 * var(--wk-sp-1, 4px));
+      width: 1px;
+      content: '';
+      background: color-mix(in srgb, currentColor 28%, transparent);
     }
     @media (prefers-reduced-motion: reduce) {
       .${TOOLBAR_CLASS}-button { transition: none; }
@@ -242,15 +279,28 @@ function positionToolbar(
     ? range.getBoundingClientRect()
     : composerSurface.getBoundingClientRect();
   const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
   const width = toolbar.offsetWidth;
   const height = toolbar.offsetHeight;
   const left = Math.min(
     Math.max(TOOLBAR_GAP_PX, rect.left + rect.width / 2 - width / 2),
     Math.max(TOOLBAR_GAP_PX, viewportWidth - width - TOOLBAR_GAP_PX),
   );
-  const top = Math.max(TOOLBAR_GAP_PX, rect.top - height - TOOLBAR_GAP_PX);
+  const placeBelow = rect.top - height - TOOLBAR_GAP_PX < TOOLBAR_GAP_PX;
+  const maxTop = Math.max(TOOLBAR_GAP_PX, viewportHeight - height - TOOLBAR_GAP_PX);
+  const top = placeBelow
+    ? Math.min(Math.max(TOOLBAR_GAP_PX, rect.bottom + TOOLBAR_GAP_PX), maxTop)
+    : Math.max(TOOLBAR_GAP_PX, rect.top - height - TOOLBAR_GAP_PX);
+  const minArrowLeft = TOOLBAR_GAP_PX;
+  const maxArrowLeft = Math.max(minArrowLeft, width - TOOLBAR_GAP_PX);
+  const arrowLeft = Math.min(
+    Math.max(minArrowLeft, rect.left + rect.width / 2 - left),
+    maxArrowLeft,
+  );
+  toolbar.dataset.octoPlacement = placeBelow ? 'bottom' : 'top';
   toolbar.style.left = `${Math.round(left)}px`;
   toolbar.style.top = `${Math.round(top)}px`;
+  toolbar.style.setProperty('--octo-composer-toolbar-arrow-left', `${Math.round(arrowLeft)}px`);
 }
 
 function createToolbar(): HTMLElement | null {
@@ -320,6 +370,31 @@ function handleDocumentSelectionChange(): void {
   scheduleRefresh();
 }
 
+function shortcutFormatKind(event: KeyboardEvent): ComposerFormatKind | null {
+  if (event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey) return null;
+  if (!event.metaKey && !event.ctrlKey) return null;
+
+  switch (event.key.toLowerCase()) {
+    case 'b': return 'bold';
+    case 'i': return 'italic';
+    default: return null;
+  }
+}
+
+function handleDocumentKeydown(event: KeyboardEvent): void {
+  const kind = shortcutFormatKind(event);
+  if (!kind) return;
+
+  const surface = findComposerSurface();
+  if (!surface || !currentComposerRange(surface)) return;
+  if (!applyComposerFormat(findComposerFormatEditor(surface), kind)) return;
+
+  // Only consume the browser shortcut after the page editor accepted the
+  // transaction; unsupported selections retain their normal browser behavior.
+  event.preventDefault();
+  scheduleRefresh();
+}
+
 /** Enable the selection toolbar in the existing Octo composer. */
 export function setComposerFormatToolbar(next: boolean): void {
   if (!next) {
@@ -334,6 +409,7 @@ export function setComposerFormatToolbar(next: boolean): void {
   enabled = true;
   ensureStyle();
   document.addEventListener('selectionchange', handleDocumentSelectionChange);
+  document.addEventListener('keydown', handleDocumentKeydown);
   document.addEventListener('scroll', handleDocumentSelectionChange, true);
   window.addEventListener('resize', handleDocumentSelectionChange);
   scheduleRefresh();
@@ -347,6 +423,7 @@ export function teardownComposerFormatToolbar(): void {
     refreshFrame = null;
   }
   document.removeEventListener('selectionchange', handleDocumentSelectionChange);
+  document.removeEventListener('keydown', handleDocumentKeydown);
   document.removeEventListener('scroll', handleDocumentSelectionChange, true);
   window.removeEventListener('resize', handleDocumentSelectionChange);
   removeToolbar();

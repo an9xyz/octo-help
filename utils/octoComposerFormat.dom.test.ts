@@ -83,13 +83,12 @@ describe('composer format toolbar', () => {
     const { chainApi } = mountComposer('重点');
 
     setComposerFormatToolbar(true);
-    for (const [key, expected] of [
-      ['b', '**重点**'],
-      ['i', '*重点*'],
+    for (const shortcut of [
+      { key: 'b', ctrlKey: true, expected: '**重点**' },
+      { key: 'i', metaKey: true, expected: '*重点*' },
     ] as const) {
       const event = new KeyboardEvent('keydown', {
-        key,
-        ctrlKey: true,
+        ...shortcut,
         bubbles: true,
         cancelable: true,
       });
@@ -98,7 +97,7 @@ describe('composer format toolbar', () => {
       expect(event.defaultPrevented).toBe(true);
       expect(chainApi.insertContentAt).toHaveBeenLastCalledWith(
         { from: 1, to: 3 },
-        { type: 'text', text: expected },
+        { type: 'text', text: shortcut.expected },
       );
     }
   });
@@ -116,6 +115,21 @@ describe('composer format toolbar', () => {
     const toolbar = document.querySelector<HTMLElement>('[role="toolbar"]');
     expect(toolbar?.dataset.octoPlacement).toBe('bottom');
     expect(toolbar?.style.top).toBe('28px');
+  });
+
+  it('keeps the toolbar above a selection when there is enough space', async () => {
+    const { range } = mountComposer('重点');
+    Object.defineProperty(range, 'getBoundingClientRect', {
+      value: () => ({ left: 80, top: 100, right: 120, bottom: 116, width: 40, height: 16 }),
+    });
+
+    setComposerFormatToolbar(true);
+    document.dispatchEvent(new Event('selectionchange'));
+    await nextFrame();
+
+    const toolbar = document.querySelector<HTMLElement>('[role="toolbar"]');
+    expect(toolbar?.dataset.octoPlacement).toBe('top');
+    expect(toolbar?.style.top).toBe('92px');
   });
 
   it('removes the toolbar when the selection is cleared or the feature is disabled', async () => {

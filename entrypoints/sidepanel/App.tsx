@@ -1226,7 +1226,7 @@ function App() {
         >
           <p className="feature-note">
             默认提供三行编辑空间，把工具栏移到右下角，同时保留 Octo 原生的附件、快捷键和全屏展开。
-            选中文本会显示格式条，点击即可插入 Markdown，无需手打；包含真 @ 或附件的选区不会转换，避免损坏消息结构。
+            选中文本会显示格式条，点击即可插入 Markdown，无需手打；粗体和斜体也支持 Ctrl/Cmd+B、Ctrl/Cmd+I。包含真 @ 或附件的选区不会转换，避免损坏消息结构。
           </p>
         </FeatureSection>
 
