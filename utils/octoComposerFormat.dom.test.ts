@@ -49,7 +49,7 @@ function mountComposer(selectedText: string) {
   selection.removeAllRanges();
   selection.addRange(range);
 
-  return { chainApi, proseMirror };
+  return { chainApi, proseMirror, range };
 }
 
 afterEach(() => {
@@ -77,6 +77,45 @@ describe('composer format toolbar', () => {
       { from: 1, to: 3 },
       { type: 'text', text: '**重点**' },
     );
+  });
+
+  it('uses the common bold and italic keyboard shortcuts for a composer selection', () => {
+    const { chainApi } = mountComposer('重点');
+
+    setComposerFormatToolbar(true);
+    for (const [key, expected] of [
+      ['b', '**重点**'],
+      ['i', '*重点*'],
+    ] as const) {
+      const event = new KeyboardEvent('keydown', {
+        key,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      document.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(chainApi.insertContentAt).toHaveBeenLastCalledWith(
+        { from: 1, to: 3 },
+        { type: 'text', text: expected },
+      );
+    }
+  });
+
+  it('places the toolbar below a selection when there is no space above it', async () => {
+    const { range } = mountComposer('重点');
+    Object.defineProperty(range, 'getBoundingClientRect', {
+      value: () => ({ left: 80, top: 4, right: 120, bottom: 20, width: 40, height: 16 }),
+    });
+
+    setComposerFormatToolbar(true);
+    document.dispatchEvent(new Event('selectionchange'));
+    await nextFrame();
+
+    const toolbar = document.querySelector<HTMLElement>('[role="toolbar"]');
+    expect(toolbar?.dataset.octoPlacement).toBe('bottom');
+    expect(toolbar?.style.top).toBe('28px');
   });
 
   it('removes the toolbar when the selection is cleared or the feature is disabled', async () => {
