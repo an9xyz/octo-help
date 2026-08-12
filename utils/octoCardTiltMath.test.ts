@@ -17,7 +17,7 @@ describe('cardTiltForPointer', () => {
   it('maps the card edge to a bounded tilt and matching glare origin', () => {
     expect(cardTiltForPointer(rect, 500, 200)).toEqual({
       rx: 5,
-      ry: 10,
+      ry: 5,
       mx: 100,
       my: 0,
     });
@@ -26,10 +26,16 @@ describe('cardTiltForPointer', () => {
   it('clamps a pointer outside the card instead of overshooting the frame', () => {
     expect(cardTiltForPointer(rect, 900, -100)).toEqual({
       rx: 5,
-      ry: 10,
+      ry: 5,
       mx: 100,
       my: 0,
     });
+  });
+
+  it('falls back to neutral when the card has no measurable size', () => {
+    expect(cardTiltForPointer({ left: 0, top: 0, width: 0, height: 0 }, 100, 100)).toEqual(
+      CARD_TILT_NEUTRAL,
+    );
   });
 });
 
