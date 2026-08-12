@@ -170,7 +170,7 @@ function ensureStyle(): void {
       align-items: center;
       gap: var(--wk-sp-1, 4px);
       max-width: calc(100vw - 16px);
-      padding: var(--wk-sp-1, 4px);
+      padding: var(--wk-sp-2, 8px);
       border: 0;
       border-radius: var(--wk-r-md, 8px);
       background: var(--wk-text-primary);
@@ -205,8 +205,8 @@ function ensureStyle(): void {
     .${TOOLBAR_CLASS}-button {
       position: relative;
       z-index: 1;
-      min-width: 30px;
-      height: 30px;
+      min-width: var(--wk-sp-10, 40px);
+      height: var(--wk-sp-10, 40px);
       padding: 0 var(--wk-sp-2, 8px);
       border: 0;
       border-radius: var(--wk-r-sm, 5px);
@@ -214,7 +214,8 @@ function ensureStyle(): void {
       color: inherit;
       cursor: pointer;
       font: inherit;
-      font-weight: 650;
+      font-size: var(--wk-text-size-3xl, 22px);
+      font-weight: 700;
       line-height: 1;
     }
     .${TOOLBAR_CLASS}-button:hover,
@@ -227,7 +228,6 @@ function ensureStyle(): void {
     .${TOOLBAR_CLASS}-button[data-octo-format='inlineCode'],
     .${TOOLBAR_CLASS}-button[data-octo-format='codeBlock'] {
       font-family: var(--wk-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-      font-size: 12px;
       letter-spacing: -0.04em;
     }
     .${TOOLBAR_CLASS}-button[data-octo-format='quote'] {
@@ -241,6 +241,17 @@ function ensureStyle(): void {
       width: 1px;
       content: '';
       background: color-mix(in srgb, currentColor 28%, transparent);
+    }
+    @media (max-width: 360px) {
+      .${TOOLBAR_CLASS} {
+        gap: var(--wk-sp-0-5, 2px);
+        padding: var(--wk-sp-1, 4px);
+      }
+      .${TOOLBAR_CLASS}-button {
+        min-width: var(--wk-sp-8, 32px);
+        height: var(--wk-sp-8, 32px);
+        font-size: var(--wk-text-size-2xl, 18px);
+      }
     }
     @media (prefers-reduced-motion: reduce) {
       .${TOOLBAR_CLASS}-button { transition: none; }
