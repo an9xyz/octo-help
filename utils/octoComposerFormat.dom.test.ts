@@ -79,7 +79,7 @@ describe('composer format toolbar', () => {
     );
   });
 
-  it('uses Discord-scale targets and glyphs for the selection controls', async () => {
+  it('keeps 22px glyphs while using a compact 36px control target', async () => {
     mountComposer('重点');
 
     setComposerFormatToolbar(true);
@@ -87,9 +87,9 @@ describe('composer format toolbar', () => {
     await nextFrame();
 
     const style = document.getElementById('octo-composer-format-style');
-    expect(style?.textContent).toContain('padding: var(--wk-sp-2, 8px);');
-    expect(style?.textContent).toContain('min-width: var(--wk-sp-10, 40px);');
-    expect(style?.textContent).toContain('height: var(--wk-sp-10, 40px);');
+    expect(style?.textContent).toContain('padding: var(--wk-sp-1-5, 6px);');
+    expect(style?.textContent).toContain('min-width: calc(var(--wk-sp-8, 32px) + var(--wk-sp-1, 4px));');
+    expect(style?.textContent).toContain('height: calc(var(--wk-sp-8, 32px) + var(--wk-sp-1, 4px));');
     expect(style?.textContent).toContain('font-size: var(--wk-text-size-3xl, 22px);');
   });
 
