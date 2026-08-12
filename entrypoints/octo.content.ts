@@ -1,6 +1,7 @@
 import { browser, defineContentScript, injectScript } from '#imports';
 import {
   COMPAT_REPORT_STORAGE_KEY,
+  CONV_FOLDED_STORAGE_KEY,
   DESKTOP_PET_POSITION_STORAGE_KEY,
   MASTER_STORAGE_KEY,
   MESSAGE_SOURCE,
@@ -8,6 +9,7 @@ import {
   OCTO_MATCHES,
   PLAYER_WATERMARK_STORAGE_KEY,
   type CompatReportMessage,
+  type ConvFoldChangeMessage,
   type DesktopPetMessage,
   type DesktopPetPositionMessage,
   type ConvCompactLevel,
@@ -21,6 +23,7 @@ import {
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
   CONV_COMPACT_STORAGE_KEY,
+  CONV_FOLD_ENABLED_STORAGE_KEY,
   CONV_RECENT_ONLY_STORAGE_KEY,
   CONV_SORT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
@@ -42,6 +45,8 @@ import {
   readBuiltInCompanionInitial,
   readComposerEnhancement,
   readConvCompactLevel,
+  readConvFoldEnabled,
+  readConvFoldMap,
   readConvRecentOnly,
   readConvSortEnabled,
   readDesktopPet,
@@ -84,6 +89,7 @@ export default defineContentScript({
     // Injected on demand from the MAIN world (see octoFullscreenKickLazy):
     // guarded here so repeated toggles never inject twice.
     let kickScriptInjected = false;
+    let foldWriteQueue: Promise<unknown> = Promise.resolve();
 
     // Inject the MAIN-world script (runs in the page's JS context).
     await injectScript('/octo-main-world.js', { keepInDom: true });
@@ -112,6 +118,10 @@ export default defineContentScript({
       postToPage({ type: MESSAGE_TYPE.convCompact, level });
     const postConvRecentOnly = (enabled: boolean) =>
       postToPage({ type: MESSAGE_TYPE.convRecentOnly, enabled });
+    const postConvFoldEnabled = (enabled: boolean) =>
+      postToPage({ type: MESSAGE_TYPE.convFoldEnabled, enabled });
+    const postConvFoldState = (foldedByScope: ReturnType<typeof readConvFoldMap>) =>
+      postToPage({ type: MESSAGE_TYPE.convFoldState, foldedByScope });
     const postLinkPreview = (enabled: boolean) =>
       postToPage({ type: MESSAGE_TYPE.linkPreview, enabled });
 
@@ -163,6 +173,8 @@ export default defineContentScript({
     let convSortEnabled = readConvSortEnabled(stored);
     let convCompactLevel = readConvCompactLevel(stored);
     let convRecentOnly = readConvRecentOnly(stored);
+    let convFoldEnabled = readConvFoldEnabled(stored);
+    let convFoldMap = readConvFoldMap(stored);
     let desktopPet = readDesktopPet(stored);
     let desktopPetPosition = readDesktopPetPosition(stored);
     let desktopPetPlacement = readDesktopPetPlacement(stored);
@@ -186,6 +198,8 @@ export default defineContentScript({
       postConvSort(convSortEnabled);
       postConvCompact(convCompactLevel);
       postConvRecentOnly(convRecentOnly);
+      postConvFoldState(convFoldMap);
+      postConvFoldEnabled(convFoldEnabled);
       postDesktopPet();
     };
 
@@ -233,6 +247,8 @@ export default defineContentScript({
         postConvCompact((convCompactLevel = readConvCompactLevel(v))),
       [CONV_RECENT_ONLY_STORAGE_KEY]: (v) =>
         postConvRecentOnly((convRecentOnly = readConvRecentOnly(v))),
+      [CONV_FOLD_ENABLED_STORAGE_KEY]: (v) =>
+        postConvFoldEnabled((convFoldEnabled = readConvFoldEnabled(v))),
       [LINK_PREVIEW_STORAGE_KEY]: (v) => postLinkPreview(readLinkPreviewEnabled(v)),
     };
 
@@ -275,6 +291,11 @@ export default defineContentScript({
         if (key in changes) SIMPLE_RELAYS[key](values);
       }
 
+      if (CONV_FOLDED_STORAGE_KEY in changes) {
+        convFoldMap = readConvFoldMap(values);
+        postConvFoldState(convFoldMap);
+      }
+
       for (const key of DESKTOP_PET_KEYS) {
         if (key in changes) DESKTOP_PET_ABSORBERS[key](values);
       }
@@ -289,6 +310,7 @@ export default defineContentScript({
         | DesktopPetPositionMessage
         | RequestKickScriptMessage
         | CompatReportMessage
+        | ConvFoldChangeMessage
         | undefined;
       if (!data || data.source !== MESSAGE_SOURCE) return;
 
@@ -332,6 +354,32 @@ export default defineContentScript({
             checkedAt: report.checkedAt,
           } satisfies StoredCompatReport,
         });
+        return;
+      }
+
+      if (data.type === MESSAGE_TYPE.convFoldChange) {
+        if (!convFoldEnabled) return;
+        const { scope, conversationKey, folded } = data;
+        if (
+          typeof scope !== 'string' || scope.length < 3 || scope.length > 220 ||
+          typeof conversationKey !== 'string' || conversationKey.length < 3 || conversationKey.length > 260 ||
+          typeof folded !== 'boolean'
+        ) {
+          return;
+        }
+
+        // Serialize read-modify-write so two quick row clicks cannot overwrite
+        // each other with snapshots read from the same storage version.
+        foldWriteQueue = foldWriteQueue.then(async () => {
+          const latest = await browser.storage.local.get(CONV_FOLDED_STORAGE_KEY) as SettingValues;
+          const map = readConvFoldMap(latest);
+          const keys = new Set(map[scope] ?? []);
+          if (folded) keys.add(conversationKey);
+          else keys.delete(conversationKey);
+          if (keys.size > 0) map[scope] = [...keys];
+          else delete map[scope];
+          await browser.storage.local.set({ [CONV_FOLDED_STORAGE_KEY]: map });
+        }).catch(() => undefined);
         return;
       }
 

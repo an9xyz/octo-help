@@ -22,6 +22,8 @@ import {
   EXPORT_RESULT_KEY,
   GLOBAL_THEME_STORAGE_KEY,
   CONV_COMPACT_STORAGE_KEY,
+  CONV_FOLD_ENABLED_STORAGE_KEY,
+  CONV_FOLDED_STORAGE_KEY,
   CONV_RECENT_ONLY_STORAGE_KEY,
   CONV_SORT_STORAGE_KEY,
   LINK_PREVIEW_STORAGE_KEY,
@@ -113,6 +115,7 @@ type BooleanSettingKey =
   | 'composerEnhancement'
   | 'convSortEnabled'
   | 'convRecentOnly'
+  | 'convFoldEnabled'
   | 'linkPreviewEnabled'
   | 'desktopPetEnabled';
 
@@ -133,6 +136,8 @@ interface AppState {
   convSortEnabled: boolean;
   convCompactLevel: ConvCompactLevel;
   convRecentOnly: boolean;
+  convFoldEnabled: boolean;
+  convFoldCount: number;
   linkPreviewEnabled: boolean;
   // UI
   loading: boolean;
@@ -174,6 +179,8 @@ const APP_INITIAL_STATE: AppState = {
   convSortEnabled: false,
   convCompactLevel: 'off',
   convRecentOnly: false,
+  convFoldEnabled: false,
+  convFoldCount: 0,
   linkPreviewEnabled: true,
   loading: true,
   petBusy: false,
@@ -454,10 +461,19 @@ function readCompatReport(value: unknown): StoredCompatReport | null {
   };
 }
 
+function countFoldedConversations(value: unknown): number {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 0;
+  return Object.values(value as Record<string, unknown>).reduce<number>(
+    (total, keys) => total + (Array.isArray(keys) ? keys.filter((key) => typeof key === 'string').length : 0),
+    0,
+  );
+}
+
 // ─── App component ────────────────────────────────────────────────────────
 
 function App() {
   const [state, dispatch] = useReducer(appReducer, APP_INITIAL_STATE);
+  const [panelTab, setPanelTab] = useState<'general' | 'conversation'>('general');
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -482,6 +498,8 @@ function App() {
     convSortEnabled,
     convCompactLevel,
     convRecentOnly,
+    convFoldEnabled,
+    convFoldCount,
     linkPreviewEnabled,
     loading,
     petBusy,
@@ -553,6 +571,8 @@ function App() {
         CONV_SORT_STORAGE_KEY,
         CONV_COMPACT_STORAGE_KEY,
         CONV_RECENT_ONLY_STORAGE_KEY,
+        CONV_FOLD_ENABLED_STORAGE_KEY,
+        CONV_FOLDED_STORAGE_KEY,
         LINK_PREVIEW_STORAGE_KEY,
         BUILT_IN_COMPANION_STORAGE_KEY,
         COMPAT_REPORT_STORAGE_KEY,
@@ -600,6 +620,8 @@ function App() {
               ? res[CONV_COMPACT_STORAGE_KEY]
               : 'off',
             convRecentOnly: res[CONV_RECENT_ONLY_STORAGE_KEY] === true,
+            convFoldEnabled: res[CONV_FOLD_ENABLED_STORAGE_KEY] === true,
+            convFoldCount: countFoldedConversations(res[CONV_FOLDED_STORAGE_KEY]),
             playerWatermark,
             ballCursor: res[BALL_CURSOR_STORAGE_KEY] !== false,
             qqSelfLeft: res[QQ_SELF_LEFT_STORAGE_KEY] === true,
@@ -633,6 +655,14 @@ function App() {
       const compatValue = changes[COMPAT_REPORT_STORAGE_KEY]?.newValue;
       if (compatValue !== undefined) {
         dispatch({ type: 'SET_COMPAT', value: readCompatReport(compatValue) });
+      }
+
+      if (CONV_FOLDED_STORAGE_KEY in changes) {
+        dispatch({
+          type: 'SET',
+          key: 'convFoldCount',
+          value: countFoldedConversations(changes[CONV_FOLDED_STORAGE_KEY]?.newValue),
+        });
       }
 
       const exportValue = changes[EXPORT_RESULT_KEY]?.newValue as
@@ -709,6 +739,15 @@ function App() {
     dispatch({ type: 'SET_RESULT', value: null });
     dispatch({ type: 'SET_ERROR', errorKey: 'exportError', message: '' });
     void browser.storage.local.remove(EXPORT_RESULT_KEY);
+  }, []);
+
+  const restoreAllFoldedConversations = useCallback(async () => {
+    try {
+      await browser.storage.local.remove(CONV_FOLDED_STORAGE_KEY);
+      dispatch({ type: 'SET', key: 'convFoldCount', value: 0 });
+    } catch {
+      dispatch({ type: 'SET_ERROR', errorKey: 'settingsError', message: '恢复折叠会话失败，请重试' });
+    }
   }, []);
 
   const chooseBuiltInCompanion = useCallback(async (id: BuiltInCompanionId) => {
@@ -861,7 +900,26 @@ function App() {
         </section>
       )}
 
-      <div className={`settings-stack${masterEnabled ? '' : ' is-paused'}`}>
+      <nav className="panel-tabs" aria-label="插件设置分类">
+        <button
+          type="button"
+          className={panelTab === 'general' ? 'is-active' : ''}
+          aria-pressed={panelTab === 'general'}
+          onClick={() => setPanelTab('general')}
+        >
+          常用功能
+        </button>
+        <button
+          type="button"
+          className={panelTab === 'conversation' ? 'is-active' : ''}
+          aria-pressed={panelTab === 'conversation'}
+          onClick={() => setPanelTab('conversation')}
+        >
+          会话列表
+        </button>
+      </nav>
+
+      <div data-tab={panelTab} className={`settings-stack${masterEnabled ? '' : ' is-paused'}`}>
         <FeatureSection
           icon="◐"
           title="消息美化与主题"
@@ -1174,6 +1232,7 @@ function App() {
 
         <FeatureSection
           icon="📌"
+          group="conversation"
           title="会话列表按重要性排序"
           summary={
             convSortEnabled
@@ -1199,6 +1258,7 @@ function App() {
 
         <FeatureSection
           icon="🗂"
+          group="conversation"
           title="会话行精简"
           summary={
             convCompactLevel === 'off'
@@ -1270,15 +1330,65 @@ function App() {
             想知道说了什么再点进去。未读数字也收成一个圆点——99+ 和 19 都是「进去看」，
             数字只多添一份催促感。时间移到悬停。
           </p>
-          <div className="config-row is-stacked">
+        </FeatureSection>
+
+        <FeatureSection
+          icon="⊟"
+          group="conversation"
+          title="会话折叠"
+          summary={
+            convFoldEnabled
+              ? `${convFoldCount > 0 ? `手动折叠 ${convFoldCount} 个` : '可手动折叠'}${convRecentOnly ? ' · 自动收起一周前' : ''}`
+              : convRecentOnly
+                ? '自动收起一周前的会话'
+                : '已关闭，会话全部正常显示'
+          }
+          enabled={convFoldEnabled || convRecentOnly}
+          onToggleEnabled={() => {
+            const next = !(convFoldEnabled || convRecentOnly);
+            void browser.storage.local.set({
+              [CONV_FOLD_ENABLED_STORAGE_KEY]: next,
+              [CONV_RECENT_ONLY_STORAGE_KEY]: next,
+            }).then(() => {
+              dispatch({ type: 'SET_MULTI', updates: { convFoldEnabled: next, convRecentOnly: next } });
+            }).catch(() => {
+              dispatch({ type: 'SET_ERROR', errorKey: 'settingsError', message: '保存折叠设置失败，请重试' });
+            });
+          }}
+          open={openFeature === 'convFold'}
+          onToggleOpen={() => toggleFeature('convFold')}
+          disabled={loading}
+        >
+          <p className="feature-note">
+            插件不接管官方置顶能力，只提供手动折叠。鼠标移到会话上可折叠，点开聚合入口
+            可查看、进入或逐条恢复；展开项会以轻缩进、行间距和独立底色区别于正常会话。
+          </p>
+          <div className="config-row">
             <div className="config-copy">
-              <span>只看最近一周</span>
-              <small>更早的收进底部一行，点开即展开；置顶和有未读的永不收起</small>
+              <span>允许手动折叠</span>
+              <small>按账号和 Space 分开保存，不改变 Octo 服务端状态</small>
             </div>
             <button
               type="button"
               role="switch"
-              aria-label="只看最近一周"
+              aria-label="允许手动折叠"
+              aria-checked={convFoldEnabled}
+              className={`switch${convFoldEnabled ? ' switch-on' : ''}`}
+              disabled={loading}
+              onClick={() => toggleSetting(CONV_FOLD_ENABLED_STORAGE_KEY, 'convFoldEnabled')}
+            >
+              <span className="switch-knob" />
+            </button>
+          </div>
+          <div className="config-row">
+            <div className="config-copy">
+              <span>自动收起一周前</span>
+              <small>更早的会话收进底部入口；这条自动规则仍保留置顶和待处理会话</small>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-label="自动收起一周前"
               aria-checked={convRecentOnly}
               className={`switch${convRecentOnly ? ' switch-on' : ''}`}
               disabled={loading}
@@ -1287,6 +1397,14 @@ function App() {
               <span className="switch-knob" />
             </button>
           </div>
+          {convFoldCount > 0 && (
+            <div className="folded-summary-row">
+              <span>插件已保存 {convFoldCount} 个折叠会话</span>
+              <button type="button" className="text-button is-danger" onClick={restoreAllFoldedConversations}>
+                全部恢复
+              </button>
+            </div>
+          )}
         </FeatureSection>
 
         <FeatureSection

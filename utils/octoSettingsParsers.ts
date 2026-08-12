@@ -4,6 +4,8 @@ import {
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
   CONV_COMPACT_STORAGE_KEY,
+  CONV_FOLD_ENABLED_STORAGE_KEY,
+  CONV_FOLDED_STORAGE_KEY,
   CONV_RECENT_ONLY_STORAGE_KEY,
   CONV_SORT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
@@ -23,6 +25,7 @@ import {
   type DesktopPetPlacement,
   type DesktopPetPosition,
   type PlayerWatermarkId,
+  type StoredConvFoldMap,
   type StoredDesktopPet,
 } from './octoShared';
 import {
@@ -132,6 +135,32 @@ export function readConvRecentOnly(v: SettingValues): boolean {
   return v[CONV_RECENT_ONLY_STORAGE_KEY] === true;
 }
 
+/** Manual conversation folding. Missing means OFF. */
+export function readConvFoldEnabled(v: SettingValues): boolean {
+  return v[CONV_FOLD_ENABLED_STORAGE_KEY] === true;
+}
+
+/**
+ * Sanitize the persisted fold map before it crosses into the page realm.
+ * Bounds stop a corrupt value from turning one setting message into an
+ * unbounded payload; conversation IDs are opaque strings, so validation stays
+ * structural rather than guessing their format.
+ */
+export function readConvFoldMap(v: SettingValues): StoredConvFoldMap {
+  const raw = v[CONV_FOLDED_STORAGE_KEY];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+
+  const result: StoredConvFoldMap = {};
+  for (const [scope, value] of Object.entries(raw as Record<string, unknown>).slice(0, 24)) {
+    if (!scope || scope.length > 220 || !Array.isArray(value)) continue;
+    const keys = value
+      .filter((item): item is string => typeof item === 'string' && item.length > 2 && item.length <= 260)
+      .slice(0, 500);
+    if (keys.length > 0) result[scope] = [...new Set(keys)];
+  }
+  return result;
+}
+
 /** Link preview. Missing means ON. */
 export function readLinkPreviewEnabled(v: SettingValues): boolean {
   return v[LINK_PREVIEW_STORAGE_KEY] !== false;
@@ -234,6 +263,8 @@ export const RELAYED_STORAGE_KEYS = [
   CONV_SORT_STORAGE_KEY,
   CONV_COMPACT_STORAGE_KEY,
   CONV_RECENT_ONLY_STORAGE_KEY,
+  CONV_FOLD_ENABLED_STORAGE_KEY,
+  CONV_FOLDED_STORAGE_KEY,
   LINK_PREVIEW_STORAGE_KEY,
   BUILT_IN_COMPANION_STORAGE_KEY,
 ] as const;
@@ -258,10 +289,14 @@ export const SIMPLE_RELAY_KEYS = [
   CONV_SORT_STORAGE_KEY,
   CONV_COMPACT_STORAGE_KEY,
   CONV_RECENT_ONLY_STORAGE_KEY,
+  CONV_FOLD_ENABLED_STORAGE_KEY,
   LINK_PREVIEW_STORAGE_KEY,
 ] as const;
 
 export type SimpleRelayKey = (typeof SIMPLE_RELAY_KEYS)[number];
+
+/** Structured state relayed as a whole rather than parsed as a scalar setting. */
+export const CONV_FOLD_STATE_KEYS = [CONV_FOLDED_STORAGE_KEY] as const;
 
 /** Keys that all feed the single desktop-pet message. */
 export const DESKTOP_PET_KEYS = [

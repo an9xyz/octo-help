@@ -27,6 +27,7 @@ import {
   setConvSortActive,
   teardownConvCompact,
 } from '@/utils/octoConvCompact';
+import { setConvFoldEnabled, setConvFoldState, teardownConvFold } from '@/utils/octoConvFold';
 import { applyDesktopPetState, teardownDesktopPet } from '@/utils/octoPetRenderer';
 import { startOctoPetSpeech } from '@/utils/octoPetSpeech';
 import { startOctoGithubLinks } from '@/utils/octoGithubLink';
@@ -74,7 +75,10 @@ export default defineUnlistedScript(() => {
   // ---- Octo DOM compatibility self-check ---------------------------------
 
   let compatTimers: number[] = [];
-  let lastReportedCompat = '';
+  // `null` means no verdict has been posted in this lifecycle. It must differ
+  // from the healthy fingerprint (`''`), otherwise a stale stored warning can
+  // never be cleared by the first healthy check after a reload.
+  let lastReportedCompat: string | null = null;
 
   /**
    * Check the load-bearing selectors and report anything that no longer matches.
@@ -101,7 +105,7 @@ export default defineUnlistedScript(() => {
           // Only post on change, so a healthy page does not write storage on
           // every retry.
           const fingerprint = report.brokenKeys.join(',');
-          if (fingerprint === lastReportedCompat) return;
+          if (lastReportedCompat !== null && fingerprint === lastReportedCompat) return;
           lastReportedCompat = fingerprint;
 
           window.postMessage(
@@ -160,6 +164,11 @@ export default defineUnlistedScript(() => {
       stop: teardownConvCompact,
     },
     {
+      // Started by its setting messages, not by the master switch.
+      id: 'conversationFold',
+      stop: teardownConvFold,
+    },
+    {
       // Started by its setting message, not by the master switch.
       id: 'desktopPet',
       stop: teardownDesktopPet,
@@ -189,7 +198,7 @@ export default defineUnlistedScript(() => {
       start: scheduleCompatCheck,
       stop: () => {
         clearCompatTimers();
-        lastReportedCompat = '';
+        lastReportedCompat = null;
       },
     },
   ];
@@ -214,6 +223,7 @@ export default defineUnlistedScript(() => {
     'composerEnhancement',
     'conversationSort',
     'conversationCompact',
+    'conversationFold',
     'petSpeech',
     'githubLinks',
     'compatCheck',
@@ -274,6 +284,8 @@ export default defineUnlistedScript(() => {
     },
     [MESSAGE_TYPE.convCompact]: (m) => setConvCompact(m.level),
     [MESSAGE_TYPE.convRecentOnly]: (m) => setConvRecentOnly(!!m.enabled),
+    [MESSAGE_TYPE.convFoldState]: (m) => setConvFoldState(m.foldedByScope),
+    [MESSAGE_TYPE.convFoldEnabled]: (m) => setConvFoldEnabled(!!m.enabled),
     [MESSAGE_TYPE.desktopPet]: (m) => applyDesktopPetState(m),
   };
 

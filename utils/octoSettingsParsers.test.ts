@@ -5,6 +5,8 @@ import {
   BUILT_IN_COMPANION_STORAGE_KEY,
   COMPOSER_ENHANCEMENT_STORAGE_KEY,
   CONV_COMPACT_STORAGE_KEY,
+  CONV_FOLD_ENABLED_STORAGE_KEY,
+  CONV_FOLDED_STORAGE_KEY,
   CONV_SORT_STORAGE_KEY,
   DESKTOP_PET_ENABLED_STORAGE_KEY,
   DESKTOP_PET_PLACEMENT_STORAGE_KEY,
@@ -18,6 +20,7 @@ import {
 import { DEFAULT_THEME } from './octoThemeCatalog';
 import {
   DESKTOP_PET_KEYS,
+  CONV_FOLD_STATE_KEYS,
   MIGRATION_ONLY_KEYS,
   RELAYED_STORAGE_KEYS,
   SIMPLE_RELAY_KEYS,
@@ -27,6 +30,8 @@ import {
   readBuiltInCompanionInitial,
   readComposerEnhancement,
   readConvCompactLevel,
+  readConvFoldEnabled,
+  readConvFoldMap,
   readConvSortEnabled,
   readDesktopPetEnabledFromChange,
   readDesktopPetEnabledInitial,
@@ -65,6 +70,7 @@ describe('defaults that keep existing users unaffected', () => {
     // list the user navigates by muscle memory, so an upgrade must never turn
     // it on for them.
     ['conversation sort', readConvSortEnabled, CONV_SORT_STORAGE_KEY],
+    ['conversation fold', readConvFoldEnabled, CONV_FOLD_ENABLED_STORAGE_KEY],
   ] as const)('%s defaults OFF when the key is missing', (_l, read, key) => {
     expect(read({})).toBe(false);
     expect(read({ [key]: true })).toBe(true);
@@ -81,6 +87,16 @@ describe('defaults that keep existing users unaffected', () => {
     expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: 2 })).toBe('off');
     expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: true })).toBe('off');
     expect(readConvCompactLevel({ [CONV_COMPACT_STORAGE_KEY]: null })).toBe('off');
+  });
+
+  it('sanitizes folded conversation state', () => {
+    expect(readConvFoldMap({})).toEqual({});
+    expect(readConvFoldMap({
+      [CONV_FOLDED_STORAGE_KEY]: {
+        'user:space': ['2:group', '2:group', 42, ''],
+        broken: 'not-an-array',
+      },
+    })).toEqual({ 'user:space': ['2:group'] });
   });
 
   it('falls back to the default theme for a non-string value', () => {
@@ -211,6 +227,7 @@ describe('key lists', () => {
     const accounted = [
       MASTER_STORAGE_KEY,
       ...SIMPLE_RELAY_KEYS,
+      ...CONV_FOLD_STATE_KEYS,
       ...DESKTOP_PET_KEYS,
       ...MIGRATION_ONLY_KEYS,
     ];
@@ -219,7 +236,10 @@ describe('key lists', () => {
 
   it('keeps the relay groups disjoint', () => {
     const simple = new Set<string>(SIMPLE_RELAY_KEYS);
+    const foldState = new Set<string>(CONV_FOLD_STATE_KEYS);
     for (const key of DESKTOP_PET_KEYS) expect(simple.has(key)).toBe(false);
+    for (const key of CONV_FOLD_STATE_KEYS) expect(simple.has(key)).toBe(false);
+    for (const key of DESKTOP_PET_KEYS) expect(foldState.has(key)).toBe(false);
     expect(simple.has(MASTER_STORAGE_KEY)).toBe(false);
   });
 });

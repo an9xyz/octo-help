@@ -43,14 +43,12 @@ describe('checkOctoCompat', () => {
   });
 
   it('does not warn when only the shell has rendered so far', () => {
-    // The conversation host is up but no messages are painted yet. `messageRow`
-    // is legitimately absent, and `messageBody` must not be blamed either.
+    // The conversation host is up but no conversation/messages are painted yet.
+    // Missing message rows and composer are all legitimate in this state.
     const report = checkOctoCompat(probeWith([S.conversation]));
     expect(report.conclusive).toBe(true);
-    expect(report.brokenKeys).toEqual(['messageItem', 'messageRow', 'composer']);
-    // messageBody is suppressed: its prerequisite (messageRow) is itself absent,
-    // so reporting it would just echo the earlier failure.
-    expect(report.brokenKeys).not.toContain('messageBody');
+    expect(report.brokenKeys).toEqual([]);
+    expect(report.brokenFeatures).toEqual([]);
   });
 
   it('names the feature behind a renamed message row', () => {
@@ -73,7 +71,7 @@ describe('checkOctoCompat', () => {
 
   it('reports several broken features at once without duplicates', () => {
     const report = checkOctoCompat(probeWith([S.conversation, S.messageRow]));
-    expect(report.brokenKeys).toEqual(['messageItem', 'messageBody', 'composer']);
+    expect(report.brokenKeys).toEqual(['messageItem', 'messageBody']);
     expect(new Set(report.brokenFeatures).size).toBe(report.brokenFeatures.length);
   });
 });

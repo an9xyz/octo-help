@@ -105,6 +105,19 @@ export type ConvCompactLevel = 'off' | 'l1' | 'l2' | 'l3' | 'l4';
  */
 export const CONV_RECENT_ONLY_STORAGE_KEY = 'octoConvRecentOnly';
 
+/** Enable manual conversation folding in the Octo sidebar. Default OFF. */
+export const CONV_FOLD_ENABLED_STORAGE_KEY = 'octoConvFoldEnabled';
+
+/**
+ * Folded conversation keys, isolated by the page account + Space scope.
+ *
+ * A conversation key is `${channelType}:${channelId}`. The outer key is built
+ * in the MAIN world from the current page session, because the extension side
+ * panel cannot read Octo's page storage safely.
+ */
+export const CONV_FOLDED_STORAGE_KEY = 'octoConvFoldedByScope';
+export type StoredConvFoldMap = Record<string, string[]>;
+
 /**
  * storage.local key holding the last Octo DOM compatibility report.
  *
@@ -186,6 +199,9 @@ export const MESSAGE_TYPE = {
   convSort: 'convSort',
   convCompact: 'convCompact',
   convRecentOnly: 'convRecentOnly',
+  convFoldEnabled: 'convFoldEnabled',
+  convFoldState: 'convFoldState',
+  convFoldChange: 'convFoldChange',
   desktopPet: 'desktopPet',
   desktopPetPosition: 'desktopPetPosition',
   requestKickScript: 'requestKickScript',
@@ -288,6 +304,29 @@ export interface ConvRecentOnlyMessage {
   enabled: boolean;
 }
 
+/** Toggle the manual conversation-folding controls and rendering. */
+export interface ConvFoldEnabledMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.convFoldEnabled;
+  enabled: boolean;
+}
+
+/** Complete storage-backed fold map sent from the content script. */
+export interface ConvFoldStateMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.convFoldState;
+  foldedByScope: StoredConvFoldMap;
+}
+
+/** MAIN world -> content script: add or remove one folded conversation key. */
+export interface ConvFoldChangeMessage {
+  source: typeof MESSAGE_SOURCE;
+  type: typeof MESSAGE_TYPE.convFoldChange;
+  scope: string;
+  conversationKey: string;
+  folded: boolean;
+}
+
 /** Drag result sent from the MAIN world back to the content script for storage. */
 export interface DesktopPetPositionMessage {
   source: typeof MESSAGE_SOURCE;
@@ -385,6 +424,9 @@ export type OctoMessage =
   | ConvSortMessage
   | ConvCompactMessage
   | ConvRecentOnlyMessage
+  | ConvFoldEnabledMessage
+  | ConvFoldStateMessage
+  | ConvFoldChangeMessage
   | DesktopPetMessage
   | DesktopPetPositionMessage
   | RequestKickScriptMessage

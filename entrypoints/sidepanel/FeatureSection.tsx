@@ -27,6 +27,8 @@ export interface FeatureSectionProps {
   enabled?: boolean;
   onToggleEnabled?: () => void;
   disabled?: boolean;
+  /** Top-level side-panel tab that owns this feature. */
+  group?: 'general' | 'conversation';
   /** Rendered only while open — details of an unopened section cost nothing. */
   children?: ReactNode;
 }
@@ -41,6 +43,7 @@ export function FeatureSection({
   enabled,
   onToggleEnabled,
   disabled = false,
+  group = 'general',
   children,
 }: FeatureSectionProps) {
   const bodyId = useId();
@@ -48,7 +51,7 @@ export function FeatureSection({
   const off = hasSwitch && !enabled;
 
   return (
-    <section className={`feature${open ? ' is-open' : ''}${off ? ' is-off' : ''}`}>
+    <section data-group={group} className={`feature${open ? ' is-open' : ''}${off ? ' is-off' : ''}`}>
       <div className="feature-head">
         <button
           type="button"

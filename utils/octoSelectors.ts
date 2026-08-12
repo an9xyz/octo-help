@@ -178,10 +178,15 @@ interface CompatCheck {
  * `.wk-msg-row--send` disappears, own-message bubbles just lose their accent.
  */
 const COMPAT_CHECKS: CompatCheck[] = [
-  { key: 'messageItem', feature: '新消息气泡', requires: 'conversation' },
-  { key: 'messageRow', feature: '消息美化与主题', requires: 'conversation' },
+  // The two row selectors corroborate each other. If both are absent, the open
+  // conversation may simply be empty or not painted yet; only one surviving
+  // while the other disappears is evidence of an Octo markup change.
+  { key: 'messageItem', feature: '新消息气泡', requires: 'messageRow' },
+  { key: 'messageRow', feature: '消息美化与主题', requires: 'messageItem' },
   { key: 'messageBody', feature: '长消息折叠、链接卡片', requires: 'messageRow' },
-  { key: 'composer', feature: '舒适输入框、输入框宠物', requires: 'conversation' },
+  // The shell can render before a conversation is selected. A painted message
+  // row is the evidence that a composer should also exist by now.
+  { key: 'composer', feature: '舒适输入框、输入框宠物', requires: 'messageItem' },
   { key: 'composerEditor', feature: '快捷 @ 群成员', requires: 'composer' },
 ];
 
