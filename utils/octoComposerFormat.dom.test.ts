@@ -79,6 +79,20 @@ describe('composer format toolbar', () => {
     );
   });
 
+  it('uses Discord-scale targets and glyphs for the selection controls', async () => {
+    mountComposer('重点');
+
+    setComposerFormatToolbar(true);
+    document.dispatchEvent(new Event('selectionchange'));
+    await nextFrame();
+
+    const style = document.getElementById('octo-composer-format-style');
+    expect(style?.textContent).toContain('padding: var(--wk-sp-2, 8px);');
+    expect(style?.textContent).toContain('min-width: var(--wk-sp-10, 40px);');
+    expect(style?.textContent).toContain('height: var(--wk-sp-10, 40px);');
+    expect(style?.textContent).toContain('font-size: var(--wk-text-size-3xl, 22px);');
+  });
+
   it('uses the common bold and italic keyboard shortcuts for a composer selection', () => {
     const { chainApi } = mountComposer('重点');
 
