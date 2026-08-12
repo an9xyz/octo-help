@@ -24,6 +24,17 @@ describe('markdownForComposerSelection', () => {
     expect(markdownForComposerSelection('inlineCode', 'a\nb')).toBe('```\na\nb\n```');
   });
 
+  it.each([
+    ['bold', '**重点**', '重点'],
+    ['italic', '*补充*', '补充'],
+    ['strike', '~~过期~~', '过期'],
+    ['inlineCode', '`pnpm test`', 'pnpm test'],
+    ['quote', '> 第一行\n> 第二行', '第一行\n第二行'],
+    ['codeBlock', '```\nconst x = 1;\n```', 'const x = 1;'],
+  ] as Array<[ComposerFormatKind, string, string]>)('toggles %s off when its own Markdown is selected', (kind, selected, expected) => {
+    expect(markdownForComposerSelection(kind, selected)).toBe(expected);
+  });
+
   it('returns null for an empty selection', () => {
     expect(markdownForComposerSelection('bold', '')).toBeNull();
   });
@@ -34,9 +45,14 @@ describe('applyComposerFormat', () => {
     text: string;
     hasNonTextInline?: boolean;
   }) {
-    const insertContentAt = vi.fn(() => ({ run: vi.fn() }));
-    const focus = vi.fn(() => ({ insertContentAt }));
-    const chain = vi.fn(() => ({ focus }));
+    const chainApi = {
+      focus: vi.fn(),
+      insertContentAt: vi.fn(),
+      run: vi.fn(() => true),
+    };
+    chainApi.focus.mockReturnValue(chainApi);
+    chainApi.insertContentAt.mockReturnValue(chainApi);
+    const chain = vi.fn(() => chainApi);
     const nodesBetween = vi.fn((_: number, __: number, visit: (node: { isInline?: boolean; isText?: boolean }) => void) => {
       if (options.hasNonTextInline) visit({ isInline: true, isText: false });
     });
@@ -53,8 +69,8 @@ describe('applyComposerFormat', () => {
         chain,
       },
       chain,
-      focus,
-      insertContentAt,
+      focus: chainApi.focus,
+      insertContentAt: chainApi.insertContentAt,
       nodesBetween,
     };
   }
@@ -65,7 +81,20 @@ describe('applyComposerFormat', () => {
     expect(applyComposerFormat(editor, 'bold')).toBe(true);
     expect(chain).toHaveBeenCalledOnce();
     expect(focus).toHaveBeenCalledOnce();
-    expect(insertContentAt).toHaveBeenCalledWith({ from: 4, to: 6 }, '**重点**');
+    expect(insertContentAt).toHaveBeenCalledWith(
+      { from: 4, to: 6 },
+      { type: 'text', text: '**重点**' },
+    );
+  });
+
+  it('writes selected angle brackets as a text node instead of parsed HTML', () => {
+    const { editor, insertContentAt } = createEditor({ text: '<draft>' });
+
+    expect(applyComposerFormat(editor, 'italic')).toBe(true);
+    expect(insertContentAt).toHaveBeenCalledWith(
+      { from: 4, to: 11 },
+      { type: 'text', text: '*<draft>*' },
+    );
   });
 
   it('does not flatten a real mention or attachment into untrusted text', () => {
@@ -83,6 +112,15 @@ describe('applyComposerFormat', () => {
     const { editor, insertContentAt } = createEditor({ text: '' });
 
     expect(applyComposerFormat(editor, 'quote')).toBe(false);
+    expect(insertContentAt).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the page editor has been destroyed or lost its transaction API', () => {
+    const { editor, insertContentAt } = createEditor({ text: '重点' });
+    Object.assign(editor, { isDestroyed: true });
+
+    expect(applyComposerFormat(editor, 'bold')).toBe(false);
+    expect(applyComposerFormat(undefined, 'bold')).toBe(false);
     expect(insertContentAt).not.toHaveBeenCalled();
   });
 });

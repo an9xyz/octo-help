@@ -1217,7 +1217,7 @@ function App() {
           icon="⌶"
           iconClass="is-message"
           title="舒适输入框"
-          summary={composerEnhancement ? '三行编辑区 · 工具栏在右下角' : '已关闭，保持 Octo 原始输入框'}
+          summary={composerEnhancement ? '三行编辑区 · 选区格式条 · 快捷 @' : '已关闭，保持 Octo 原始输入框'}
           enabled={composerEnhancement}
           onToggleEnabled={() => toggleSetting(COMPOSER_ENHANCEMENT_STORAGE_KEY, 'composerEnhancement')}
           open={openFeature === 'composer'}
@@ -1226,7 +1226,7 @@ function App() {
         >
           <p className="feature-note">
             默认提供三行编辑空间，把工具栏移到右下角，同时保留 Octo 原生的附件、快捷键和全屏展开。
-            只调整布局样式，不接管编辑器事件。
+            选中文本会显示格式条，点击即可插入 Markdown，无需手打；包含真 @ 或附件的选区不会转换，避免损坏消息结构。
           </p>
         </FeatureSection>
 

@@ -3,7 +3,7 @@
 一个增强 Octo（`im.deepminer.com.cn`）网页版聊天体验的浏览器扩展（WXT + React）：把界面换成自己喜欢的样子，把每天要做几十次的操作变快。
 
 - **消息美化 + 换肤** —— 三档气泡配色（AI / 自己 / 他人）、自己的头像略大且 hover 会越转越快、折叠会话自动展开、长消息限高「展开全文」、暗色适配，以及可切换的消息主题。
-- **舒适输入框 + 快捷 @** —— 默认三行编辑空间，工具栏移到右下角，保留 Octo 原生的附件、快捷键和全屏展开；底部多 5 个群成员头像，点一下就 @ 他。头像按「这个会话里谁被 @ 得最多」排序（常被 @ 的 AI 会排最前），插入的是真 mention，对方会收到提醒。
+- **舒适输入框 + 选区格式 + 快捷 @** —— 默认三行编辑空间，工具栏移到右下角，保留 Octo 原生的附件、快捷键和全屏展开；选中文本会出现格式条，点击可插入粗体、斜体、删除线、引用、行内代码或代码块，不必手打 Markdown。底部多 5 个群成员头像，点一下就 @ 他。头像按「这个会话里谁被 @ 得最多」排序（常被 @ 的 AI 会排最前），插入的是真 mention，对方会收到提醒。
 - **全站主题 + 世界杯特效** —— 可切换导航、会话和输入区配色，提供足球射门动画与梅西、姆巴佩水印。
 - **GitHub 快捷入口** —— 自动识别消息中的仓库、Issue、PR、Commit、Action、Release 和文件链接，在消息旁提供准确跳转；PR/Issue 编号后即使直接粘着文字也不会把文字带进 URL。
 - **会话列表整理** —— 插件内独立的「会话列表」Tab 统一管理重要性排序、行精简与折叠；插件不接管 Octo 官方置顶能力。「折叠的会话」入口显示名称摘要、数量和未读状态，点开后折叠项以缩进和分组底色展开，可查看、进入或逐条恢复，状态按账号和 Space 本地保存。
@@ -21,7 +21,7 @@
 - **换肤**：主题模型 `base`→`body[theme-mode]`（亮/暗，联动 app 原生暗色）、`skin`→`body[data-octo-skin]`（消息皮肤）。样式由注入的大段 CSS 按这两个属性切换；Side Panel 选中的主题存 `browser.storage.local`，经内容脚本转发到 MAIN world 应用。有 `MutationObserver` 在 app 启动强制亮色时「重申」所选主题（带自写抑制 + 去抖，避免与 app 抢属性打死循环）。
 - **开卡抽卡**：Bot 资料卡弹窗挂载时，美化引擎的 `sync()` 按加权概率 `Math.random()` 抽一个稀有度，写到 `.wk-modal-shell` / `.wk-bot-detail-content` 的 `data-octo-rarity` 上——卡框配色、角标文字（`content: attr(...)`）、辉光强度全部由 CSS 据此渲染。抽卡是「每个卡片实例一次」：同一弹窗重渲染沿用已抽结果，关闭重开则是新实例、重新抽。揭晓特效节点注入 `<body>`（在弹窗 React 树之外，避免被 reconcile 清掉），播完自移除。只读随机 + 自身属性写入，不改源码、不改 React 状态。
 - **桌面宠物**：Side Panel 使用 JSZip 本地校验并解压宠物包，把 manifest 与 spritesheet data URL 存入 `browser.storage.local`；内容脚本把状态转发到 MAIN world，页面脚本按 manifest 播放动作状态机，并把拖拽位置回写 storage。Codex v1 `8 × 9` 与 v2 `8 × 11` atlas 使用官方动作行和逐帧时长；无动画配置的旧 Octo 包仍按 `12 × 13` 第一行播放。
-- **输入区增强**：舒适模式只通过 scoped CSS 调整 Octo 的 `.wk-messageinput-*` 布局，不接管 Tiptap 编辑器事件；宠物输入框模式用 `ResizeObserver`、滚动监听和批量定位跟随当前会话输入框。
+- **输入区增强**：舒适模式通过 scoped CSS 调整 Octo 的 `.wk-messageinput-*` 布局；选区格式条只监听选区变化，并通过页面已有 Tiptap 事务写入文本节点，绝不改写 ProseMirror DOM。包含真 mention 或附件的选区会拒绝转换，避免把结构化节点降级成纯文本；宠物输入框模式用 `ResizeObserver`、滚动监听和批量定位跟随当前会话输入框。
 - **会话列表按重要性排序**：整个功能是一张样式表，**没有 JS 逻辑、没有 MutationObserver、不动 DOM**。因为 Octo 自己已经把需要的信号渲染成了 class：它对「群里 @我」和「私聊有未读」输出同一个 `.wk-mention`（渲染条件是 `hasMention || (unread && !muted)`，所以它穿透免打扰），置顶是 `-top`，免打扰（含子区继承父群）是 `-muted`。于是「谁在等我回」就是 `:has(.wk-mention)`，排序交给 CSS `order`，随 React 更新自动自愈。**想在这个文件里加 JS 前先读它的头注释** —— 盖章式的 pass 必须跟着每次渲染重跑，而它能算的东西 class 里已经有了。用 `order` 而不搬 DOM，是因为 React 每次 commit 都会重新强加自己的子节点顺序（搬进自己的分组 wrapper 更糟：`removeChild` 会对着 React 记录的父节点调用，直接抛 `NotFoundError`）。作用域用 `:has(> .wk-conversationlist-item)` 限定，恰好等价于「只在最近栏」——因为 `compact` 是整表级 prop，关注栏渲染的是 `.wk-conv-compact-item`，一个普通行都没有，所以它的拖拽排序完全不受影响。四级阶梯之间用 `:not()` 互斥而不靠层叠：`:has()` 会继承其参数的优先级，一条朴素的 mention 规则会盖过置顶规则、把预期次序反过来。
 - **会话行四级精简 + 只看最近一周**：一行最多九个信号，真正回答「要不要我现在处理」的只有两个。L1 纯 CSS 删冗余装饰；L2 用 grid 把面包屑从独占一行改成标题前缀，并归并「一次子区活动占两行」（只在那行没有未读时才归并，绝不隐藏在等人处理的会话）；**L3 单行是重点 —— 预览文本就是那个「信息流」**，删掉它列表才从「推内容」变成「报状态」，未读数字同时收成圆点（99+ 和 19 导向同一个决定），时间和面包屑一起移到悬停 —— 面包屑在 L3 被删是对 L2 的有意反转：L2 的行还有内容、你本就在读它，而 L3 的一行只回答「谁在活跃」，291px 的侧边栏里前缀要吃掉近 90px 去渲染一个被截成「FT-OctoCore…」的名字，识别不了任何东西；可达性靠盖在行上的 `title`（`父群 · 名称 · 时间`，且只写没有 title 的行、并用 `data-octo-conv-title` 记住哪些是自己写的，以便降级时只收回自己的）；L4 才是父群真正回来的地方，把连续同父群折成分组表头，表头文字用 `content: attr()` 从盖的属性里取，不注入任何节点。L3 靠 `display: contents` 把第二行从布局里摘掉、让未读点落到第一行右侧 —— 这是不搬 DOM 就能跨行搬子节点的唯一办法。**一周过滤不需要时间戳**：Octo 自己的 `getTimeStringAutoShort2` 正好在 7×24 小时处切换格式，判据是「时间文字含 4 位连续数字」（不用斜杠，因为非中文 locale 会输出 `03.08.2026`）；置顶、@我（含免打扰群里的 @我）和非免打扰未读的永不折叠，免打扰的未读堆积不买豁免，其余收进一个 `order: 9999` 的脚注（大 order 是为了在排序把容器变成 flex 后仍留在最后）。状态一律写 `data-octo-*` 属性而非 class：行的 `className` 会被 React 在每次未读/选中/免打扰翻转时整体重写。**只有 L4 与「按重要性排序」互斥**（折叠要按 DOM 顺序判断上一行，而排序只改视觉顺序），阶梯刻意这么排，好让真正管用的 L3 永远不被这个冲突禁掉。多级门控统一由 `at(levels, ...)` 生成，每条规则自带完整后代选择器——手写 `body[..='2'],body[..='3'] .item` 会因逗号退化成一个裸 `body[..='2']`，曾经因此在 L2 把整个页面 `display:none`。
 - **会话折叠**：不复制 Octo 的会话列表，也不接管官方置顶规则；只给原生行盖 `data-octo-*` 属性，并在 `body` 上复用一个避开未读徽章的轻量「折叠 / 恢复」悬停操作，绝不往 React 管理的行里塞子节点。「折叠的会话」入口是紧凑的列表分组栏，显示数量和未读状态；点开后原生行以轻缩进、3px 行间距、圆角浅色行紧跟入口展开，不再使用重复的蓝色竖线；其顺序优先于“一周前自动收起”，不会再被推到列表末尾。稳定身份来自原生行的 React key（`<channelId>-<channelType>`），能保留子区完整的 `group____thread` ID；解析失败时保持可见。折叠键以 `${channelType}:${channelId}` 保存到 `browser.storage.local`，外层按页面当前 `uid + Space` 隔离。MAIN world 只发增删请求，内容脚本串行执行 storage 的读改写，避免快速连续操作互相覆盖。
@@ -49,7 +49,8 @@
 - `utils/octoPetRenderer.ts` — 桌面宠物 overlay、spritesheet 动画与拖拽交互。
 - `utils/octoBuiltInCompanion.ts` — 四只内置输入框宠物的巡游、定位和消息唤醒。
 - `utils/octoGithubLink.ts` — GitHub URL 边界识别、分类和消息快捷入口。
-- `utils/octoComposerEnhancer.ts` — 三行舒适输入框样式和完整还原，并挂载快捷 @ 头像条。
+- `utils/octoComposerEnhancer.ts` — 三行舒适输入框样式、快捷 @ 头像条与选区格式条的生命周期接线。
+- `utils/octoComposerFormat.ts` — 选中编辑器文本后的 Discord 式格式条：定位、可逆 Markdown 包裹、Tiptap 文本事务和安全清理。
 - `utils/octoConvSort.ts` — 会话列表按重要性排序：一张样式表，无 JS 逻辑、无 observer。
 - `utils/octoConvCompact.ts` — 会话行四级精简（减装饰 / 收面包屑 / 单行 / 连续折叠）+ 只看最近一周，CSS + 属性盖章。
 - `utils/octoConvGroup.ts` — 精简的纯规则：父群通知行归并、连续同父群成组、一周以外判定。
