@@ -2875,11 +2875,13 @@
             body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .semi-popover,
             body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .semi-popover-content,
             body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .semi-dropdown-menu,
-            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal,
-            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal .semi-modal-content,
-            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal .semi-modal-body,
-            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal .wk-modal-shell,
-            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal .wk-modal-body {
+            /* Bot 资料卡的 .wk-modal-shell 是 3D 卡牌本体；它的内容已经自带整卡画布，
+             * 若套用通用弹层面板色会在倾斜卡片后露出一层底板。其他弹层仍走这里。 */
+            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal:not(.wk-bot-detail-modal),
+            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal:not(.wk-bot-detail-modal) .semi-modal-content,
+            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal:not(.wk-bot-detail-modal) .semi-modal-body,
+            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal:not(.wk-bot-detail-modal) .wk-modal-shell,
+            body[data-octo-global-theme]:not([data-octo-global-theme="none"]) .wk-modal:not(.wk-bot-detail-modal) .wk-modal-body {
                 background: var(--octo-global-panel) !important;
                 border-color: var(--octo-global-line) !important;
                 color: var(--octo-global-ink) !important;
