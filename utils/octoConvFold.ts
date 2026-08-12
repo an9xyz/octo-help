@@ -6,7 +6,7 @@ import { conversationRefFromRow } from './octoConvRowKey';
  * Manual, extension-owned folding for Octo's native conversation rows.
  *
  * The native row remains the unit of rendering and interaction. We only stamp
- * attributes, float one shared hover action, and append one manual-fold aggregate
+ * attributes, add a small per-row fold action, and append one manual-fold aggregate
  * entry. That keeps unread state, selection, avatars, official pin behavior and
  * opening a conversation under Octo's control instead of cloning its sidebar.
  */
@@ -15,7 +15,13 @@ const STYLE_ID = 'octo-conv-fold-style';
 const BODY_ATTRIBUTE = 'data-octo-conv-fold';
 const FOLDED_ATTRIBUTE = 'data-octo-conv-folded';
 const KEY_ATTRIBUTE = 'data-octo-conv-fold-key';
-const ACTION_CLASS = 'octo-conv-fold-action';
+const AVATAR_ACTION_ATTRIBUTE = 'data-octo-conv-fold-avatar-action';
+const AVATAR_SCOPE_ATTRIBUTE = 'data-octo-conv-fold-avatar-scope';
+const AVATAR_KEY_ATTRIBUTE = 'data-octo-conv-fold-avatar-key';
+const TOGGLE_CLASS = 'octo-conv-fold-row-toggle';
+const TOGGLE_ICON_CLASS = 'octo-conv-fold-row-toggle-icon';
+const TOGGLE_LABEL_CLASS = 'octo-conv-fold-row-toggle-label';
+const TOGGLE_KNOB_CLASS = 'octo-conv-fold-row-toggle-knob';
 const ENTRY_CLASS = 'octo-conv-fold-entry';
 const ENTRY_ICON_CLASS = 'octo-conv-fold-entry-icon';
 const ENTRY_TEXT_CLASS = 'octo-conv-fold-entry-text';
@@ -24,24 +30,19 @@ const ENTRY_SUMMARY_CLASS = 'octo-conv-fold-entry-summary';
 const ENTRY_COUNT_CLASS = 'octo-conv-fold-entry-count';
 const ENTRY_UNREAD_CLASS = 'octo-conv-fold-entry-unread';
 const ENTRY_CHEVRON_CLASS = 'octo-conv-fold-entry-chevron';
+const TOGGLE_ORDER = -111;
 const ENTRY_ORDER = -110;
 const REVEAL_ORDER = -109;
-const ACTION_WIDTH = 48;
-const ACTION_HEIGHT = 24;
-const ACTION_INSET = 10;
+const PLUGIN_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><path d="M512 1024a128.102857 128.102857 0 0 1-111.805714-65.725714 128 128 0 0 1-218.285715-61.405715 128 128 0 0 1-126.114285-221.714285C19.142857 606.537143 0 529.222857 0 448 0 184.228571 210.548571 0 512 0s512 184.228571 512 448c0 81.222857-19.142857 158.537143-55.84 227.131429a128 128 0 0 1-126.114286 221.714285 128 128 0 0 1-218.285714 61.405715A128.102857 128.102857 0 0 1 512 1024z" fill="#f44393"/><path d="M896 704c-2.377143 0-4.731429 0.148571-7.051429 0.354286C941.714286 634.125714 972.8 546.64 972.8 448c0-254.491429-206.308571-396.8-460.8-396.8S51.2 193.508571 51.2 448c0 98.64 31.074286 186.125714 83.851429 256.354286-2.285714-0.205714-4.674286-0.354286-7.051429-0.354286a76.8 76.8 0 1 0 76.8 76.8c0-1.337143-0.137143-2.651429-0.205714-3.977143a443.097143 443.097143 0 0 0 51.211428 36.571429A76.765714 76.765714 0 1 0 384 870.4c0-1.142857-0.114286-2.205714-0.171429-3.314286a498.422857 498.422857 0 0 0 53.622858 10.742857 76.8 76.8 0 1 0 149.097142 0 498.422857 498.422857 0 0 0 53.622858-10.742857c0 1.142857-0.171429 2.194286-0.171429 3.314286a76.8 76.8 0 1 0 128.194286-56.96 443.097143 443.097143 0 0 0 51.211428-36.571429c-0.068571 1.325714-0.205714 2.64-0.205714 3.977143A76.8 76.8 0 1 0 896 704z" fill="#F5CEDB"/><path d="M972.8 780.8a76.8 76.8 0 0 1-153.6 0c0-1.28 0.125714-2.685714 0.251429-3.965714a431.531429 431.531429 0 0 1-51.325715 36.571428A76.742857 76.742857 0 1 1 640 870.4c0-1.142857 0.125714-2.171429 0.125714-3.325714a484.571429 484.571429 0 0 1-53.634285 10.754285 76.8 76.8 0 1 1-148.982858 0 484.571429 484.571429 0 0 1-53.634285-10.754285c0 1.142857 0.125714 2.171429 0.125714 3.325714a76.8 76.8 0 1 1-128.125714-56.96 431.531429 431.531429 0 0 1-51.325715-36.571429c0.125714 1.28 0.251429 2.685714 0.251429 3.965715a76.8 76.8 0 1 1-84.868571-76.411429A515.942857 515.942857 0 0 0 428.8 806.4c281.348571 0 510.205714-224 518.274286-503.428571 16.64 43.142857 25.725714 91.657143 25.725714 145.028571 0 98.685714-31.108571 186.114286-83.84 256.388571A61.554286 61.554286 0 0 1 896 704a76.868571 76.868571 0 0 1 76.8 76.8z" fill="#EBC5D2"/><path d="M512 550.4a64.068571 64.068571 0 0 1-64-64 12.8 12.8 0 1 1 25.6 0 38.4 38.4 0 0 0 76.8 0 12.8 12.8 0 1 1 25.6 0 64.068571 64.068571 0 0 1-64 64z" fill="#25467A"/><path d="M384 384m-38.4 0a38.4 38.4 0 1 0 76.8 0 38.4 38.4 0 1 0-76.8 0Z" fill="#25467A"/><path d="M640 384m-38.4 0a38.4 38.4 0 1 0 76.8 0 38.4 38.4 0 1 0-76.8 0Z" fill="#25467A"/><path d="M332.8 448h-51.2a25.6 25.6 0 1 0 0 51.2h51.2a25.6 25.6 0 1 0 0-51.2zM742.4 448h-51.2a25.6 25.6 0 1 0 0 51.2h51.2a25.6 25.6 0 0 0 0-51.2z" fill="#f44393"/></svg>';
+const PLUGIN_ICON_DATA_URL = `data:image/svg+xml,${encodeURIComponent(PLUGIN_ICON_SVG)}`;
 
 let enabled = false;
 let foldedByScope: StoredConvFoldMap = {};
 let expanded = false;
+let avatarActionsVisible = false;
 let frame = 0;
 let rootObserver: MutationObserver | null = null;
 const listObservers = new Map<Element, MutationObserver>();
-let action: HTMLButtonElement | null = null;
-let actionRow: Element | null = null;
-let actionKey = '';
-let actionScope = '';
-let actionFolded = false;
-let hideTimer = 0;
 
 function currentScope(): string | null {
   try {
@@ -92,119 +93,87 @@ function applyOptimisticChange(scope: string, conversationKey: string, folded: b
   scheduleStamp();
 }
 
-function clearHideTimer(): void {
-  if (!hideTimer) return;
-  window.clearTimeout(hideTimer);
-  hideTimer = 0;
+function onAvatarActionClick(event: Event): void {
+  const avatar = event.currentTarget as Element;
+  const scope = avatar.getAttribute(AVATAR_SCOPE_ATTRIBUTE) ?? '';
+  const key = avatar.getAttribute(AVATAR_KEY_ATTRIBUTE) ?? '';
+  if (!scope || !key) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const next = avatar.getAttribute(AVATAR_ACTION_ATTRIBUTE) !== 'folded';
+  applyOptimisticChange(scope, key, next);
+  emitChange(scope, key, next);
 }
 
-function hideAction(): void {
-  clearHideTimer();
-  action?.removeAttribute('data-visible');
-  actionRow = null;
-  actionKey = '';
-  actionScope = '';
-}
-
-function scheduleHideAction(): void {
-  clearHideTimer();
-  hideTimer = window.setTimeout(hideAction, 80);
-}
-
-function positionAction(): void {
-  if (!action || !actionRow || !actionRow.isConnected) {
-    hideAction();
-    return;
+function ensureAvatarAction(row: Element, folded: boolean, key: string, scope: string): void {
+  const avatar = row.querySelector<HTMLElement>(OCTO_SELECTORS.conversationListAvatarBox);
+  if (!avatar) return;
+  const label = folded ? '点击恢复到会话列表' : '点击折叠该会话';
+  avatar.setAttribute(AVATAR_ACTION_ATTRIBUTE, folded ? 'folded' : 'open');
+  avatar.setAttribute(AVATAR_SCOPE_ATTRIBUTE, scope);
+  avatar.setAttribute(AVATAR_KEY_ATTRIBUTE, key);
+  avatar.setAttribute('role', 'button');
+  avatar.setAttribute('aria-label', label);
+  avatar.setAttribute('title', label);
+  if (avatar.getAttribute('data-octo-conv-fold-bound') !== 'true') {
+    avatar.addEventListener('click', onAvatarActionClick, true);
+    avatar.setAttribute('data-octo-conv-fold-bound', 'true');
   }
-  const rect = actionRow.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
-    hideAction();
-    return;
-  }
-  const indicators = actionRow.querySelector(OCTO_SELECTORS.conversationListIndicators);
-  const indicatorsLeft = indicators?.getBoundingClientRect().left;
-  const rightEdge = indicatorsLeft && indicatorsLeft > rect.left + ACTION_WIDTH
-    ? indicatorsLeft - 8
-    : rect.right - ACTION_INSET;
-  action.style.top = `${Math.round(rect.top + (rect.height - ACTION_HEIGHT) / 2)}px`;
-  action.style.left = `${Math.round(Math.max(rect.left + 54, rightEdge - ACTION_WIDTH))}px`;
 }
 
-function ensureAction(): HTMLButtonElement | null {
-  if (action?.isConnected) return action;
-  if (!document.body) return null;
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = ACTION_CLASS;
-  button.addEventListener('pointerenter', clearHideTimer);
-  button.addEventListener('pointerleave', scheduleHideAction);
-  button.addEventListener('click', (event) => {
+function removeAvatarAction(row: Element): void {
+  const avatar = row.querySelector<HTMLElement>(OCTO_SELECTORS.conversationListAvatarBox);
+  avatar?.removeAttribute(AVATAR_ACTION_ATTRIBUTE);
+  avatar?.removeAttribute(AVATAR_SCOPE_ATTRIBUTE);
+  avatar?.removeAttribute(AVATAR_KEY_ATTRIBUTE);
+  avatar?.removeAttribute('role');
+  avatar?.removeAttribute('aria-label');
+  avatar?.removeAttribute('title');
+}
+
+function updateRowActionToggle(toggle: HTMLButtonElement): void {
+  const label = avatarActionsVisible
+    ? '已开启章鱼折叠入口，点击章鱼头像可折叠或恢复会话'
+    : '开启章鱼折叠入口，用章鱼头像替换会话头像，点击可折叠或恢复会话';
+  toggle.setAttribute('aria-pressed', avatarActionsVisible ? 'true' : 'false');
+  toggle.setAttribute('data-enabled', avatarActionsVisible ? 'true' : 'false');
+  toggle.setAttribute('aria-label', label);
+  toggle.setAttribute('title', label);
+}
+
+function ensureRowActionToggle(list: Element): HTMLButtonElement {
+  let toggle = list.querySelector<HTMLButtonElement>(`:scope > .${TOGGLE_CLASS}`);
+  if (toggle) {
+    updateRowActionToggle(toggle);
+    return toggle;
+  }
+  toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = TOGGLE_CLASS;
+  const icon = document.createElement('span');
+  icon.className = TOGGLE_ICON_CLASS;
+  icon.setAttribute('aria-hidden', 'true');
+  toggle.appendChild(icon);
+  const label = document.createElement('span');
+  label.className = TOGGLE_LABEL_CLASS;
+  label.textContent = '章鱼折叠入口';
+  toggle.appendChild(label);
+  const knob = document.createElement('span');
+  knob.className = TOGGLE_KNOB_CLASS;
+  knob.setAttribute('aria-hidden', 'true');
+  toggle.appendChild(knob);
+  toggle.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!actionKey || !actionScope) return;
-    const next = !actionFolded;
-    const scope = actionScope;
-    const key = actionKey;
-    hideAction();
-    applyOptimisticChange(scope, key, next);
-    emitChange(scope, key, next);
+    avatarActionsVisible = !avatarActionsVisible;
+    scheduleStamp();
   });
-  document.body.appendChild(button);
-  action = button;
-  return button;
-}
-
-function showAction(row: Element, folded: boolean, key: string, scope: string): void {
-  const button = ensureAction();
-  if (!button) return;
-  clearHideTimer();
-  actionRow = row;
-  actionKey = key;
-  actionScope = scope;
-  actionFolded = folded;
-  button.textContent = folded ? '恢复' : '折叠';
-  button.title = folded ? '恢复到会话列表' : '折叠该会话';
-  button.setAttribute('aria-label', button.title);
-  button.setAttribute('data-visible', 'true');
-  positionAction();
-}
-
-function actionForRow(row: Element): void {
-  const scope = currentScope();
-  const ref = conversationRefFromRow(row);
-  if (!enabled || !scope || !ref) {
-    scheduleHideAction();
-    return;
-  }
-  const isFolded = foldedKeys().has(ref.key);
-  if (isFolded && !expanded) {
-    scheduleHideAction();
-    return;
-  }
-  showAction(row, isFolded, ref.key, scope);
-}
-
-function onPointerOver(event: PointerEvent): void {
-  const target = event.target;
-  if (!(target instanceof Element) || target.closest(`.${ACTION_CLASS}`)) return;
-  const row = target.closest(OCTO_SELECTORS.conversationListItem);
-  if (row) actionForRow(row);
-  else scheduleHideAction();
-}
-
-function onPointerOut(event: PointerEvent): void {
-  if (!actionRow) return;
-  const related = event.relatedTarget;
-  if (related instanceof Node && (actionRow.contains(related) || action?.contains(related))) return;
-  scheduleHideAction();
-}
-
-function onViewportChange(): void {
-  if (actionRow) positionAction();
+  list.appendChild(toggle);
+  updateRowActionToggle(toggle);
+  return toggle;
 }
 
 function onResize(): void {
-  onViewportChange();
   if (enabled) scheduleStamp();
 }
 
@@ -242,27 +211,67 @@ function ensureStyle(): void {
       flex: 0 0 auto;
     }
 
-    .${ACTION_CLASS} {
-      position: fixed;
-      z-index: 2147483646;
-      display: none;
-      width: ${ACTION_WIDTH}px;
-      height: ${ACTION_HEIGHT}px;
-      padding: 0 6px;
-      place-items: center;
+    .${TOGGLE_CLASS} {
+      order: ${TOGGLE_ORDER};
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) 30px;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      margin: 0 10px 4px 13px;
+      padding: 4px 8px;
       border: 0;
-      border-radius: 4px;
+      border-bottom: 1px solid #eef0f2;
       background: transparent;
-      color: #86909c;
-      font: 12px/1 sans-serif;
-      white-space: nowrap;
+      color: #6b7280;
+      font: inherit;
+      text-align: left;
       cursor: pointer;
-      box-shadow: none;
     }
-    .${ACTION_CLASS}[data-visible='true'] { display: grid; }
-    .${ACTION_CLASS}:hover {
-      background: #e9eef9;
-      color: #245bdb;
+    .${TOGGLE_CLASS}:hover { background: #f5f6f8; }
+    .${TOGGLE_ICON_CLASS} {
+      width: 18px;
+      height: 18px;
+      background: url("${PLUGIN_ICON_DATA_URL}") center / contain no-repeat;
+      opacity: .72;
+    }
+    .${TOGGLE_LABEL_CLASS} {
+      overflow: hidden;
+      font-size: 12px;
+      line-height: 16px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .${TOGGLE_KNOB_CLASS} {
+      position: relative;
+      width: 30px;
+      height: 16px;
+      border-radius: 999px;
+      background: #d7dbe1;
+      transition: background .16s ease;
+    }
+    .${TOGGLE_KNOB_CLASS}::after {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(31, 35, 41, .18);
+      content: '';
+      transition: transform .16s ease;
+    }
+    .${TOGGLE_CLASS}[data-enabled='true'] .${TOGGLE_KNOB_CLASS} { background: #ff6ba8; }
+    .${TOGGLE_CLASS}[data-enabled='true'] .${TOGGLE_KNOB_CLASS}::after { transform: translateX(14px); }
+
+    [${AVATAR_ACTION_ATTRIBUTE}] {
+      background: url("${PLUGIN_ICON_DATA_URL}") center / contain no-repeat !important;
+      cursor: pointer;
+      overflow: visible;
+    }
+    [${AVATAR_ACTION_ATTRIBUTE}] > * {
+      visibility: hidden !important;
     }
 
     .${ENTRY_CLASS} {
@@ -287,28 +296,10 @@ function ensureStyle(): void {
     }
     .${ENTRY_CLASS}:hover { background: #f1f4f8; }
     .${ENTRY_ICON_CLASS} {
-      display: grid;
+      display: block;
       width: 32px;
       height: 32px;
-      place-items: center;
-      position: relative;
-      border-radius: 7px;
-      background: #e9eef8;
-    }
-    .${ENTRY_ICON_CLASS}::before,
-    .${ENTRY_ICON_CLASS}::after {
-      position: absolute;
-      width: 14px;
-      height: 11px;
-      border: 1.5px solid #5f6b7a;
-      border-radius: 3px;
-      background: #fff;
-      content: '';
-    }
-    .${ENTRY_ICON_CLASS}::before { transform: translate(-2.5px, -2.5px); }
-    .${ENTRY_ICON_CLASS}::after { transform: translate(2.5px, 2.5px); }
-    .${ENTRY_CLASS}:hover .${ENTRY_ICON_CLASS} {
-      background: #dfe7f5;
+      background: url("${PLUGIN_ICON_DATA_URL}") center / contain no-repeat;
     }
     .${ENTRY_TEXT_CLASS} {
       display: grid;
@@ -353,27 +344,17 @@ function ensureStyle(): void {
       text-align: center;
     }
 
-    body[theme-mode='dark'] .${ACTION_CLASS} {
-      background: transparent;
-      color: #d6d9de;
-      box-shadow: none;
+    body[theme-mode='dark'] .${TOGGLE_CLASS} {
+      border-color: rgba(255, 255, 255, .07);
+      color: #aeb4bd;
     }
-    body[theme-mode='dark'] .${ACTION_CLASS}:hover {
-      background: #273651;
-      color: #a9c6ff;
-    }
+    body[theme-mode='dark'] .${TOGGLE_CLASS}:hover { background: #292c31; }
     body[theme-mode='dark'] .${ENTRY_CLASS} {
       border-color: rgba(255, 255, 255, .07);
       background: #25282d;
     }
     body[theme-mode='dark'] .${ENTRY_CLASS}:hover { background: #292c31; }
     body[theme-mode='dark'] .${ENTRY_TITLE_CLASS} { color: #e8eaed; }
-    body[theme-mode='dark'] .${ENTRY_ICON_CLASS} { background: #32353b; }
-    body[theme-mode='dark'] .${ENTRY_ICON_CLASS}::before,
-    body[theme-mode='dark'] .${ENTRY_ICON_CLASS}::after {
-      border-color: #aeb4bd;
-      background: #272a2f;
-    }
     body[theme-mode='dark'][${BODY_ATTRIBUTE}='open'] ${row}[${FOLDED_ATTRIBUTE}='true'] {
       background: rgba(41, 44, 50, .92);
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
@@ -468,23 +449,25 @@ function stampAll(): void {
   const scope = currentScope();
   const folded = foldedKeys();
   for (const list of normalLists()) {
+    ensureRowActionToggle(list);
     const rows = rowsOf(list);
     for (const row of rows) {
       const ref = conversationRefFromRow(row);
       row.removeAttribute(FOLDED_ATTRIBUTE);
       row.removeAttribute(KEY_ATTRIBUTE);
-      if (!scope || !ref) continue;
+      if (!scope || !ref) {
+        removeAvatarAction(row);
+        continue;
+      }
 
       row.setAttribute(KEY_ATTRIBUTE, ref.key);
       const isFolded = folded.has(ref.key);
+      if (avatarActionsVisible) ensureAvatarAction(row, isFolded, ref.key, scope);
+      else removeAvatarAction(row);
       if (isFolded) {
         row.setAttribute(FOLDED_ATTRIBUTE, 'true');
       }
     }
-  }
-  if (actionRow) {
-    if (!actionRow.isConnected) hideAction();
-    else actionForRow(actionRow);
   }
   refreshEntries();
 }
@@ -506,12 +489,12 @@ function isOwnMutation(records: MutationRecord[]): boolean {
     const target = record.target instanceof Element
       ? record.target
       : record.target.parentElement;
-    if (target?.closest(`.${ACTION_CLASS},.${ENTRY_CLASS}`)) return true;
+    if (target?.closest(`[${AVATAR_ACTION_ATTRIBUTE}],.${ENTRY_CLASS}`)) return true;
     const nodes = [...record.addedNodes, ...record.removedNodes];
     return nodes.length > 0 && nodes.every((node) => {
       if (node.nodeType !== 1) return false;
       const element = node as Element;
-      return element.classList.contains(ACTION_CLASS) || element.classList.contains(ENTRY_CLASS);
+      return element.hasAttribute(AVATAR_ACTION_ATTRIBUTE) || element.classList.contains(ENTRY_CLASS);
     });
   });
 }
@@ -537,17 +520,12 @@ function syncObservers(): void {
 
 function attach(): void {
   ensureStyle();
-  // Remove buttons left by an older hot-reloaded build. Native React rows must
-  // never own extension children: they can corrupt virtual-list measurement.
+  // Remove controls left by older hot-reloaded builds.
   for (const legacy of document.querySelectorAll(
-    `${OCTO_SELECTORS.conversationListItem} > .${ACTION_CLASS}`,
+    `${OCTO_SELECTORS.conversationListItem} > .octo-conv-fold-action`,
   )) legacy.remove();
-  ensureAction();
   applyBodyState();
   syncObservers();
-  document.addEventListener('pointerover', onPointerOver, true);
-  document.addEventListener('pointerout', onPointerOut, true);
-  document.addEventListener('scroll', onViewportChange, true);
   window.addEventListener('resize', onResize);
   if (!rootObserver && document.body) {
     rootObserver = new MutationObserver((records) => {
@@ -567,19 +545,18 @@ function cleanup(): void {
   rootObserver = null;
   for (const observer of listObservers.values()) observer.disconnect();
   listObservers.clear();
-  document.removeEventListener('pointerover', onPointerOver, true);
-  document.removeEventListener('pointerout', onPointerOut, true);
-  document.removeEventListener('scroll', onViewportChange, true);
   window.removeEventListener('resize', onResize);
-  clearHideTimer();
-  action?.remove();
-  action = null;
-  actionRow = null;
-  actionKey = '';
-  actionScope = '';
   document.body?.removeAttribute(BODY_ATTRIBUTE);
   document.getElementById(STYLE_ID)?.remove();
-  for (const button of document.querySelectorAll(`.${ACTION_CLASS}`)) button.remove();
+  for (const toggle of document.querySelectorAll(`.${TOGGLE_CLASS}`)) toggle.remove();
+  for (const avatar of document.querySelectorAll(`[${AVATAR_ACTION_ATTRIBUTE}]`)) {
+    avatar.removeAttribute(AVATAR_ACTION_ATTRIBUTE);
+    avatar.removeAttribute(AVATAR_SCOPE_ATTRIBUTE);
+    avatar.removeAttribute(AVATAR_KEY_ATTRIBUTE);
+    avatar.removeAttribute('role');
+    avatar.removeAttribute('aria-label');
+    avatar.removeAttribute('title');
+  }
   for (const entry of document.querySelectorAll(`.${ENTRY_CLASS}`)) entry.remove();
   for (const row of document.querySelectorAll(
     `[${FOLDED_ATTRIBUTE}],[${KEY_ATTRIBUTE}]`,
@@ -592,6 +569,7 @@ function cleanup(): void {
 export function setConvFoldEnabled(next: boolean): void {
   enabled = next;
   expanded = false;
+  avatarActionsVisible = false;
   if (enabled) attach();
   else cleanup();
 }
@@ -604,6 +582,7 @@ export function setConvFoldState(next: StoredConvFoldMap): void {
 export function teardownConvFold(): void {
   enabled = false;
   expanded = false;
+  avatarActionsVisible = false;
   foldedByScope = {};
   cleanup();
 }

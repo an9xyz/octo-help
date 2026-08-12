@@ -30,6 +30,7 @@ class FakeElement extends FakeNode {
   title = '';
   type = '';
   name = '';
+  avatarBox: FakeElement | null = null;
   indicatorLeft: number | null = null;
   private listeners = new Map<string, EventListener>();
 
@@ -41,6 +42,14 @@ class FakeElement extends FakeNode {
     return { contains: (name: string) => this.className.split(/\s+/).includes(name) };
   }
 
+  get firstElementChild() {
+    return this.children[0] ?? null;
+  }
+
+  get parentElement() {
+    return this.parent;
+  }
+
   appendChild(child: FakeElement) {
     child.parent = this;
     child.isConnected = true;
@@ -49,8 +58,19 @@ class FakeElement extends FakeNode {
     return child;
   }
 
+  insertBefore(child: FakeElement, before: FakeElement | null) {
+    child.parent = this;
+    child.isConnected = true;
+    const index = before ? this.children.indexOf(before) : -1;
+    if (index >= 0) this.children.splice(index, 0, child);
+    else this.children.push(child);
+    if (child.id) elementsById.set(child.id, child);
+    return child;
+  }
+
   remove() {
     this.isConnected = false;
+    for (const child of this.children) child.isConnected = false;
     if (this.id) elementsById.delete(this.id);
     if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this);
   }
@@ -61,6 +81,7 @@ class FakeElement extends FakeNode {
 
   dispatch(type: string) {
     this.listeners.get(type)?.({
+      currentTarget: this,
       preventDefault: vi.fn(),
       stopPropagation: vi.fn(),
     } as unknown as Event);
@@ -84,7 +105,6 @@ class FakeElement extends FakeNode {
 
   closest(selector: string) {
     if (selector === '.wk-conversationlist-item' && this.kind === 'row') return this;
-    if (selector === '.octo-conv-fold-action' && this.className === 'octo-conv-fold-action') return this;
     if (selector.includes('.octo-conv-fold-entry')) {
       if (this.className === 'octo-conv-fold-entry') return this;
       for (let parent = this.parent; parent; parent = parent.parent) {
@@ -108,6 +128,15 @@ class FakeElement extends FakeNode {
       heading.textContent = this.name;
       return heading;
     }
+    if (this.kind === 'row' && selector === '.wk-conversationlist-item-avatar-box') {
+      if (!this.avatarBox) {
+        this.avatarBox = new FakeElement();
+        const image = new FakeElement();
+        image.className = 'wk-avatar';
+        this.avatarBox.appendChild(image);
+      }
+      return this.avatarBox;
+    }
     if (this.kind === 'row' && selector === '.wk-conversationlist-item-indicators' && this.indicatorLeft) {
       const indicators = new FakeElement();
       indicators.getBoundingClientRect = () => ({
@@ -127,6 +156,9 @@ class FakeElement extends FakeNode {
       if (selector.includes('octo-conv-fold-entry')) {
         return this.children.find((child) => child.className === 'octo-conv-fold-entry') ?? null;
       }
+      if (selector.includes('octo-conv-fold-row-toggle')) {
+        return this.children.find((child) => child.className === 'octo-conv-fold-row-toggle') ?? null;
+      }
     }
     const className = selector.startsWith('.') ? selector.slice(1) : '';
     if (!className) return null;
@@ -142,7 +174,15 @@ class FakeElement extends FakeNode {
     if (this.kind === 'list' && selector.includes('wk-conversationlist-item')) {
       return this.children.filter((child) => child.kind === 'row');
     }
-    return [];
+    if (selector === '*') {
+      return this.children.flatMap((child) => [child, ...child.querySelectorAll('*')]);
+    }
+    const className = selector.startsWith('.') ? selector.slice(1) : '';
+    if (!className) return [];
+    return this.children.flatMap((child) => [
+      ...(child.className === className ? [child] : []),
+      ...child.querySelectorAll(selector),
+    ]);
   }
 }
 
@@ -185,12 +225,10 @@ describe('conversation fold action', () => {
       documentElement: new FakeElement(),
       createElement: () => new FakeElement(),
       getElementById: (id: string) => elementsById.get(id) ?? null,
+      querySelector: (selector: string) => body.querySelector(selector),
       querySelectorAll: (selector: string) => {
         if (selector === '.wk-conversationlist') return [list];
         if (selector.includes('data-octo-conv-fold')) return [row];
-        if (selector === '.octo-conv-fold-action') {
-          return body.children.filter((child) => child.className === 'octo-conv-fold-action');
-        }
         if (selector === '.octo-conv-fold-entry') {
           return list.children.filter((child) => child.className === 'octo-conv-fold-entry');
         }
@@ -198,6 +236,7 @@ describe('conversation fold action', () => {
       },
       addEventListener: (type: string, listener: EventListener) => documentListeners.set(type, listener),
       removeEventListener: (type: string) => documentListeners.delete(type),
+      dispatchEvent: vi.fn(),
     });
     vi.stubGlobal('window', {
       innerHeight: 800,
@@ -220,23 +259,38 @@ describe('conversation fold action', () => {
     vi.clearAllMocks();
   });
 
-  it('mounts one shared action outside React-owned rows', () => {
+  it('mounts the avatar-action toggle with original avatars by default', () => {
     setConvFoldEnabled(true);
     flushFrames();
 
-    expect(row.children).toEqual([]);
-    expect(body.children.filter((child) => child.className === 'octo-conv-fold-action')).toHaveLength(1);
+    const toggle = list.querySelector('.octo-conv-fold-row-toggle');
+    expect(toggle?.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle?.querySelector('.octo-conv-fold-row-toggle-label')?.textContent).toBe('章鱼折叠入口');
+    expect(toggle?.getAttribute('aria-label')).toContain('点击可折叠或恢复会话');
+    expect(row.querySelector('.wk-conversationlist-item-avatar-box')?.getAttribute('data-octo-conv-fold-avatar-action')).toBeNull();
   });
 
-  it('folds the hovered row through the shared action', () => {
+  it('replaces the row avatar with the octopus action when enabled', () => {
     setConvFoldEnabled(true);
     flushFrames();
-    documentListeners.get('pointerover')?.({ target: row } as unknown as Event);
+    list.querySelector('.octo-conv-fold-row-toggle')?.dispatch('click');
+    flushFrames();
 
-    const button = body.children.find((child) => child.className === 'octo-conv-fold-action');
-    expect(button?.getAttribute('data-visible')).toBe('true');
-    expect(button?.textContent).toBe('折叠');
-    button?.dispatch('click');
+    const avatar = row.querySelector('.wk-conversationlist-item-avatar-box');
+    expect(avatar?.getAttribute('data-octo-conv-fold-avatar-action')).toBe('open');
+    expect(avatar?.getAttribute('aria-label')).toBe('点击折叠该会话');
+    expect(avatar?.getAttribute('title')).toBe('点击折叠该会话');
+  });
+
+  it('folds through the octopus avatar', () => {
+    setConvFoldEnabled(true);
+    flushFrames();
+    list.querySelector('.octo-conv-fold-row-toggle')?.dispatch('click');
+    flushFrames();
+
+    const avatar = row.querySelector('.wk-conversationlist-item-avatar-box');
+    expect(posted).toEqual([]);
+    avatar?.dispatch('click');
 
     expect(posted).toContainEqual(expect.objectContaining({
       type: 'convFoldChange',
@@ -246,15 +300,26 @@ describe('conversation fold action', () => {
     }));
   });
 
-  it('positions the clear text action before the unread badge', () => {
-    row.indicatorLeft = 250;
+  it('uses restore affordance when the folded row is visible in expanded mode', () => {
+    setConvFoldState({ 'user:space': ['2:channel'] });
     setConvFoldEnabled(true);
     flushFrames();
-    documentListeners.get('pointerover')?.({ target: row } as unknown as Event);
+    const entry = list.children.find((child) => child.className === 'octo-conv-fold-entry');
+    entry?.dispatch('click');
+    list.querySelector('.octo-conv-fold-row-toggle')?.dispatch('click');
+    flushFrames();
 
-    const button = body.children.find((child) => child.className === 'octo-conv-fold-action');
-    expect(button?.style.left).toBe('194px');
-    expect(button?.textContent).toBe('折叠');
+    const avatar = row.querySelector('.wk-conversationlist-item-avatar-box');
+    expect(avatar?.getAttribute('aria-label')).toBe('点击恢复到会话列表');
+    expect(avatar?.getAttribute('data-octo-conv-fold-avatar-action')).toBe('folded');
+    avatar?.dispatch('click');
+
+    expect(posted).toContainEqual(expect.objectContaining({
+      type: 'convFoldChange',
+      scope: 'user:space',
+      conversationKey: '2:channel',
+      folded: false,
+    }));
   });
 
   it('renders a WeChat-style entry and expands the folded native rows', () => {
@@ -275,6 +340,15 @@ describe('conversation fold action', () => {
     expect(css).toContain('order: -109 !important');
     expect(css).toContain('margin: 3px 7px 0 13px');
     expect(css).toContain('background: rgba(255, 255, 255, .78)');
+    expect(css).toContain('data:image/svg+xml');
+    expect(css).toContain('f44393');
+    expect(css).toContain('[data-octo-conv-fold-avatar-action]');
+    expect(css).toContain('visibility: hidden !important');
+    expect(css).not.toContain('flex: 0 0 22px');
+    expect(css).not.toContain('right: 32px');
+    expect(css).not.toContain('display: flex;\n      align-items: center;\n      gap: 8px;');
+    const entryIconCss = css?.match(/\.octo-conv-fold-entry-icon \{[^}]+}/)?.[0];
+    expect(entryIconCss).not.toContain('border-radius');
   });
 
 });
