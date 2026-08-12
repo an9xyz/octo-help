@@ -747,8 +747,17 @@
                 overflow: hidden !important;
                 box-shadow: 0 30px 70px rgba(26, 22, 64, 0.38), 0 2px 8px rgba(26, 22, 64, 0.20) !important;
                 transform: perspective(1100px) rotateX(var(--octo-card-rx, 0deg)) rotateY(var(--octo-card-ry, 0deg)) translateY(var(--octo-card-lift, 0px)) scale(var(--octo-card-sc, 1)) !important;
-                transition: transform .12s ease, box-shadow .2s ease !important;
+                transition: transform .18s cubic-bezier(.22,.61,.36,1), box-shadow .24s ease !important;
                 will-change: transform !important;
+                transform-style: preserve-3d !important;
+                backface-visibility: hidden !important;
+            }
+            /* 指针移动由 rAF 插值驱动，避免每一次 pointermove 重启 CSS transform 过渡；
+             * 离开后属性会在回正时移除，继续使用上面的柔和回弹。 */
+            .wk-bot-detail-modal .wk-modal-shell[data-octo-card-tilting="true"] {
+                --octo-card-lift: -4px;
+                --octo-card-sc: 1.015;
+                transition: box-shadow .24s ease !important;
             }
             .wk-bot-detail-modal .wk-modal-shell:hover {
                 --octo-card-lift: -4px;
