@@ -29,6 +29,7 @@
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "2.1.9",
     "@wxt-dev/module-react": "^1.1.5",
     "eslint": "^10.8.0",
     "typescript": "^5.9.3",

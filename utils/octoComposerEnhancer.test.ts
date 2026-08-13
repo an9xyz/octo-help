@@ -5,8 +5,17 @@ vi.mock('./octoMentionBar', () => ({
   teardownMentionQuickBar: vi.fn(),
 }));
 
+vi.mock('./octoComposerFormat', () => ({
+  setComposerFormatToolbar: vi.fn(),
+  teardownComposerFormatToolbar: vi.fn(),
+}));
+
 import { setComposerEnhancement, teardownComposerEnhancement } from './octoComposerEnhancer';
 import { setMentionQuickBar, teardownMentionQuickBar } from './octoMentionBar';
+import {
+  setComposerFormatToolbar,
+  teardownComposerFormatToolbar,
+} from './octoComposerFormat';
 
 // ─── DOM mock ───────────────────────────────────────────────────────────
 
@@ -93,6 +102,7 @@ describe('setComposerEnhancement', () => {
     setComposerEnhancement(true);
 
     expect(setMentionQuickBar).toHaveBeenCalledWith(true);
+    expect(setComposerFormatToolbar).toHaveBeenCalledWith(true);
   });
 
   it('is idempotent — does not inject duplicate styles', () => {
@@ -127,6 +137,7 @@ describe('disable via setComposerEnhancement(false)', () => {
     setComposerEnhancement(false);
 
     expect(teardownMentionQuickBar).toHaveBeenCalled();
+    expect(teardownComposerFormatToolbar).toHaveBeenCalled();
   });
 });
 
@@ -150,6 +161,7 @@ describe('teardownComposerEnhancement', () => {
     teardownComposerEnhancement();
 
     expect(teardownMentionQuickBar).toHaveBeenCalled();
+    expect(teardownComposerFormatToolbar).toHaveBeenCalled();
   });
 
   it('is safe to call multiple times', () => {
