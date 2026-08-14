@@ -2,6 +2,10 @@
   "extends": "./.wxt/tsconfig.json",
   "compilerOptions": {
     "allowImportingTsExtensions": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    // WXT 0.21 turns noUncheckedIndexedAccess on by default. The codebase was
+    // written without it, so enabling it now surfaces ~40 call sites that need
+    // a deliberate migration. Opt back out until that migration happens.
+    "noUncheckedIndexedAccess": false
   }
 }
