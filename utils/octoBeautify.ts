@@ -1,5 +1,7 @@
 import type { PlayerWatermarkId } from './octoShared';
 import qrcode from 'qrcode-generator';
+import katex from 'katex';
+import renderMathInElement from 'katex/contrib/auto-render';
 import BEAUTIFY_CSS from './octoBeautify.css?raw';
 import { CLAMP_CANDIDATE_SELECTOR, OCTO_SELECTORS } from './octoSelectors';
 import {
@@ -271,6 +273,124 @@ function markAIContinueMessages(): void {
       currentSenderIsAI = !!row.querySelector('.ai-badge');
     }
   });
+}
+
+// ---- TeX source -> rendered formulas --------------------------------------
+
+const MATH_BODY_SEL = OCTO_SELECTORS.anyMessageBody;
+const renderedMathSources = new WeakMap<HTMLElement, DocumentFragment>();
+const renderedMathHosts = new Set<HTMLElement>();
+
+const MATH_OPTIONS = {
+  // Native MathML keeps the extension small: no KaTeX font bundle or 25 KB
+  // stylesheet, and our supported Chrome/Firefox versions both render it.
+  output: 'mathml' as const,
+  throwOnError: false,
+  trust: false,
+  maxSize: 20,
+};
+
+interface WholeFormula {
+  source: string;
+  display: boolean;
+}
+
+/** Markdown consumes the TeX escape in `\left\{` / `\right\}` before we see it. */
+export function repairMarkdownMath(source: string): string {
+  return source.replace(/\\(left|right)\s*([{}])/g, '\\$1\\$2');
+}
+
+/**
+ * Octo's Markdown renderer often turns a three-line `$$ / formula / $$` message
+ * into three sibling paragraphs. KaTeX auto-render deliberately won't match
+ * delimiters across elements, so recognize whole-message formulas first.
+ *
+ * Bare formulas are accepted only when they look unambiguously mathematical;
+ * this covers pasted `a^2+b^2=c^2` and LaTeX code blocks without turning
+ * ordinary source such as `const type=1` into maths.
+ */
+export function wholeMessageFormula(text: string): WholeFormula | null {
+  const value = repairMarkdownMath(text.trim());
+  for (const [left, right, display] of [
+    ['$$', '$$', true],
+    ['\\[', '\\]', true],
+    ['\\(', '\\)', false],
+    ['$', '$', false],
+  ] as const) {
+    if (!value.startsWith(left)) continue;
+    // Do not reinterpret a broken display delimiter as a single-dollar pair.
+    if (left === '$' && (value.startsWith('$$') || value.endsWith('$$'))) return null;
+    if (!value.endsWith(right) || value.length <= left.length + right.length) return null;
+    return { source: value.slice(left.length, -right.length).trim(), display };
+  }
+
+  const hasLatexCommand = /\\[A-Za-z]+/.test(value);
+  const proseWords = value.replace(/\\[A-Za-z]+/g, '').match(/[A-Za-z]{4,}/g) || [];
+  const bareLatex = hasLatexCommand && value.startsWith('\\');
+  // `_` alone is common in identifiers, so accept it only on a one-symbol base.
+  const hasMathOperator = /[=^]/.test(value) || /(?:^|[\s([{,+\-*/=])[A-Za-z]_[A-Za-z0-9{]/.test(value);
+  const bareEquation = hasMathOperator && proseWords.length === 0 && /^[\sA-Za-z0-9\u0370-\u03ff{}()[\].,+\-*/=^_\\]+$/.test(value);
+  if (!bareLatex && !bareEquation) return null;
+
+  try {
+    katex.renderToString(value, { ...MATH_OPTIONS, throwOnError: true });
+    return { source: value, display: true };
+  } catch {
+    return null;
+  }
+}
+
+/** Render standard Markdown/LaTeX delimiters and pasted formula-only messages. */
+export function renderMessageMath(roots?: Element[]): void {
+  forEachInScope<HTMLElement>(roots, MATH_BODY_SEL, (host) => {
+    if (host.querySelector('.katex')) return;
+    const text = host.textContent || '';
+    const whole = wholeMessageFormula(text);
+    if (!whole && !text.includes('$') && !text.includes('\\(') && !text.includes('\\[')) return;
+
+    const source = document.createDocumentFragment();
+    host.childNodes.forEach((node) => source.appendChild(node.cloneNode(true)));
+    const before = host.querySelectorAll('.katex').length;
+    if (whole) {
+      katex.render(whole.source, host, { ...MATH_OPTIONS, displayMode: whole.display });
+    } else {
+      // Repair brace delimiters inside inline formulas too. The original nodes
+      // are already cloned above, so teardown still restores exactly what Octo rendered.
+      const walker = document.createTreeWalker(host, 4 /* NodeFilter.SHOW_TEXT */);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (node.parentElement?.closest('code, pre, script, style, textarea')) continue;
+        node.nodeValue = repairMarkdownMath(node.nodeValue || '');
+      }
+      renderMathInElement(host, {
+        ...MATH_OPTIONS,
+        delimiters: [
+          { left: '$$', right: '$$', display: true },
+          { left: '\\[', right: '\\]', display: true },
+          { left: '\\(', right: '\\)', display: false },
+          { left: '$', right: '$', display: false },
+        ],
+        errorCallback: () => {},
+      });
+    }
+    if (host.querySelectorAll('.katex').length > before && !renderedMathSources.has(host)) {
+      renderedMathSources.set(host, source);
+      renderedMathHosts.add(host);
+    }
+  });
+
+  // Message virtualization detaches old rows; do not retain them for the tab's lifetime.
+  renderedMathHosts.forEach((host) => {
+    if (!host.isConnected) renderedMathHosts.delete(host);
+  });
+}
+
+function restoreMessageMath(): void {
+  renderedMathHosts.forEach((host) => {
+    const source = renderedMathSources.get(host);
+    if (source !== undefined && host.isConnected) host.replaceChildren(source.cloneNode(true));
+  });
+  renderedMathHosts.clear();
 }
 
 // ---- WeCom (企业微信) links -> inline card --------------------------------
@@ -985,9 +1105,11 @@ function sync(scope: SyncScope<Element> = FULL_SYNC_SCOPE): void {
       // Deliberately NOT scoped: the AI-continue chain is sequential over the
       // whole list, so inserting one row can change the flag on rows after it.
       try { markAIContinueMessages(); } catch { /* noop */ }
-      // Must precede applyClamp(): the clamp skips messages carrying a 企业微信
-      // card, and it can only see them once the anchors are tagged. Tagging after
-      // clamping would clamp the card for one frame and un-clamp on the next.
+      // Formula rendering and link tagging both affect the final message height,
+      // so they must happen before the clamp measures it.
+      try { renderMessageMath(roots); } catch { /* noop */ }
+      // The clamp skips messages carrying a 企业微信 card, and it can only see
+      // them once the anchors are tagged.
       try { tagWecomLinks(roots); } catch { /* noop */ }
       try { applyClamp(roots); } catch { /* noop */ }
     } else {
@@ -1123,6 +1245,9 @@ export function teardownBeautify(): void {
   // Stop listening for page-side interactions.
   removeClicks();
   removeWecomCardClicks();
+
+  // Put the original TeX source back when the enhancement is turned off.
+  restoreMessageMath();
 
   // Strip every attribute / inline var / class we ever wrote to the page.
   const body = document.body;

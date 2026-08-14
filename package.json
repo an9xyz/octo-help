@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "jszip": "^3.10.1",
+    "katex": "^0.18.4",
     "pixi-filters": "^6",
     "pixi.js": "^8",
     "qrcode-generator": "^2.0.4",
@@ -27,11 +28,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/katex": "^0.16.8",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitest/coverage-v8": "2.1.9",
     "@wxt-dev/module-react": "^1.1.5",
     "eslint": "^10.8.0",
+    "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.66.0",
     "vitest": "^2.1.9",
