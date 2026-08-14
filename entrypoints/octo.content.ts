@@ -8,13 +8,10 @@ import {
   MESSAGE_TYPE,
   OCTO_MATCHES,
   PLAYER_WATERMARK_STORAGE_KEY,
-  type CompatReportMessage,
-  type ConvFoldChangeMessage,
   type DesktopPetMessage,
-  type DesktopPetPositionMessage,
   type ConvCompactLevel,
+  type PageOutboundMessage,
   type PlayerWatermarkId,
-  type RequestKickScriptMessage,
   type StoredCompatReport,
 } from '@/utils/octoShared';
 import {
@@ -306,12 +303,7 @@ export default defineContentScript({
 
     window.addEventListener('message', (event: MessageEvent) => {
       if (event.source !== window) return;
-      const data = event.data as
-        | DesktopPetPositionMessage
-        | RequestKickScriptMessage
-        | CompatReportMessage
-        | ConvFoldChangeMessage
-        | undefined;
+      const data = event.data as PageOutboundMessage | undefined;
       if (!data || data.source !== MESSAGE_SOURCE) return;
 
       // Lazy load of the pixi.js kick effect. Only a content script can call

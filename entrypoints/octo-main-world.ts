@@ -3,7 +3,7 @@ import {
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
   type CompatReportMessage,
-  type OctoMessage,
+  type PageInboundMessage,
 } from '@/utils/octoShared';
 import { DEFAULT_THEME } from '@/utils/octoThemeCatalog';
 import {
@@ -31,6 +31,7 @@ import { setConvFoldEnabled, setConvFoldState, teardownConvFold } from '@/utils/
 import { applyDesktopPetState, teardownDesktopPet } from '@/utils/octoPetRenderer';
 import { startOctoPetSpeech } from '@/utils/octoPetSpeech';
 import { startOctoGithubLinks } from '@/utils/octoGithubLink';
+import { startOctoLinkPreview } from '@/utils/octoLinkPreview';
 import { handleQuickMention } from '@/utils/octoMentionBar';
 import {
   startFeatures,
@@ -61,6 +62,7 @@ export default defineUnlistedScript(() => {
   // This avoids briefly applying defaults for users who disabled all features.
   let stopPetSpeech: (() => void) | undefined;
   let stopGithubLinks: (() => void) | undefined;
+  let stopLinkPreview: (() => void) | undefined;
 
   // ---- master switch (global "uninstall") --------------------------------
 
@@ -194,6 +196,14 @@ export default defineUnlistedScript(() => {
       },
     },
     {
+      // Started by its setting message, not by the master switch.
+      id: 'linkPreview',
+      stop: () => {
+        stopLinkPreview?.();
+        stopLinkPreview = undefined;
+      },
+    },
+    {
       id: 'compatCheck',
       start: scheduleCompatCheck,
       stop: () => {
@@ -226,6 +236,7 @@ export default defineUnlistedScript(() => {
     'conversationFold',
     'petSpeech',
     'githubLinks',
+    'linkPreview',
     'compatCheck',
   ] as const;
 
@@ -262,8 +273,8 @@ export default defineUnlistedScript(() => {
   }
 
   const SETTING_HANDLERS: {
-    [K in Exclude<OctoMessage['type'], typeof MESSAGE_TYPE.master>]?: (
-      message: Extract<OctoMessage, { type: K }>,
+    [K in Exclude<PageInboundMessage['type'], typeof MESSAGE_TYPE.master>]: (
+      message: Extract<PageInboundMessage, { type: K }>,
     ) => void;
   } = {
     [MESSAGE_TYPE.beautify]: (m) => applyBeautify(!!m.enabled),
@@ -287,11 +298,18 @@ export default defineUnlistedScript(() => {
     [MESSAGE_TYPE.convFoldState]: (m) => setConvFoldState(m.foldedByScope),
     [MESSAGE_TYPE.convFoldEnabled]: (m) => setConvFoldEnabled(!!m.enabled),
     [MESSAGE_TYPE.desktopPet]: (m) => applyDesktopPetState(m),
+    [MESSAGE_TYPE.linkPreview]: (m) => {
+      if (m.enabled) stopLinkPreview ??= startOctoLinkPreview();
+      else {
+        stopLinkPreview?.();
+        stopLinkPreview = undefined;
+      }
+    },
   };
 
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window) return;
-    const data = event.data as OctoMessage | undefined;
+    const data = event.data as PageInboundMessage | undefined;
     if (!data || data.source !== MESSAGE_SOURCE) return;
     if (data.type === MESSAGE_TYPE.master) {
       applyMaster(!!data.enabled);
@@ -315,7 +333,9 @@ export default defineUnlistedScript(() => {
       return;
     }
 
-    const handler = SETTING_HANDLERS[data.type] as ((message: OctoMessage) => void) | undefined;
+    const handler = SETTING_HANDLERS[data.type] as
+      | ((message: PageInboundMessage) => void)
+      | undefined;
     handler?.(data);
   });
 });

@@ -97,10 +97,11 @@ Octo 是我们不控制的移动目标。改版重命名类名时，受影响的
 
 目标是每项只改一处，且漏改会被编译器或测试拦下：
 
-1. `octoShared.ts`：加 storage key + 消息类型与接口（并加入 `OctoMessage` 联合）。
+1. `octoShared.ts`：加 storage key + 消息类型与接口（按方向加入 `PageInboundMessage` 或 `PageOutboundMessage` 联合）。
 2. `octoSettingsParsers.ts`：加解析器，并把 key 加入 `RELAYED_STORAGE_KEYS` 和 `SIMPLE_RELAY_KEYS`。
    → 内容脚本的 relay 表是以这个联合为键的 `Record`，**忘了接线会直接编译失败**。
 3. `octo-main-world.ts`：在 `SETTING_HANDLERS` 表里加一行。
+   → 该表现在也是以 `PageInboundMessage`（除 `master`）为键的必填 `Record`，漏加同样编译失败。
 4. 面板 UI 用 `FeatureSection`：功能自己的开关放 `enabled` / `onToggleEnabled`，折叠里放细节。没有真实布尔开关的功能要先补一个 storage key（例如美化引擎的 `octoBeautifyEnabled`），而不是在面板上留一个假开关。
 5. 如果它在页面上留下任何痕迹（样式、属性、节点、监听器、定时器）：在 `PAGE_FEATURES`
    里加一项，`stop` 是必填的。这是「关掉总开关 = 等于没装插件」的结构保证。

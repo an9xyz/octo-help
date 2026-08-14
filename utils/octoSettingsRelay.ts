@@ -1,4 +1,4 @@
-import { MESSAGE_SOURCE, type OctoMessage } from './octoShared';
+import { MESSAGE_SOURCE, type PageInboundMessage } from './octoShared';
 
 /**
  * `Omit` over a discriminated union collapses it into one flattened object type,
@@ -11,7 +11,7 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   : never;
 
 /** A message payload minus the `source` tag, which postToPage adds. */
-export type PageMessagePayload = DistributiveOmit<OctoMessage, 'source'>;
+export type PageMessagePayload = DistributiveOmit<PageInboundMessage, 'source'>;
 
 /**
  * Send a message to the MAIN world.
@@ -25,7 +25,7 @@ export type PageMessagePayload = DistributiveOmit<OctoMessage, 'source'>;
  * see the security notes in README.
  */
 export function postToPage(message: PageMessagePayload): void {
-  window.postMessage({ source: MESSAGE_SOURCE, ...message } as OctoMessage, '*');
+  window.postMessage({ source: MESSAGE_SOURCE, ...message } as PageInboundMessage, '*');
 }
 
 /**

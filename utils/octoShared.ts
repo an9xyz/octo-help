@@ -185,7 +185,7 @@ export interface DesktopPetPosition {
 /** window.postMessage envelope source, so we ignore unrelated messages. */
 export const MESSAGE_SOURCE = 'octo-enhancer';
 
-/** Message types sent from content script -> injected main-world script. */
+/** postMessage types shared by the content script and the injected MAIN-world script. */
 export const MESSAGE_TYPE = {
   master: 'master',
   beautify: 'beautify',
@@ -377,6 +377,12 @@ export interface CompatReportMessage {
 }
 
 // ─── Export request/result ───────────────────────────────────────────────
+//
+// Reserved for the unfinished conversation-export feature. These two types are
+// intentionally NOT part of PageInboundMessage / PageOutboundMessage yet:
+// nothing sends or handles them (the side panel currently signals export
+// through storage keys instead). Add them to the split below when the feature
+// lands.
 
 /** Side panel -> MAIN world: request to export the current conversation. */
 export interface ExportRequestMessage {
@@ -411,7 +417,19 @@ export interface LinkPreviewMessage {
   enabled: boolean;
 }
 
-export type OctoMessage =
+/**
+ * Direction split of the postMessage protocol.
+ *
+ * `PageInboundMessage` is what the content script posts INTO the page to drive
+ * features. The MAIN world must handle every one of them: its handler table is
+ * typed as a required Record over this union (minus the special-cased `master`),
+ * so adding an inbound type without a handler fails to compile.
+ *
+ * `PageOutboundMessage` is what the MAIN world posts back to the content script
+ * (compat reports, fold-change requests, pet positions, lazy kick-script
+ * injection). The content script's incoming listener is typed over this union.
+ */
+export type PageInboundMessage =
   | MasterMessage
   | BeautifyMessage
   | ThemeMessage
@@ -426,11 +444,13 @@ export type OctoMessage =
   | ConvRecentOnlyMessage
   | ConvFoldEnabledMessage
   | ConvFoldStateMessage
-  | ConvFoldChangeMessage
   | DesktopPetMessage
+  | LinkPreviewMessage;
+
+export type PageOutboundMessage =
   | DesktopPetPositionMessage
   | RequestKickScriptMessage
   | CompatReportMessage
-  | ExportRequestMessage
-  | ExportResultMessage
-  | LinkPreviewMessage;
+  | ConvFoldChangeMessage;
+
+export type OctoMessage = PageInboundMessage | PageOutboundMessage;
