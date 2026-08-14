@@ -377,12 +377,6 @@ export interface CompatReportMessage {
 }
 
 // ─── Export request/result ───────────────────────────────────────────────
-//
-// Reserved for the unfinished conversation-export feature. These two types are
-// intentionally NOT part of PageInboundMessage / PageOutboundMessage yet:
-// nothing sends or handles them (the side panel currently signals export
-// through storage keys instead). Add them to the split below when the feature
-// lands.
 
 /** Side panel -> MAIN world: request to export the current conversation. */
 export interface ExportRequestMessage {
@@ -427,7 +421,8 @@ export interface LinkPreviewMessage {
  *
  * `PageOutboundMessage` is what the MAIN world posts back to the content script
  * (compat reports, fold-change requests, pet positions, lazy kick-script
- * injection). The content script's incoming listener is typed over this union.
+ * injection, export results). The content script's incoming listener is typed
+ * over this union.
  */
 export type PageInboundMessage =
   | MasterMessage
@@ -445,12 +440,14 @@ export type PageInboundMessage =
   | ConvFoldEnabledMessage
   | ConvFoldStateMessage
   | DesktopPetMessage
-  | LinkPreviewMessage;
+  | LinkPreviewMessage
+  | ExportRequestMessage;
 
 export type PageOutboundMessage =
   | DesktopPetPositionMessage
   | RequestKickScriptMessage
   | CompatReportMessage
-  | ConvFoldChangeMessage;
+  | ConvFoldChangeMessage
+  | ExportResultMessage;
 
 export type OctoMessage = PageInboundMessage | PageOutboundMessage;

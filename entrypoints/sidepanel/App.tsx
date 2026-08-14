@@ -1,13 +1,11 @@
 import { browser } from '#imports';
 import {
-  useEffect,
   useCallback,
-  useMemo,
+  useEffect,
   useReducer,
   useRef,
   useState,
   type ChangeEvent,
-  type CSSProperties,
 } from 'react';
 import {
   BALL_CURSOR_STORAGE_KEY,
@@ -34,13 +32,10 @@ import {
   QQ_SELF_LEFT_STORAGE_KEY,
   COMPAT_REPORT_STORAGE_KEY,
   THEME_STORAGE_KEY,
+  type BuiltInCompanionId,
   type ConvCompactLevel,
   type ExportFormat,
   type PlayerWatermarkId,
-  type BuiltInCompanionId,
-  type DesktopPetPlacement,
-  type StoredCompatReport,
-  type StoredDesktopPet,
 } from '@/utils/octoShared';
 import {
   GLOBAL_THEMES,
@@ -49,13 +44,13 @@ import {
   DEFAULT_THEME,
   KICK_STYLES,
   DEFAULT_KICK_STYLE,
-  type GlobalThemeDef,
-  type ThemeCategory,
-  type ThemeDef,
 } from '@/utils/octoThemeCatalog';
 import { isBuiltInCompanionId, isStoredDesktopPet } from '@/utils/octoPetState';
 import { isConvCompactLevel } from '@/utils/octoSettingsParsers';
 import { FeatureSection } from './FeatureSection';
+import { ThemePicker, ThemeSwatch } from './ThemePicker';
+import { APP_INITIAL_STATE, appReducer, type AppState, type BooleanSettingKey } from './state';
+import { countFoldedConversations, normalizeStoredId, readCompatReport } from './helpers';
 import './App.css';
 
 const PLAYER_WATERMARKS: Array<{ id: PlayerWatermarkId; label: string; icon: string }> = [
@@ -91,383 +86,6 @@ const CONV_COMPACT_OPTIONS: Array<{ id: ConvCompactLevel; label: string; summary
   { id: 'l3', label: '单行', summary: '不显示消息内容，一行一个会话' },
   { id: 'l4', label: '连续折叠', summary: '连续同父群折成一个分组表头' },
 ];
-
-type ThemeChoice = ThemeDef | GlobalThemeDef;
-type ThemeFilter = 'all' | ThemeCategory;
-
-const THEME_FILTERS: Array<{ id: ThemeFilter; label: string }> = [
-  { id: 'all', label: '全部' },
-  { id: 'light', label: '浅色' },
-  { id: 'dark', label: '深色' },
-  { id: 'classic', label: '经典' },
-  { id: 'special', label: '特色' },
-];
-
-// ─── State + Reducer ─────────────────────────────────────────────────────
-
-type ExportResultValue = { summary: string; fileName: string; content: string };
-
-type BooleanSettingKey =
-  | 'masterEnabled'
-  | 'beautifyEnabled'
-  | 'ballCursor'
-  | 'qqSelfLeft'
-  | 'composerEnhancement'
-  | 'convSortEnabled'
-  | 'convRecentOnly'
-  | 'convFoldEnabled'
-  | 'linkPreviewEnabled'
-  | 'desktopPetEnabled';
-
-interface AppState {
-  masterEnabled: boolean;
-  beautifyEnabled: boolean;
-  themeId: string;
-  globalThemeId: string;
-  kickStyle: string;
-  playerWatermark: PlayerWatermarkId;
-  ballCursor: boolean;
-  qqSelfLeft: boolean;
-  desktopPet: StoredDesktopPet | null;
-  desktopPetEnabled: boolean;
-  builtInCompanion: BuiltInCompanionId | null;
-  desktopPetPlacement: DesktopPetPlacement;
-  composerEnhancement: boolean;
-  convSortEnabled: boolean;
-  convCompactLevel: ConvCompactLevel;
-  convRecentOnly: boolean;
-  convFoldEnabled: boolean;
-  convFoldCount: number;
-  linkPreviewEnabled: boolean;
-  // UI
-  loading: boolean;
-  petBusy: boolean;
-  petError: string;
-  settingsError: string;
-  compatReport: StoredCompatReport | null;
-  exportBusy: boolean;
-  exportResult: ExportResultValue | null;
-  exportError: string;
-  activeThemePicker: 'message' | 'global' | null;
-  openFeature: string | null;
-}
-
-type AppAction =
-  | { type: 'TOGGLE'; key: BooleanSettingKey }
-  | { type: 'SET'; key: string; value: unknown }
-  | { type: 'SET_MULTI'; updates: Partial<AppState> }
-  | { type: 'SET_ERROR'; errorKey: 'petError' | 'settingsError' | 'exportError'; message: string }
-  | { type: 'SET_BUSY'; key: 'loading' | 'petBusy' | 'exportBusy'; value: boolean }
-  | { type: 'SET_RESULT'; value: ExportResultValue | null }
-  | { type: 'SET_COMPAT'; value: StoredCompatReport | null }
-  | { type: 'INIT'; state: Partial<AppState> };
-
-const APP_INITIAL_STATE: AppState = {
-  masterEnabled: true,
-  beautifyEnabled: true,
-  themeId: DEFAULT_THEME,
-  globalThemeId: DEFAULT_GLOBAL_THEME,
-  kickStyle: DEFAULT_KICK_STYLE,
-  playerWatermark: 'none',
-  ballCursor: true,
-  qqSelfLeft: false,
-  desktopPet: null,
-  desktopPetEnabled: false,
-  builtInCompanion: null,
-  desktopPetPlacement: 'desktop',
-  composerEnhancement: true,
-  convSortEnabled: false,
-  convCompactLevel: 'off',
-  convRecentOnly: false,
-  convFoldEnabled: false,
-  convFoldCount: 0,
-  linkPreviewEnabled: true,
-  loading: true,
-  petBusy: false,
-  petError: '',
-  settingsError: '',
-  compatReport: null,
-  exportBusy: false,
-  exportResult: null,
-  exportError: '',
-  activeThemePicker: null,
-  openFeature: null,
-};
-
-function appReducer(state: AppState, action: AppAction): AppState {
-  switch (action.type) {
-    case 'TOGGLE':
-      return { ...state, [action.key]: !(state[action.key] as boolean) };
-    case 'SET':
-      return { ...state, [action.key]: action.value };
-    case 'SET_MULTI':
-      return { ...state, ...action.updates };
-    case 'SET_ERROR':
-      return { ...state, [action.errorKey]: action.message };
-    case 'SET_BUSY':
-      return { ...state, [action.key]: action.value };
-    case 'SET_RESULT':
-      return { ...state, exportResult: action.value };
-    case 'SET_COMPAT':
-      return { ...state, compatReport: action.value };
-    case 'INIT':
-      return { ...state, ...action.state };
-    default:
-      return state;
-  }
-}
-
-// ─── Theme helpers ────────────────────────────────────────────────────────
-
-function ThemeSwatch({ theme, compact = false }: { theme: ThemeChoice; compact?: boolean }) {
-  const style = {
-    '--swatch-a': theme.colors[0],
-    '--swatch-b': theme.colors[1],
-    '--swatch-c': theme.colors[2],
-  } as CSSProperties;
-
-  return (
-    <span className={`theme-swatch${compact ? ' is-compact' : ''}`} style={style} aria-hidden="true">
-      <span className="theme-swatch-icon">{theme.icon}</span>
-    </span>
-  );
-}
-
-interface ThemePickerProps {
-  open: boolean;
-  title: string;
-  description: string;
-  themes: ThemeChoice[];
-  selectedId: string;
-  appliesImmediately: boolean;
-  onSelect: (id: string) => void;
-  onClose: () => void;
-}
-
-function ThemePicker({
-  open,
-  title,
-  description,
-  themes,
-  selectedId,
-  appliesImmediately,
-  onSelect,
-  onClose,
-}: ThemePickerProps) {
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<ThemeFilter>('all');
-  const searchInput = useRef<HTMLInputElement>(null);
-  const pickerPanel = useRef<HTMLDivElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  const showDiscoveryTools = themes.length > 8;
-
-  useEffect(() => {
-    if (!open) return;
-    previousFocus.current = document.activeElement as HTMLElement | null;
-    setQuery('');
-    setFilter('all');
-    const focusTimer = window.setTimeout(() => {
-      if (searchInput.current) searchInput.current.focus();
-      else pickerPanel.current?.focus();
-    }, 0);
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = pickerPanel.current?.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusable?.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.clearTimeout(focusTimer);
-      window.removeEventListener('keydown', onKeyDown);
-      previousFocus.current?.focus();
-    };
-  }, [open, onClose]);
-
-  const availableFilters = useMemo(
-    () => THEME_FILTERS.filter((item) => item.id === 'all' || themes.some((theme) => theme.category === item.id)),
-    [themes],
-  );
-
-  const filteredThemes = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    return themes.filter((theme) => {
-      if (filter !== 'all' && theme.category !== filter) return false;
-      if (!normalizedQuery) return true;
-      const searchable = [theme.label, theme.description, ...(theme.keywords ?? [])]
-        .join(' ')
-        .toLocaleLowerCase();
-      return searchable.includes(normalizedQuery);
-    });
-  }, [filter, query, themes]);
-
-  useEffect(() => {
-    if (!open || query || filter !== 'all') return;
-    const timer = window.setTimeout(() => {
-      pickerPanel.current
-        ?.querySelector<HTMLElement>('.theme-option.is-selected')
-        ?.scrollIntoView({ block: 'nearest' });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [filter, open, query, selectedId]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="theme-picker-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={pickerPanel}
-        className={`theme-picker${showDiscoveryTools ? '' : ' is-compact'}`}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="theme-picker-title"
-        aria-describedby="theme-picker-description"
-      >
-        <header className="theme-picker-header">
-          <div>
-            <h2 id="theme-picker-title">{title}</h2>
-            <p id="theme-picker-description">{description}</p>
-          </div>
-          <button type="button" className="icon-button" aria-label="关闭主题选择" onClick={onClose}>
-            ×
-          </button>
-        </header>
-
-        {showDiscoveryTools && <div className="theme-picker-tools">
-          <label className="theme-search">
-            <span aria-hidden="true">⌕</span>
-            <input
-              ref={searchInput}
-              type="search"
-              value={query}
-              placeholder="搜索主题名称、颜色或风格"
-              onChange={(event) => setQuery(event.currentTarget.value)}
-            />
-            {query && (
-              <button type="button" aria-label="清空搜索" onClick={() => setQuery('')}>
-                ×
-              </button>
-            )}
-          </label>
-          <div className="theme-filters" role="group" aria-label="主题分类">
-            {availableFilters.map((item) => {
-              const count = item.id === 'all'
-                ? themes.length
-                : themes.filter((theme) => theme.category === item.id).length;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-pressed={filter === item.id}
-                  className={filter === item.id ? 'is-active' : ''}
-                  onClick={() => setFilter(item.id)}
-                >
-                  {item.label}<span>{count}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>}
-
-        {showDiscoveryTools && <div className="theme-picker-summary" aria-live="polite">
-          {filteredThemes.length > 0
-            ? `找到 ${filteredThemes.length} 个主题`
-            : '没有匹配的主题'}
-        </div>}
-
-        <div className="theme-options">
-          {filteredThemes.map((theme) => {
-            const selected = theme.id === selectedId;
-            return (
-              <button
-                key={theme.id}
-                type="button"
-                className={`theme-option${selected ? ' is-selected' : ''}`}
-                aria-pressed={selected}
-                onClick={() => onSelect(theme.id)}
-              >
-                <ThemeSwatch theme={theme} />
-                <span className="theme-option-copy">
-                  <strong>{theme.label}</strong>
-                  <small>{theme.description}</small>
-                </span>
-                <span className="theme-option-state">{selected ? '已选' : ''}</span>
-              </button>
-            );
-          })}
-          {filteredThemes.length === 0 && (
-            <div className="theme-empty">
-              <span aria-hidden="true">◌</span>
-              <strong>换个关键词试试</strong>
-              <small>可以搜索"深色"、"QQ"或"足球"</small>
-            </div>
-          )}
-        </div>
-
-        <footer className="theme-picker-footer">
-          <span><i />{appliesImmediately ? '点击主题后会立即应用' : '重新开启全部增强后应用'}</span>
-          <button type="button" onClick={onClose}>完成</button>
-        </footer>
-      </div>
-    </div>
-  );
-}
-
-function normalizeStoredId(
-  value: unknown,
-  options: ReadonlyArray<{ id: string }>,
-  fallback: string,
-): string {
-  return typeof value === 'string' && options.some((option) => option.id === value)
-    ? value
-    : fallback;
-}
-
-function readCompatReport(value: unknown): StoredCompatReport | null {
-  if (!value || typeof value !== 'object') return null;
-  const candidate = value as Partial<StoredCompatReport>;
-  if (!Array.isArray(candidate.brokenFeatures) || typeof candidate.checkedAt !== 'number') {
-    return null;
-  }
-  const brokenFeatures = candidate.brokenFeatures
-    .filter((entry): entry is string => typeof entry === 'string')
-    .slice(0, 12);
-  return {
-    brokenFeatures,
-    brokenKeys: Array.isArray(candidate.brokenKeys)
-      ? candidate.brokenKeys.filter((k): k is string => typeof k === 'string').slice(0, 12)
-      : [],
-    checkedAt: candidate.checkedAt,
-  };
-}
-
-function countFoldedConversations(value: unknown): number {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return 0;
-  return Object.values(value as Record<string, unknown>).reduce<number>(
-    (total, keys) => total + (Array.isArray(keys) ? keys.filter((key) => typeof key === 'string').length : 0),
-    0,
-  );
-}
 
 // ─── App component ────────────────────────────────────────────────────────
 
@@ -733,12 +351,6 @@ function App() {
     a.download = `${fileName}.md`;
     a.click();
     URL.revokeObjectURL(url);
-  }, []);
-
-  const dismissExport = useCallback(() => {
-    dispatch({ type: 'SET_RESULT', value: null });
-    dispatch({ type: 'SET_ERROR', errorKey: 'exportError', message: '' });
-    void browser.storage.local.remove(EXPORT_RESULT_KEY);
   }, []);
 
   const restoreAllFoldedConversations = useCallback(async () => {
@@ -1436,42 +1048,49 @@ function App() {
           open={openFeature === 'export'}
           onToggleOpen={() => toggleFeature('export')}
         >
-          {exportResult ? (
-            <div className="export-done">
-              <p className="export-success">✅ {exportResult.summary}</p>
-              <div className="export-actions">
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={downloadExport}
-                >
-                  下载 Markdown (.md)
-                </button>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={dismissExport}
-                >
-                  关闭
-                </button>
-              </div>
+          <div
+            className={`export-panel${exportResult ? ' is-done' : ''}`}
+            aria-live="polite"
+            aria-busy={exportBusy}
+          >
+            <div className="export-format">
+              <span className="export-format-icon" aria-hidden="true">
+                {exportResult ? '✓' : 'MD'}
+              </span>
+              <span className="export-format-copy">
+                <strong>{exportResult ? exportResult.summary : 'Markdown 文件'}</strong>
+                <small>
+                  {exportResult
+                    ? `${exportResult.fileName}.md`
+                    : '包含发送者、时间和当前已加载的消息'}
+                </small>
+              </span>
             </div>
-          ) : (
-            <>
-              <p className="feature-note">
-                把当前对话导出为 Markdown 文件，方便分享给没有 Octo 账号的人，或存档备份。
-              </p>
-              {exportError && <p className="pet-error" role="alert">{exportError}</p>}
+            {exportError && <p className="export-error" role="alert">{exportError}</p>}
+            <div className="export-actions">
               <button
                 type="button"
                 className="primary-button"
                 disabled={exportBusy}
-                onClick={() => triggerExport('markdown')}
+                onClick={exportResult ? downloadExport : () => triggerExport('markdown')}
               >
-                {exportBusy ? '正在读取…' : '📄 导出为 Markdown'}
+                <span aria-hidden="true">{exportBusy ? '•••' : '↓'}</span>
+                {exportBusy ? '正在读取' : exportResult ? '下载文件' : '导出当前对话'}
               </button>
-            </>
-          )}
+              {exportResult && (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => triggerExport('markdown')}
+                >
+                  重新导出
+                </button>
+              )}
+            </div>
+            {!exportResult && (
+              <small className="export-local-note">文件在本地生成，不会上传聊天内容</small>
+            )}
+          </div>
         </FeatureSection>
 
       </div>

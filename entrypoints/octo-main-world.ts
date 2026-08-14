@@ -3,6 +3,7 @@ import {
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
   type CompatReportMessage,
+  type ExportResultMessage,
   type PageInboundMessage,
 } from '@/utils/octoShared';
 import { DEFAULT_THEME } from '@/utils/octoThemeCatalog';
@@ -30,6 +31,7 @@ import {
 import { setConvFoldEnabled, setConvFoldState, teardownConvFold } from '@/utils/octoConvFold';
 import { applyDesktopPetState, teardownDesktopPet } from '@/utils/octoPetRenderer';
 import { startOctoPetSpeech } from '@/utils/octoPetSpeech';
+import { exportAsMarkdown } from '@/utils/octoExport';
 import { startOctoGithubLinks } from '@/utils/octoGithubLink';
 import { startOctoLinkPreview } from '@/utils/octoLinkPreview';
 import { handleQuickMention } from '@/utils/octoMentionBar';
@@ -304,6 +306,39 @@ export default defineUnlistedScript(() => {
         stopLinkPreview?.();
         stopLinkPreview = undefined;
       }
+    },
+    [MESSAGE_TYPE.exportRequest]: (m) => {
+      void exportAsMarkdown()
+        .then((result) => {
+          window.postMessage(
+            {
+              source: MESSAGE_SOURCE,
+              type: MESSAGE_TYPE.exportResult,
+              format: m.format,
+              requestId: m.requestId,
+              content: result.content,
+              fileName: result.fileName,
+              messageCount: result.messageCount,
+              summary: result.summary,
+            } satisfies ExportResultMessage,
+            '*',
+          );
+        })
+        .catch((error: unknown) => {
+          window.postMessage(
+            {
+              source: MESSAGE_SOURCE,
+              type: MESSAGE_TYPE.exportResult,
+              format: m.format,
+              requestId: m.requestId,
+              content: '',
+              fileName: '',
+              messageCount: 0,
+              summary: error instanceof Error ? error.message : '导出失败',
+            } satisfies ExportResultMessage,
+            '*',
+          );
+        });
     },
   };
 

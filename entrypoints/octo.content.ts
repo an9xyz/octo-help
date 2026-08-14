@@ -3,6 +3,8 @@ import {
   COMPAT_REPORT_STORAGE_KEY,
   CONV_FOLDED_STORAGE_KEY,
   DESKTOP_PET_POSITION_STORAGE_KEY,
+  EXPORT_REQUEST_KEY,
+  EXPORT_RESULT_KEY,
   MASTER_STORAGE_KEY,
   MESSAGE_SOURCE,
   MESSAGE_TYPE,
@@ -293,6 +295,19 @@ export default defineContentScript({
         postConvFoldState(convFoldMap);
       }
 
+      if (EXPORT_REQUEST_KEY in changes) {
+        const req = changes[EXPORT_REQUEST_KEY].newValue as
+          | { format?: unknown; requestId?: unknown }
+          | undefined;
+        if (req && req.format === 'markdown' && typeof req.requestId === 'string') {
+          postToPage({
+            type: MESSAGE_TYPE.exportRequest,
+            format: req.format,
+            requestId: req.requestId,
+          });
+        }
+      }
+
       for (const key of DESKTOP_PET_KEYS) {
         if (key in changes) DESKTOP_PET_ABSORBERS[key](values);
       }
@@ -372,6 +387,25 @@ export default defineContentScript({
           else delete map[scope];
           await browser.storage.local.set({ [CONV_FOLDED_STORAGE_KEY]: map });
         }).catch(() => undefined);
+        return;
+      }
+
+      if (data.type === MESSAGE_TYPE.exportResult) {
+        if (
+          typeof data.content === 'string' &&
+          typeof data.fileName === 'string' &&
+          typeof data.summary === 'string' &&
+          typeof data.requestId === 'string'
+        ) {
+          void browser.storage.local.set({
+            [EXPORT_RESULT_KEY]: {
+              content: data.content,
+              fileName: data.fileName,
+              summary: data.summary,
+              requestId: data.requestId,
+            },
+          });
+        }
         return;
       }
 
