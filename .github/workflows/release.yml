@@ -38,6 +38,12 @@ jobs:
       - name: Type check
         run: pnpm compile
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
       - name: Build Chrome package
         run: pnpm zip
 

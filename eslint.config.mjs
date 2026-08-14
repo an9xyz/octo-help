@@ -13,6 +13,7 @@ export default tseslint.config(
       '.wxt/**',
       'node_modules/**',
       'design-demos/**',
+      'coverage/**',
       'utils/octoBeautify.css',
     ],
   },
