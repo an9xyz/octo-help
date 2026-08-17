@@ -18,6 +18,14 @@ export interface RepoRef {
   repo: string;
 }
 
+export interface RepoItem {
+  number: number;
+  title: string;
+  state: string;
+  updatedAt: string;
+  url: string;
+}
+
 export interface RepoStatus {
   fullName: string;
   htmlUrl: string;
@@ -26,7 +34,8 @@ export interface RepoStatus {
   openIssues: number;
   openPrs: number;
   pushedAt: string;
-  recent: Array<{ number: number; title: string; isPr: boolean; state: string; updatedAt: string; url: string }>;
+  recentIssues: RepoItem[];
+  recentPrs: RepoItem[];
 }
 
 export class GithubError extends Error {
@@ -96,21 +105,27 @@ async function ghFetch(path: string, options: GithubOptions): Promise<Response> 
   }
 }
 
-/** Fetch a repo's issue/PR status snapshot. */
+/** Fetch a repo's issue/PR status snapshot: counts + recent 10 issues and 10 PRs. */
 export async function fetchRepoStatus(ref: RepoRef, options: GithubOptions = {}): Promise<RepoStatus> {
   const base = `/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}`;
   const meta = (await (await ghFetch(base, options)).json()) as {
     full_name: string; html_url: string; stargazers_count: number; forks_count: number;
     open_issues_count: number; pushed_at: string;
   };
-  const prsRes = await ghFetch(`${base}/pulls?state=open&per_page=1`, options);
-  const prsItems = (await prsRes.json()) as unknown[];
-  const openPrs = countFromLink(prsRes.headers.get('link'), prsItems.length);
-  const recentRaw = (await (
-    await ghFetch(`${base}/issues?state=all&sort=updated&direction=desc&per_page=8`, options)
-  ).json()) as Array<{
-    number: number; title: string; state: string; updated_at: string; html_url: string; pull_request?: unknown;
-  }>;
+  // Open-PR count from the pulls Link header (avoids the stricter search API).
+  const prCountRes = await ghFetch(`${base}/pulls?state=open&per_page=1`, options);
+  const prCountItems = (await prCountRes.json()) as unknown[];
+  const openPrs = countFromLink(prCountRes.headers.get('link'), prCountItems.length);
+
+  // Recent 10 PRs (any state; merged shows as 'merged').
+  const prsRaw = (await (
+    await ghFetch(`${base}/pulls?state=all&sort=updated&direction=desc&per_page=10`, options)
+  ).json()) as Array<{ number: number; title: string; state: string; merged_at: string | null; updated_at: string; html_url: string }>;
+  // Recent issues: the issues endpoint includes PRs, so over-fetch then drop them.
+  const issuesRaw = (await (
+    await ghFetch(`${base}/issues?state=all&sort=updated&direction=desc&per_page=25`, options)
+  ).json()) as Array<{ number: number; title: string; state: string; updated_at: string; html_url: string; pull_request?: unknown }>;
+
   return {
     fullName: meta.full_name,
     htmlUrl: meta.html_url,
@@ -119,14 +134,17 @@ export async function fetchRepoStatus(ref: RepoRef, options: GithubOptions = {})
     openIssues: Math.max(0, meta.open_issues_count - openPrs),
     openPrs,
     pushedAt: meta.pushed_at,
-    recent: recentRaw.map((r) => ({
+    recentPrs: prsRaw.map((r) => ({
       number: r.number,
       title: r.title,
-      isPr: !!r.pull_request,
-      state: r.state,
+      state: r.merged_at ? 'merged' : r.state,
       updatedAt: r.updated_at,
       url: r.html_url,
     })),
+    recentIssues: issuesRaw
+      .filter((r) => !r.pull_request)
+      .slice(0, 10)
+      .map((r) => ({ number: r.number, title: r.title, state: r.state, updatedAt: r.updated_at, url: r.html_url })),
   };
 }
 
@@ -140,18 +158,32 @@ function ago(iso: string, now: number): string {
   return `${Math.floor(h / 24)}天前`;
 }
 
+/** Short state marker for readability in a plain-text digest. */
+function mark(state: string): string {
+  if (state === 'open') return '🟢';
+  if (state === 'merged') return '🟣';
+  return '⚪'; // closed
+}
+
+function titleLine(item: RepoItem, now: number): string {
+  const t = item.title.length > 42 ? item.title.slice(0, 42) + '…' : item.title;
+  return `${mark(item.state)} #${item.number} ${t}（${ago(item.updatedAt, now)}）`;
+}
+
 /** Format a plain-text digest for an Octo message or on-screen preview. */
 export function formatRepoStatus(s: RepoStatus, now = Date.now()): string {
   const lines = [
-    `📊 ${s.fullName} 状态`,
-    `★ ${s.stars} · Fork ${s.forks} · 最近推送 ${ago(s.pushedAt, now)}`,
-    `开放 Issue：${s.openIssues}  |  开放 PR：${s.openPrs}`,
+    `📊 ${s.fullName}`,
+    `★ ${s.stars} · Fork ${s.forks} · 推送 ${ago(s.pushedAt, now)}`,
+    `🟢 开放 Issue ${s.openIssues} · 🔀 开放 PR ${s.openPrs}`,
   ];
-  if (s.recent.length) {
-    lines.push('最近更新：');
-    for (const r of s.recent.slice(0, 6)) {
-      lines.push(`• ${r.isPr ? 'PR' : 'Issue'} #${r.number} ${r.title}（${r.state}·${ago(r.updatedAt, now)}）`);
-    }
+  if (s.recentIssues.length) {
+    lines.push('', `📋 最近 Issue（${s.recentIssues.length}）`);
+    for (const it of s.recentIssues) lines.push(titleLine(it, now));
+  }
+  if (s.recentPrs.length) {
+    lines.push('', `🔀 最近 PR（${s.recentPrs.length}）`);
+    for (const it of s.recentPrs) lines.push(titleLine(it, now));
   }
   return lines.join('\n');
 }
