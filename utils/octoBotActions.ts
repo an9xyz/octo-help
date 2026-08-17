@@ -102,16 +102,6 @@ export async function clipToOcto(text: string, url: string, title: string): Prom
   return doc.title;
 }
 
-/** Send a message to an explicit channel (used by the scheduled-send alarm). */
-export async function sendScheduledText(
-  channelId: string,
-  channelType: number,
-  text: string,
-): Promise<void> {
-  const { token, baseUrl } = await readConfig();
-  await sendBotMessage(baseUrl, token, channelId, channelType, text);
-}
-
 /**
  * Fetch the configured GitHub repo's status, format a digest, and post it to the
  * default share target. Returns the digest text. Used by the "立即汇总" button and

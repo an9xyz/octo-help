@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import {
   BOT_BASE_URL_STORAGE_KEY,
   BOT_CLIP_DOC_STORAGE_KEY,
-  BOT_SCHEDULED_STORAGE_KEY,
   BOT_SHARE_TARGET_STORAGE_KEY,
   BOT_TEMPLATES_STORAGE_KEY,
   BOT_TOKEN_STORAGE_KEY,
@@ -12,7 +11,6 @@ import {
   GH_TARGET_STORAGE_KEY,
   GH_TOKEN_STORAGE_KEY,
   type BotClipDoc,
-  type BotScheduledSend,
   type BotShareTarget,
 } from '@/utils/octoShared';
 import {
@@ -54,14 +52,13 @@ export function BotTestPanel({
   const [threads, setThreads] = useState<OctoThread[]>([]);
   const [selectedThread, setSelectedThread] = useState('');
   const [text, setText] = useState('');
-  const [busy, setBusy] = useState<null | 'groups' | 'send' | 'dm' | 'threads' | 'doc' | 'sched' | 'gh'>(null);
+  const [busy, setBusy] = useState<null | 'groups' | 'send' | 'dm' | 'threads' | 'doc' | 'gh'>(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [shareTarget, setShareTarget] = useState<BotShareTarget | null>(null);
   const [clipDoc, setClipDoc] = useState<BotClipDoc | null>(null);
   const [templates, setTemplates] = useState<string[]>([]);
   const [newTemplate, setNewTemplate] = useState('');
-  const [scheduleAt, setScheduleAt] = useState('');
   const [ghRepo, setGhRepo] = useState('');
   const [ghToken, setGhToken] = useState('');
   const [ghInterval, setGhInterval] = useState(0);
@@ -255,41 +252,6 @@ export function BotTestPanel({
     if (!t) return;
     saveTemplates([...templates, t]);
     setNewTemplate('');
-  };
-
-  const scheduleSend = async () => {
-    setError('');
-    setStatus('');
-    const t = currentTarget();
-    if (!t) {
-      setError('先选择群或子区');
-      return;
-    }
-    if (!text.trim()) {
-      setError('消息内容不能为空');
-      return;
-    }
-    const at = scheduleAt ? new Date(scheduleAt).getTime() : 0;
-    if (!at || at <= Date.now()) {
-      setError('请选择一个未来时间');
-      return;
-    }
-    setBusy('sched');
-    try {
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const entry: BotScheduledSend = { id, at, ...t, text: text.trim() };
-      const res = await browser.storage.local.get(BOT_SCHEDULED_STORAGE_KEY);
-      const list = (res[BOT_SCHEDULED_STORAGE_KEY] as BotScheduledSend[] | undefined) ?? [];
-      await browser.storage.local.set({ [BOT_SCHEDULED_STORAGE_KEY]: [...list, entry] });
-      await browser.alarms.create(`octo-sched-${id}`, { when: at });
-      setStatus(`已定时：${new Date(at).toLocaleString('zh-CN', { hour12: false })} 发送到「${t.label}」`);
-      setText('');
-      setScheduleAt('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '定时设置失败');
-    } finally {
-      setBusy(null);
-    }
   };
 
   const persistGh = (patch: Record<string, unknown>) => browser.storage.local.set(patch);
@@ -550,21 +512,6 @@ export function BotTestPanel({
           </button>
           <button type="button" className="secondary-button" disabled={busy !== null} onClick={saveShareTarget}>
             设为默认分享目标{shareTarget ? `（当前：${shareTarget.label}）` : ''}
-          </button>
-          <div className="config-row is-stacked">
-            <div className="config-copy">
-              <span>定时发送</span>
-              <small>到点由后台自动发到当前群/子区（需保持浏览器运行）</small>
-            </div>
-            <input
-              className="bot-input"
-              type="datetime-local"
-              value={scheduleAt}
-              onChange={(e) => setScheduleAt(e.currentTarget.value)}
-            />
-          </div>
-          <button type="button" className="secondary-button" disabled={busy !== null} onClick={scheduleSend}>
-            {busy === 'sched' ? '设置中…' : '定时发送'}
           </button>
         </>
       )}

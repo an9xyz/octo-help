@@ -1,6 +1,6 @@
 import { browser, defineBackground } from '#imports';
-import { MESSAGE_SOURCE, OCTO_MATCHES, BOT_SCHEDULED_STORAGE_KEY, type BotScheduledSend } from '@/utils/octoShared';
-import { shareToOcto, clipToOcto, sendScheduledText, githubDigestToOcto } from '@/utils/octoBotActions';
+import { MESSAGE_SOURCE, OCTO_MATCHES } from '@/utils/octoShared';
+import { shareToOcto, clipToOcto, githubDigestToOcto } from '@/utils/octoBotActions';
 
 const OCTO_URL_PREFIX = OCTO_MATCHES[0].replace('/*', '');
 
@@ -34,9 +34,7 @@ async function activateOctoTab(query?: string): Promise<void> {
 }
 
 export default defineBackground(() => {
-  // ─── Bot: right-click share / clip + scheduled send ──────────────────
-  const SCHED_PREFIX = 'octo-sched-';
-
+  // ─── Bot: right-click share / clip + periodic GitHub digest ──────────
   function notify(title: string, message: string): void {
     try {
       void browser.notifications?.create({
@@ -88,30 +86,13 @@ export default defineBackground(() => {
     }
   });
 
-  // Scheduled send: the side panel writes an entry + creates an alarm; we fire it.
+  // Periodic GitHub digest: the side panel sets the interval alarm; we fire it.
   browser.alarms?.onAlarm.addListener(async (alarm) => {
-    if (alarm.name === 'octo-gh-digest') {
-      try {
-        await githubDigestToOcto();
-      } catch (err) {
-        notify('GitHub 汇总失败', err instanceof Error ? err.message : String(err));
-      }
-      return;
-    }
-    if (!alarm.name.startsWith(SCHED_PREFIX)) return;
-    const wantId = alarm.name.slice(SCHED_PREFIX.length);
-    const res = await browser.storage.local.get(BOT_SCHEDULED_STORAGE_KEY);
-    const list = (res[BOT_SCHEDULED_STORAGE_KEY] as BotScheduledSend[] | undefined) ?? [];
-    const entry = list.find((e) => e.id === wantId);
-    await browser.storage.local.set({
-      [BOT_SCHEDULED_STORAGE_KEY]: list.filter((e) => e.id !== wantId),
-    });
-    if (!entry) return;
+    if (alarm.name !== 'octo-gh-digest') return;
     try {
-      await sendScheduledText(entry.channelId, entry.channelType, entry.text);
-      notify('定时消息已发送', `${entry.label}：${entry.text}`);
+      await githubDigestToOcto();
     } catch (err) {
-      notify('定时发送失败', err instanceof Error ? err.message : String(err));
+      notify('GitHub 汇总失败', err instanceof Error ? err.message : String(err));
     }
   });
 

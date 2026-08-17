@@ -148,8 +148,6 @@ export const BOT_SHARE_TARGET_STORAGE_KEY = 'octoBotShareTarget';
 export const BOT_CLIP_DOC_STORAGE_KEY = 'octoBotClipDoc';
 /** Saved quick-send message templates: string[]. */
 export const BOT_TEMPLATES_STORAGE_KEY = 'octoBotTemplates';
-/** Pending scheduled sends: {id, at, channelId, channelType, label, text}[]. */
-export const BOT_SCHEDULED_STORAGE_KEY = 'octoBotScheduled';
 
 /** GitHub digest: repo ("owner/repo"), optional token, poll interval in minutes (0=off). */
 export const GH_REPO_STORAGE_KEY = 'octoGithubRepo';
@@ -166,14 +164,6 @@ export interface BotShareTarget {
 export interface BotClipDoc {
   docId: string;
   title: string;
-}
-export interface BotScheduledSend {
-  id: string;
-  at: number;
-  channelId: string;
-  channelType: number;
-  label: string;
-  text: string;
 }
 
 export type ExportFormat = 'markdown';
