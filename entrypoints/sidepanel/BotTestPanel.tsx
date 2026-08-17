@@ -293,7 +293,8 @@ export function BotTestPanel({
     try {
       await browser.alarms.clear('octo-gh-digest');
       if (min > 0) await browser.alarms.create('octo-gh-digest', { periodInMinutes: min });
-      setStatus(min > 0 ? `已开启定期汇总，每 ${min} 分钟` : '已关闭定期汇总');
+      const label = min <= 0 ? '' : min < 1 ? `每 ${min * 60} 秒` : `每 ${min} 分钟`;
+      setStatus(min > 0 ? `已开启定期汇总，${label}` : '已关闭定期汇总');
     } catch (err) {
       setError(err instanceof Error ? err.message : '设置定时失败');
     }
@@ -538,6 +539,7 @@ export function BotTestPanel({
           <span className="sr-only">定期频率</span>
           <select value={ghInterval} onChange={(e) => void setGhIntervalPersist(Number(e.currentTarget.value))}>
             <option value={0}>关闭</option>
+            <option value={0.5}>每 30 秒</option>
             <option value={60}>每小时</option>
             <option value={360}>每 6 小时</option>
             <option value={1440}>每天</option>

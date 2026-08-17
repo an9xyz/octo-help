@@ -1,6 +1,6 @@
 import { browser, defineBackground } from '#imports';
 import { MESSAGE_SOURCE, OCTO_MATCHES } from '@/utils/octoShared';
-import { shareToOcto, clipToOcto, githubDigestToOcto } from '@/utils/octoBotActions';
+import { clipToOcto, githubDigestToOcto } from '@/utils/octoBotActions';
 
 const OCTO_URL_PREFIX = OCTO_MATCHES[0].replace('/*', '');
 
@@ -34,7 +34,7 @@ async function activateOctoTab(query?: string): Promise<void> {
 }
 
 export default defineBackground(() => {
-  // ─── Bot: right-click share / clip + periodic GitHub digest ──────────
+  // ─── Bot: right-click clip + periodic GitHub digest ──────────
   function notify(title: string, message: string): void {
     try {
       void browser.notifications?.create({
@@ -51,9 +51,6 @@ export default defineBackground(() => {
   function setupBotMenus(): void {
     if (!browser.contextMenus) return;
     browser.contextMenus.removeAll(() => {
-      browser.contextMenus.create({ id: 'octo-share-selection', title: '发送划词到 Octo', contexts: ['selection'] });
-      browser.contextMenus.create({ id: 'octo-share-link', title: '发送链接到 Octo', contexts: ['link'] });
-      browser.contextMenus.create({ id: 'octo-share-page', title: '发送本页到 Octo', contexts: ['page'] });
       browser.contextMenus.create({ id: 'octo-clip-selection', title: '剪存到 Octo 文档', contexts: ['selection'] });
     });
   }
@@ -70,16 +67,6 @@ export default defineBackground(() => {
           tab?.title || '',
         );
         notify('已剪存到文档', docTitle);
-      } else if (id.startsWith('octo-share')) {
-        const pageUrl = info.pageUrl || tab?.url || '';
-        const meta =
-          id === 'octo-share-selection'
-            ? { title: tab?.title, url: pageUrl, snippet: info.selectionText || '' }
-            : id === 'octo-share-link'
-              ? { title: info.linkUrl, url: info.linkUrl || '' }
-              : { title: tab?.title, url: pageUrl };
-        if (!meta.url && !meta.snippet) return;
-        notify('已发送到 Octo', await shareToOcto(meta));
       }
     } catch (err) {
       notify('操作失败', err instanceof Error ? err.message : String(err));
@@ -89,9 +76,12 @@ export default defineBackground(() => {
   // Periodic GitHub digest: the side panel sets the interval alarm; we fire it.
   browser.alarms?.onAlarm.addListener(async (alarm) => {
     if (alarm.name !== 'octo-gh-digest') return;
+    console.log('[octo] gh-digest alarm fired', new Date().toISOString());
     try {
-      await githubDigestToOcto();
+      const text = await githubDigestToOcto();
+      console.log('[octo] gh-digest sent ok', text.slice(0, 80));
     } catch (err) {
+      console.error('[octo] gh-digest failed', err);
       notify('GitHub 汇总失败', err instanceof Error ? err.message : String(err));
     }
   });

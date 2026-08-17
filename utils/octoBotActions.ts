@@ -30,36 +30,6 @@ import { buildRepoStatusCard, fetchRepoStatus, formatRepoStatus, parseRepo } fro
 
 export class BotNotConfiguredError extends Error {}
 
-export interface ShareMeta {
-  url?: string;
-  title?: string;
-  snippet?: string;
-}
-
-function isHttp(u?: string): u is string {
-  return !!u && /^https?:\/\//i.test(u);
-}
-
-/** A compact share card: title, optional snippet, the link, and an open button. */
-function buildShareCard(m: ShareMeta): Record<string, unknown> {
-  const body: Array<Record<string, unknown>> = [
-    { type: 'TextBlock', text: (m.title || m.url || '').slice(0, 120), weight: 'Bolder', size: 'Medium', wrap: true },
-  ];
-  if (m.snippet && m.snippet.trim()) {
-    body.push({ type: 'TextBlock', text: m.snippet.slice(0, 500), wrap: true, isSubtle: true, spacing: 'Small' });
-  }
-  if (isHttp(m.url)) {
-    body.push({ type: 'TextBlock', text: m.url, size: 'Small', color: 'Accent', wrap: true, spacing: 'Small' });
-  }
-  return {
-    type: 'AdaptiveCard',
-    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-    version: '1.5',
-    body,
-    actions: isHttp(m.url) ? [{ type: 'Action.OpenUrl', title: '🔗 打开链接', url: m.url }] : [],
-  };
-}
-
 async function readConfig(): Promise<{ token: string; baseUrl: string }> {
   const res = await browser.storage.local.get([BOT_TOKEN_STORAGE_KEY, BOT_BASE_URL_STORAGE_KEY]);
   const token = typeof res[BOT_TOKEN_STORAGE_KEY] === 'string' ? res[BOT_TOKEN_STORAGE_KEY] : '';
@@ -68,27 +38,6 @@ async function readConfig(): Promise<{ token: string; baseUrl: string }> {
     OCTO_BOT_API_DEFAULT_BASE;
   if (!token) throw new BotNotConfiguredError('未配置 Bot Token，请先在扩展的 Bot 面板填写');
   return { token, baseUrl };
-}
-
-/** Send text (or a card, when a link is present) to the configured default share
- *  target. Returns the target label. */
-export async function shareToOcto(input: string | ShareMeta): Promise<string> {
-  const { token, baseUrl } = await readConfig();
-  const res = await browser.storage.local.get(BOT_SHARE_TARGET_STORAGE_KEY);
-  const target = res[BOT_SHARE_TARGET_STORAGE_KEY] as BotShareTarget | undefined;
-  if (!target?.channelId) throw new BotNotConfiguredError('未设置默认分享目标，请先在 Bot 面板选群并「设为默认分享目标」');
-  const meta: ShareMeta = typeof input === 'string' ? { snippet: input } : input;
-  const text = [meta.title, meta.snippet, meta.url].filter(Boolean).join('\n') || meta.snippet || meta.url || '';
-  if (isHttp(meta.url) && (await getCardEnabled(baseUrl, token))) {
-    try {
-      await sendBotCard(baseUrl, token, target.channelId, target.channelType, buildShareCard(meta), text);
-      return target.label;
-    } catch {
-      // fall through to plain text
-    }
-  }
-  await sendBotMessage(baseUrl, token, target.channelId, target.channelType, text);
-  return target.label;
 }
 
 /** Append a clip (text + source) to the configured clip doc. Returns the doc title. */
