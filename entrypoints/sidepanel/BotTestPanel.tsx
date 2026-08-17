@@ -621,7 +621,7 @@ export function BotTestPanel({
           设为当前群/子区
         </button>
       </div>
-      <div className="tpl-add">
+      <div className="gh-actions">
         <button type="button" className="secondary-button" disabled={busy !== null} onClick={ghPreviewNow}>
           {busy === 'gh' ? '获取中…' : '仅预览'}
         </button>
