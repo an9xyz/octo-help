@@ -4,6 +4,8 @@ import {
   BOT_CLIP_DOC_STORAGE_KEY,
   BOT_SHARE_TARGET_STORAGE_KEY,
   BOT_TOKEN_STORAGE_KEY,
+  GH_REPO_STORAGE_KEY,
+  GH_TOKEN_STORAGE_KEY,
   type BotClipDoc,
   type BotShareTarget,
 } from './octoShared';
@@ -13,6 +15,7 @@ import {
   buildClipBlocks,
   sendBotMessage,
 } from './octoBotApi';
+import { fetchRepoStatus, formatRepoStatus, parseRepo } from './octoGithub';
 
 /**
  * Storage-backed orchestration for the bot features, shared by the background
@@ -63,4 +66,19 @@ export async function sendScheduledText(
 ): Promise<void> {
   const { token, baseUrl } = await readConfig();
   await sendBotMessage(baseUrl, token, channelId, channelType, text);
+}
+
+/**
+ * Fetch the configured GitHub repo's status, format a digest, and post it to the
+ * default share target. Returns the digest text. Used by the "立即汇总" button and
+ * the periodic alarm.
+ */
+export async function githubDigestToOcto(): Promise<string> {
+  const store = await browser.storage.local.get([GH_REPO_STORAGE_KEY, GH_TOKEN_STORAGE_KEY]);
+  const ref = parseRepo(typeof store[GH_REPO_STORAGE_KEY] === 'string' ? store[GH_REPO_STORAGE_KEY] : '');
+  if (!ref) throw new BotNotConfiguredError('未设置 GitHub 仓库（owner/repo）');
+  const ghToken = typeof store[GH_TOKEN_STORAGE_KEY] === 'string' ? store[GH_TOKEN_STORAGE_KEY] : undefined;
+  const text = formatRepoStatus(await fetchRepoStatus(ref, { token: ghToken || undefined }));
+  await shareToOcto(text);
+  return text;
 }

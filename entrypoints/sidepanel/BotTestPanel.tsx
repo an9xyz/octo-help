@@ -7,6 +7,9 @@ import {
   BOT_SHARE_TARGET_STORAGE_KEY,
   BOT_TEMPLATES_STORAGE_KEY,
   BOT_TOKEN_STORAGE_KEY,
+  GH_INTERVAL_STORAGE_KEY,
+  GH_REPO_STORAGE_KEY,
+  GH_TOKEN_STORAGE_KEY,
   type BotClipDoc,
   type BotScheduledSend,
   type BotShareTarget,
@@ -26,6 +29,8 @@ import {
   type OctoThread,
 } from '@/utils/octoBotApi';
 import { FeatureSection } from './FeatureSection';
+import { fetchRepoStatus, formatRepoStatus, parseRepo } from '@/utils/octoGithub';
+import { githubDigestToOcto } from '@/utils/octoBotActions';
 
 /**
  * Bot API connectivity tester. Self-contained (its own state, its own storage
@@ -48,7 +53,7 @@ export function BotTestPanel({
   const [threads, setThreads] = useState<OctoThread[]>([]);
   const [selectedThread, setSelectedThread] = useState('');
   const [text, setText] = useState('');
-  const [busy, setBusy] = useState<null | 'groups' | 'send' | 'dm' | 'threads' | 'doc' | 'sched'>(null);
+  const [busy, setBusy] = useState<null | 'groups' | 'send' | 'dm' | 'threads' | 'doc' | 'sched' | 'gh'>(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [shareTarget, setShareTarget] = useState<BotShareTarget | null>(null);
@@ -56,6 +61,10 @@ export function BotTestPanel({
   const [templates, setTemplates] = useState<string[]>([]);
   const [newTemplate, setNewTemplate] = useState('');
   const [scheduleAt, setScheduleAt] = useState('');
+  const [ghRepo, setGhRepo] = useState('');
+  const [ghToken, setGhToken] = useState('');
+  const [ghInterval, setGhInterval] = useState(0);
+  const [ghPreview, setGhPreview] = useState('');
 
   useEffect(() => {
     browser.storage.local
@@ -65,6 +74,9 @@ export function BotTestPanel({
         BOT_SHARE_TARGET_STORAGE_KEY,
         BOT_CLIP_DOC_STORAGE_KEY,
         BOT_TEMPLATES_STORAGE_KEY,
+        GH_REPO_STORAGE_KEY,
+        GH_TOKEN_STORAGE_KEY,
+        GH_INTERVAL_STORAGE_KEY,
       ])
       .then((res) => {
         if (typeof res[BOT_TOKEN_STORAGE_KEY] === 'string') setToken(res[BOT_TOKEN_STORAGE_KEY]);
@@ -74,6 +86,9 @@ export function BotTestPanel({
         if (res[BOT_SHARE_TARGET_STORAGE_KEY]) setShareTarget(res[BOT_SHARE_TARGET_STORAGE_KEY] as BotShareTarget);
         if (res[BOT_CLIP_DOC_STORAGE_KEY]) setClipDoc(res[BOT_CLIP_DOC_STORAGE_KEY] as BotClipDoc);
         if (Array.isArray(res[BOT_TEMPLATES_STORAGE_KEY])) setTemplates(res[BOT_TEMPLATES_STORAGE_KEY] as string[]);
+        if (typeof res[GH_REPO_STORAGE_KEY] === 'string') setGhRepo(res[GH_REPO_STORAGE_KEY]);
+        if (typeof res[GH_TOKEN_STORAGE_KEY] === 'string') setGhToken(res[GH_TOKEN_STORAGE_KEY]);
+        if (typeof res[GH_INTERVAL_STORAGE_KEY] === 'number') setGhInterval(res[GH_INTERVAL_STORAGE_KEY]);
       })
       .catch(() => {});
   }, []);
@@ -270,6 +285,55 @@ export function BotTestPanel({
       setError(err instanceof Error ? err.message : '定时设置失败');
     } finally {
       setBusy(null);
+    }
+  };
+
+  const persistGh = (patch: Record<string, unknown>) => browser.storage.local.set(patch);
+
+  const ghPreviewNow = async () => {
+    setError('');
+    setStatus('');
+    const ref = parseRepo(ghRepo);
+    if (!ref) {
+      setError('仓库格式应为 owner/repo 或 GitHub 链接');
+      return;
+    }
+    setBusy('gh');
+    try {
+      const text = formatRepoStatus(await fetchRepoStatus(ref, { token: ghToken.trim() || undefined }));
+      setGhPreview(text);
+      setStatus('已获取仓库状态（未发送）');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '获取失败');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const ghSendNow = async () => {
+    setError('');
+    setStatus('');
+    setBusy('gh');
+    try {
+      const text = await githubDigestToOcto();
+      setGhPreview(text);
+      setStatus('已汇总并发送到默认分享目标 ✓');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '汇总发送失败');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const setGhIntervalPersist = async (min: number) => {
+    setGhInterval(min);
+    await persistGh({ [GH_INTERVAL_STORAGE_KEY]: min });
+    try {
+      await browser.alarms.clear('octo-gh-digest');
+      if (min > 0) await browser.alarms.create('octo-gh-digest', { periodInMinutes: min });
+      setStatus(min > 0 ? `已开启定期汇总，每 ${min} 分钟` : '已关闭定期汇总');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '设置定时失败');
     }
   };
 
@@ -489,6 +553,59 @@ export function BotTestPanel({
           </button>
         </>
       )}
+
+      <div className="config-row is-stacked">
+        <div className="config-copy">
+          <span>GitHub 仓库状态汇总</span>
+          <small>定期把 issue/PR 情况发到默认分享目标·公开仓库无需 token</small>
+        </div>
+        <input
+          className="bot-input"
+          value={ghRepo}
+          onChange={(e) => setGhRepo(e.currentTarget.value)}
+          onBlur={() => void persistGh({ [GH_REPO_STORAGE_KEY]: ghRepo.trim() })}
+          placeholder="owner/repo 或 https://github.com/owner/repo"
+        />
+      </div>
+      <div className="config-row is-stacked">
+        <div className="config-copy">
+          <span>GitHub Token（可选）</span>
+          <small>私有仓库必填；公开仓库只为提高限额（60→5000/小时）</small>
+        </div>
+        <input
+          className="bot-input"
+          type="password"
+          value={ghToken}
+          onChange={(e) => setGhToken(e.currentTarget.value)}
+          onBlur={() => void persistGh({ [GH_TOKEN_STORAGE_KEY]: ghToken.trim() })}
+          placeholder="ghp_...（可留空）"
+          autoComplete="off"
+        />
+      </div>
+      <div className="config-row is-stacked">
+        <div className="config-copy">
+          <span>定期频率</span>
+          <small>到点由后台自动汇总并发送（需保持浏览器运行）</small>
+        </div>
+        <label className="select-wrap">
+          <span className="sr-only">定期频率</span>
+          <select value={ghInterval} onChange={(e) => void setGhIntervalPersist(Number(e.currentTarget.value))}>
+            <option value={0}>关闭</option>
+            <option value={60}>每小时</option>
+            <option value={360}>每 6 小时</option>
+            <option value={1440}>每天</option>
+          </select>
+        </label>
+      </div>
+      <div className="tpl-add">
+        <button type="button" className="secondary-button" disabled={busy !== null} onClick={ghPreviewNow}>
+          {busy === 'gh' ? '获取中…' : '仅预览'}
+        </button>
+        <button type="button" className="primary-button" disabled={busy !== null} onClick={ghSendNow}>
+          立即汇总并发送
+        </button>
+      </div>
+      {ghPreview && <pre className="gh-preview">{ghPreview}</pre>}
 
       {status && <p className="feature-note" role="status">{status}</p>}
       {error && <p className="pet-error bot-error" role="alert">{error}</p>}

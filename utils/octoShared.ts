@@ -151,6 +151,11 @@ export const BOT_TEMPLATES_STORAGE_KEY = 'octoBotTemplates';
 /** Pending scheduled sends: {id, at, channelId, channelType, label, text}[]. */
 export const BOT_SCHEDULED_STORAGE_KEY = 'octoBotScheduled';
 
+/** GitHub digest: repo ("owner/repo"), optional token, poll interval in minutes (0=off). */
+export const GH_REPO_STORAGE_KEY = 'octoGithubRepo';
+export const GH_TOKEN_STORAGE_KEY = 'octoGithubToken';
+export const GH_INTERVAL_STORAGE_KEY = 'octoGithubIntervalMin';
+
 export interface BotShareTarget {
   channelId: string;
   channelType: number;

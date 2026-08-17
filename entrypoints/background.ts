@@ -1,6 +1,6 @@
 import { browser, defineBackground } from '#imports';
 import { MESSAGE_SOURCE, OCTO_MATCHES, BOT_SCHEDULED_STORAGE_KEY, type BotScheduledSend } from '@/utils/octoShared';
-import { shareToOcto, clipToOcto, sendScheduledText } from '@/utils/octoBotActions';
+import { shareToOcto, clipToOcto, sendScheduledText, githubDigestToOcto } from '@/utils/octoBotActions';
 
 const OCTO_URL_PREFIX = OCTO_MATCHES[0].replace('/*', '');
 
@@ -89,6 +89,14 @@ export default defineBackground(() => {
 
   // Scheduled send: the side panel writes an entry + creates an alarm; we fire it.
   browser.alarms?.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === 'octo-gh-digest') {
+      try {
+        await githubDigestToOcto();
+      } catch (err) {
+        notify('GitHub 汇总失败', err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
     if (!alarm.name.startsWith(SCHED_PREFIX)) return;
     const wantId = alarm.name.slice(SCHED_PREFIX.length);
     const res = await browser.storage.local.get(BOT_SCHEDULED_STORAGE_KEY);
