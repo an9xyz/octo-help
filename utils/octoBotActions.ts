@@ -5,6 +5,7 @@ import {
   BOT_SHARE_TARGET_STORAGE_KEY,
   BOT_TOKEN_STORAGE_KEY,
   GH_REPO_STORAGE_KEY,
+  GH_TARGET_STORAGE_KEY,
   GH_TOKEN_STORAGE_KEY,
   type BotClipDoc,
   type BotShareTarget,
@@ -74,11 +75,18 @@ export async function sendScheduledText(
  * the periodic alarm.
  */
 export async function githubDigestToOcto(): Promise<string> {
-  const store = await browser.storage.local.get([GH_REPO_STORAGE_KEY, GH_TOKEN_STORAGE_KEY]);
+  const store = await browser.storage.local.get([GH_REPO_STORAGE_KEY, GH_TOKEN_STORAGE_KEY, GH_TARGET_STORAGE_KEY]);
   const ref = parseRepo(typeof store[GH_REPO_STORAGE_KEY] === 'string' ? store[GH_REPO_STORAGE_KEY] : '');
   if (!ref) throw new BotNotConfiguredError('未设置 GitHub 仓库（owner/repo）');
   const ghToken = typeof store[GH_TOKEN_STORAGE_KEY] === 'string' ? store[GH_TOKEN_STORAGE_KEY] : undefined;
   const text = formatRepoStatus(await fetchRepoStatus(ref, { token: ghToken || undefined }));
-  await shareToOcto(text);
+  // Prefer the digest's own target; fall back to the default share target.
+  const ghTarget = store[GH_TARGET_STORAGE_KEY] as BotShareTarget | undefined;
+  if (ghTarget?.channelId) {
+    const { token, baseUrl } = await readConfig();
+    await sendBotMessage(baseUrl, token, ghTarget.channelId, ghTarget.channelType, text);
+  } else {
+    await shareToOcto(text);
+  }
   return text;
 }

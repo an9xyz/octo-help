@@ -155,6 +155,8 @@ export const BOT_SCHEDULED_STORAGE_KEY = 'octoBotScheduled';
 export const GH_REPO_STORAGE_KEY = 'octoGithubRepo';
 export const GH_TOKEN_STORAGE_KEY = 'octoGithubToken';
 export const GH_INTERVAL_STORAGE_KEY = 'octoGithubIntervalMin';
+/** Dedicated Octo channel for the GitHub digest (BotShareTarget); falls back to the default share target when unset. */
+export const GH_TARGET_STORAGE_KEY = 'octoGithubTarget';
 
 export interface BotShareTarget {
   channelId: string;

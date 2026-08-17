@@ -9,6 +9,7 @@ import {
   BOT_TOKEN_STORAGE_KEY,
   GH_INTERVAL_STORAGE_KEY,
   GH_REPO_STORAGE_KEY,
+  GH_TARGET_STORAGE_KEY,
   GH_TOKEN_STORAGE_KEY,
   type BotClipDoc,
   type BotScheduledSend,
@@ -65,6 +66,7 @@ export function BotTestPanel({
   const [ghToken, setGhToken] = useState('');
   const [ghInterval, setGhInterval] = useState(0);
   const [ghPreview, setGhPreview] = useState('');
+  const [ghTarget, setGhTarget] = useState<BotShareTarget | null>(null);
 
   useEffect(() => {
     browser.storage.local
@@ -77,6 +79,7 @@ export function BotTestPanel({
         GH_REPO_STORAGE_KEY,
         GH_TOKEN_STORAGE_KEY,
         GH_INTERVAL_STORAGE_KEY,
+        GH_TARGET_STORAGE_KEY,
       ])
       .then((res) => {
         if (typeof res[BOT_TOKEN_STORAGE_KEY] === 'string') setToken(res[BOT_TOKEN_STORAGE_KEY]);
@@ -89,6 +92,7 @@ export function BotTestPanel({
         if (typeof res[GH_REPO_STORAGE_KEY] === 'string') setGhRepo(res[GH_REPO_STORAGE_KEY]);
         if (typeof res[GH_TOKEN_STORAGE_KEY] === 'string') setGhToken(res[GH_TOKEN_STORAGE_KEY]);
         if (typeof res[GH_INTERVAL_STORAGE_KEY] === 'number') setGhInterval(res[GH_INTERVAL_STORAGE_KEY]);
+        if (res[GH_TARGET_STORAGE_KEY]) setGhTarget(res[GH_TARGET_STORAGE_KEY] as BotShareTarget);
       })
       .catch(() => {});
   }, []);
@@ -335,6 +339,17 @@ export function BotTestPanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : '设置定时失败');
     }
+  };
+
+  const saveGhTarget = () => {
+    const t = currentTarget();
+    if (!t) {
+      setError('先在上方拉取群列表并选群/子区');
+      return;
+    }
+    setGhTarget(t);
+    void persistGh({ [GH_TARGET_STORAGE_KEY]: t });
+    setStatus(`GitHub 汇总目标已设为「${t.label}」`);
   };
 
   const summary = identity
@@ -585,7 +600,7 @@ export function BotTestPanel({
       <div className="config-row is-stacked">
         <div className="config-copy">
           <span>定期频率</span>
-          <small>到点由后台自动汇总并发送（需保持浏览器运行）</small>
+          <small>到点自动汇总并发送到下方目标（需保持浏览器运行）</small>
         </div>
         <label className="select-wrap">
           <span className="sr-only">定期频率</span>
@@ -596,6 +611,15 @@ export function BotTestPanel({
             <option value={1440}>每天</option>
           </select>
         </label>
+      </div>
+      <div className="config-row is-stacked">
+        <div className="config-copy">
+          <span>汇总发送目标</span>
+          <small>{ghTarget ? `当前：${ghTarget.label}` : '未设置则发到默认分享目标'}</small>
+        </div>
+        <button type="button" className="secondary-button" disabled={busy !== null} onClick={saveGhTarget}>
+          设为当前群/子区
+        </button>
       </div>
       <div className="tpl-add">
         <button type="button" className="secondary-button" disabled={busy !== null} onClick={ghPreviewNow}>
