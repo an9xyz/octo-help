@@ -61,24 +61,58 @@ describe('octoGithub', () => {
     const text = formatRepoStatus(status);
     expect(text).toContain('开放 Issue 2');
     expect(text).toContain('开放 PR 8');
-    expect(text).toContain('最近 Issue');
+    expect(text).toContain('最近开放 Issue');
     expect(text).toContain('最近 PR');
     expect(text).toContain('#9');
   });
 
-  it('builds a valid AdaptiveCard 1.5 with facts and an OpenUrl action', () => {
+  it('flags actionable (good first issue / help wanted) open issues', async () => {
+    const now = new Date().toISOString();
+    const fetchImpl = (async (url: string) => {
+      if (url.endsWith('/pulls?state=open&per_page=1')) {
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => [] } as unknown as Response;
+      }
+      if (url.includes('/pulls?state=all')) {
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => [] } as unknown as Response;
+      }
+      if (url.includes('/issues?')) {
+        return {
+          ok: true, status: 200, headers: { get: () => null },
+          json: async () => [
+            { number: 1, title: 'easy one', state: 'open', updated_at: now, html_url: 'u', labels: [{ name: 'good first issue' }] },
+            { number: 2, title: 'hard', state: 'open', updated_at: now, html_url: 'u', labels: [{ name: 'bug' }] },
+            { number: 3, title: 'help', state: 'open', updated_at: now, html_url: 'u', labels: [{ name: 'Help Wanted' }] },
+          ],
+        } as unknown as Response;
+      }
+      return {
+        ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({ full_name: 'o/r', html_url: 'h', stargazers_count: 1, forks_count: 0, open_issues_count: 3, pushed_at: now }),
+      } as unknown as Response;
+    }) as unknown as typeof fetch;
+    const status = await fetchRepoStatus({ owner: 'o', repo: 'r' }, { fetchImpl });
+    expect(status.actionableIssues.map((i) => i.number)).toEqual([1, 3]);
+  });
+
+  it('builds a valid AdaptiveCard 1.5 with stat tiles and an OpenUrl action', () => {
+    const now = Date.now();
+    const iso = new Date(now).toISOString();
     const card = buildRepoStatusCard({
       fullName: 'o/r', htmlUrl: 'https://github.com/o/r', stars: 5, forks: 1,
-      openIssues: 2, openPrs: 3, pushedAt: new Date().toISOString(),
-      recentIssues: [{ number: 1, title: 'i', state: 'open', updatedAt: new Date().toISOString(), url: 'u' }],
-      recentPrs: [{ number: 2, title: 'p', state: 'merged', updatedAt: new Date().toISOString(), url: 'u' }],
-    });
+      openIssues: 2, openPrs: 3, pushedAt: iso,
+      recentIssues: [{ number: 1, title: 'i', state: 'open', updatedAt: iso, url: 'https://github.com/o/r/issues/1', labels: ['bug'] }],
+      recentPrs: [{ number: 2, title: 'p', state: 'merged', updatedAt: iso, url: 'https://github.com/o/r/pull/2', labels: [] }],
+      actionableIssues: [{ number: 3, title: 'easy', state: 'open', updatedAt: iso, url: 'https://github.com/o/r/issues/3', labels: ['good first issue'] }],
+    }, now);
     expect(card.type).toBe('AdaptiveCard');
     expect(card.version).toBe('1.5');
     const actions = card.actions as Array<{ type: string; url: string }>;
     expect(actions[0]).toMatchObject({ type: 'Action.OpenUrl', url: 'https://github.com/o/r' });
-    const facts = (card.body as Array<{ type: string; facts?: unknown[] }>).find((b) => b.type === 'FactSet');
-    expect(facts?.facts).toHaveLength(2);
+    const cols = (card.body as Array<{ type: string; columns?: unknown[] }>).find((b) => b.type === 'ColumnSet');
+    expect(cols?.columns).toHaveLength(3); // 3 stat tiles
+    // every clickable row carries a valid absolute URL (invalid URLs get the card rejected)
+    const urls = JSON.stringify(card).match(/"url":"[^"]+"/g) ?? [];
+    expect(urls.every((u) => u.includes('https://'))).toBe(true);
   });
 
   it('reports rate-limit with reset minutes when remaining is 0', async () => {

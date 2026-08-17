@@ -24,6 +24,8 @@ export interface RepoItem {
   state: string;
   updatedAt: string;
   url: string;
+  labels: string[];
+  comments?: number;
 }
 
 export interface RepoStatus {
@@ -36,6 +38,17 @@ export interface RepoStatus {
   pushedAt: string;
   recentIssues: RepoItem[];
   recentPrs: RepoItem[];
+  /** Open issues labelled good-first-issue / help-wanted — “which issues can be worked on”. */
+  actionableIssues: RepoItem[];
+}
+
+/** Labels that mark an issue as open for contribution. */
+const ACTIONABLE_LABELS = [
+  'good first issue', 'good-first-issue', 'help wanted', 'help-wanted',
+  'up-for-grabs', 'up for grabs', 'e-easy', 'easy',
+];
+function isActionable(labels: string[]): boolean {
+  return labels.some((l) => ACTIONABLE_LABELS.includes(l.toLowerCase().trim()));
 }
 
 export class GithubError extends Error {
@@ -105,7 +118,8 @@ async function ghFetch(path: string, options: GithubOptions): Promise<Response> 
   }
 }
 
-/** Fetch a repo's issue/PR status snapshot: counts + recent 10 issues and 10 PRs. */
+/** Fetch a repo's issue/PR status: counts, recent PRs, recent OPEN issues, and
+ *  the open issues that are labelled for contribution (“which can be worked on”). */
 export async function fetchRepoStatus(ref: RepoRef, options: GithubOptions = {}): Promise<RepoStatus> {
   const base = `/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}`;
   const meta = (await (await ghFetch(base, options)).json()) as {
@@ -120,11 +134,27 @@ export async function fetchRepoStatus(ref: RepoRef, options: GithubOptions = {})
   // Recent 10 PRs (any state; merged shows as 'merged').
   const prsRaw = (await (
     await ghFetch(`${base}/pulls?state=all&sort=updated&direction=desc&per_page=10`, options)
-  ).json()) as Array<{ number: number; title: string; state: string; merged_at: string | null; updated_at: string; html_url: string }>;
-  // Recent issues: the issues endpoint includes PRs, so over-fetch then drop them.
+  ).json()) as Array<{ number: number; title: string; state: string; merged_at: string | null; updated_at: string; html_url: string; labels?: Array<{ name: string }> }>;
+
+  // Open issues (the issues endpoint includes PRs, so drop them). Used for both
+  // the recent-open list and the actionable (labelled) subset.
   const issuesRaw = (await (
-    await ghFetch(`${base}/issues?state=all&sort=updated&direction=desc&per_page=25`, options)
-  ).json()) as Array<{ number: number; title: string; state: string; updated_at: string; html_url: string; pull_request?: unknown }>;
+    await ghFetch(`${base}/issues?state=open&sort=updated&direction=desc&per_page=40`, options)
+  ).json()) as Array<{
+    number: number; title: string; state: string; updated_at: string; html_url: string;
+    pull_request?: unknown; comments?: number; labels?: Array<{ name: string }>;
+  }>;
+  const openIssueItems: RepoItem[] = issuesRaw
+    .filter((r) => !r.pull_request)
+    .map((r) => ({
+      number: r.number,
+      title: r.title,
+      state: r.state,
+      updatedAt: r.updated_at,
+      url: r.html_url,
+      comments: r.comments,
+      labels: (r.labels ?? []).map((l) => l.name),
+    }));
 
   return {
     fullName: meta.full_name,
@@ -140,11 +170,10 @@ export async function fetchRepoStatus(ref: RepoRef, options: GithubOptions = {})
       state: r.merged_at ? 'merged' : r.state,
       updatedAt: r.updated_at,
       url: r.html_url,
+      labels: (r.labels ?? []).map((l) => l.name),
     })),
-    recentIssues: issuesRaw
-      .filter((r) => !r.pull_request)
-      .slice(0, 10)
-      .map((r) => ({ number: r.number, title: r.title, state: r.state, updatedAt: r.updated_at, url: r.html_url })),
+    recentIssues: openIssueItems.slice(0, 10),
+    actionableIssues: openIssueItems.filter((it) => isActionable(it.labels)).slice(0, 8),
   };
 }
 
@@ -165,20 +194,30 @@ function mark(state: string): string {
   return '⚪'; // closed
 }
 
-function titleLine(item: RepoItem, now: number): string {
-  const t = item.title.length > 42 ? item.title.slice(0, 42) + '…' : item.title;
-  return `${mark(item.state)} #${item.number} ${t}（${ago(item.updatedAt, now)}）`;
+function clip(t: string, n = 44): string {
+  return t.length > n ? t.slice(0, n) + '…' : t;
 }
 
-/** Format a plain-text digest for an Octo message or on-screen preview. */
+function titleLine(item: RepoItem, now: number): string {
+  return `${mark(item.state)} #${item.number} ${clip(item.title)}（${ago(item.updatedAt, now)}）`;
+}
+
+/** Format a plain-text digest (also the card's fallback text). */
 export function formatRepoStatus(s: RepoStatus, now = Date.now()): string {
   const lines = [
     `📊 ${s.fullName}`,
     `★ ${s.stars} · Fork ${s.forks} · 推送 ${ago(s.pushedAt, now)}`,
-    `🟢 开放 Issue ${s.openIssues} · 🔀 开放 PR ${s.openPrs}`,
+    `🟢 开放 Issue ${s.openIssues} · 🔀 开放 PR ${s.openPrs} · 🙋 可认领 ${s.actionableIssues.length}`,
   ];
+  if (s.actionableIssues.length) {
+    lines.push('', '🙋 可以改的 Issue');
+    for (const it of s.actionableIssues) {
+      const tags = it.labels.length ? ` [${it.labels.slice(0, 3).join(', ')}]` : '';
+      lines.push(`• #${it.number} ${clip(it.title)}${tags}`);
+    }
+  }
   if (s.recentIssues.length) {
-    lines.push('', `📋 最近 Issue（${s.recentIssues.length}）`);
+    lines.push('', `📋 最近开放 Issue（${s.recentIssues.length}）`);
     for (const it of s.recentIssues) lines.push(titleLine(it, now));
   }
   if (s.recentPrs.length) {
@@ -188,41 +227,122 @@ export function formatRepoStatus(s: RepoStatus, now = Date.now()): string {
   return lines.join('\n');
 }
 
-/**
- * Build an Adaptive Cards 1.5 display card (octo/v1) for the digest. Verified
- * elements: TextBlock, FactSet, ActionSet/Action.OpenUrl. Kept well under the
- * server limits (200 nodes / 512 KB): a header, a fact set, two capped lists.
- */
+// ─── Adaptive Card (octo/v1 display) ───────────────────────────────────
+// Elements verified enabled: TextBlock, FactSet, Container, ColumnSet,
+// ActionSet/Action.OpenUrl. Container.selectAction(OpenUrl) makes a whole row
+// open its issue/PR on click. Kept under limits (200 nodes / depth 16 / 512KB).
+
+type ACNode = Record<string, unknown>;
+
+function stateColor(state: string): string {
+  if (state === 'open') return 'Good';
+  if (state === 'merged') return 'Accent';
+  return 'Attention'; // closed
+}
+
+/** A stat tile: big number over a small label, tinted by container style. */
+function statTile(value: number, label: string, style: string): ACNode {
+  return {
+    type: 'Column',
+    width: 'stretch',
+    items: [
+      {
+        type: 'Container',
+        style,
+        bleed: false,
+        items: [
+          { type: 'TextBlock', text: String(value), size: 'ExtraLarge', weight: 'Bolder', horizontalAlignment: 'Center', spacing: 'None' },
+          { type: 'TextBlock', text: label, size: 'Small', isSubtle: true, horizontalAlignment: 'Center', spacing: 'None', wrap: true },
+        ],
+      },
+    ],
+  };
+}
+
+/** One clickable list row: `#N title`, an optional labels/meta subline. */
+function itemRow(it: RepoItem, now: number, showLabels: boolean): ACNode {
+  const items: ACNode[] = [
+    {
+      type: 'TextBlock',
+      text: `**#${it.number}** ${clip(it.title, 52)}`,
+      wrap: true,
+      color: stateColor(it.state),
+      spacing: 'None',
+    },
+  ];
+  const meta: string[] = [];
+  if (showLabels && it.labels.length) meta.push(it.labels.slice(0, 3).join(' · '));
+  meta.push(ago(it.updatedAt, now));
+  if (typeof it.comments === 'number' && it.comments > 0) meta.push(`💬 ${it.comments}`);
+  items.push({ type: 'TextBlock', text: meta.join('  ·  '), size: 'Small', isSubtle: true, spacing: 'None', wrap: true });
+  return {
+    type: 'Container',
+    spacing: 'Small',
+    separator: true,
+    selectAction: { type: 'Action.OpenUrl', title: `#${it.number}`, url: it.url },
+    items,
+  };
+}
+
+function sectionHeader(text: string): ACNode {
+  return { type: 'TextBlock', text, weight: 'Bolder', size: 'Medium', spacing: 'Medium', wrap: true };
+}
+
+/** Build a polished Adaptive Cards 1.5 display card for the digest. */
 export function buildRepoStatusCard(s: RepoStatus, now = Date.now()): Record<string, unknown> {
-  const body: Array<Record<string, unknown>> = [
-    { type: 'TextBlock', text: `📊 ${s.fullName}`, weight: 'Bolder', size: 'Large', wrap: true },
+  const body: ACNode[] = [
+    {
+      type: 'TextBlock',
+      text: `📊 ${s.fullName}`,
+      weight: 'Bolder',
+      size: 'Large',
+      wrap: true,
+      spacing: 'None',
+    },
     {
       type: 'TextBlock',
       text: `★ ${s.stars} · Fork ${s.forks} · 推送 ${ago(s.pushedAt, now)}`,
       isSubtle: true,
+      size: 'Small',
       spacing: 'None',
       wrap: true,
     },
     {
-      type: 'FactSet',
-      facts: [
-        { title: '🟢 开放 Issue', value: String(s.openIssues) },
-        { title: '🔀 开放 PR', value: String(s.openPrs) },
+      type: 'ColumnSet',
+      spacing: 'Medium',
+      columns: [
+        statTile(s.openIssues, '开放 Issue', 'attention'),
+        statTile(s.openPrs, '开放 PR', 'accent'),
+        statTile(s.actionableIssues.length, '可认领', 'good'),
       ],
     },
   ];
-  const section = (title: string, items: RepoItem[]) => {
-    if (!items.length) return;
-    body.push({ type: 'TextBlock', text: title, weight: 'Bolder', spacing: 'Medium', wrap: true });
-    for (const it of items) body.push({ type: 'TextBlock', text: titleLine(it, now), wrap: true, spacing: 'Small' });
-  };
-  section(`📋 最近 Issue（${s.recentIssues.length}）`, s.recentIssues);
-  section(`🔀 最近 PR（${s.recentPrs.length}）`, s.recentPrs);
+
+  if (s.actionableIssues.length) {
+    body.push(sectionHeader('🙋 可以改的 Issue'));
+    body.push({
+      type: 'Container',
+      style: 'good',
+      spacing: 'Small',
+      items: s.actionableIssues.map((it) => itemRow(it, now, true)),
+    });
+  }
+
+  if (s.recentIssues.length) {
+    body.push(sectionHeader(`📋 最近开放 Issue（${s.recentIssues.length}）`));
+    for (const it of s.recentIssues) body.push(itemRow(it, now, true));
+  }
+
+  if (s.recentPrs.length) {
+    body.push(sectionHeader(`🔀 最近 PR（${s.recentPrs.length}）`));
+    for (const it of s.recentPrs) body.push(itemRow(it, now, false));
+  }
+
   return {
     type: 'AdaptiveCard',
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
     version: '1.5',
     body,
-    actions: [{ type: 'Action.OpenUrl', title: '打开仓库', url: s.htmlUrl }],
+    actions: [{ type: 'Action.OpenUrl', title: '🔗 打开仓库', url: s.htmlUrl }],
   };
 }

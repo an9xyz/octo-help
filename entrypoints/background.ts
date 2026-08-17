@@ -73,14 +73,15 @@ export default defineBackground(() => {
         );
         notify('已剪存到文档', docTitle);
       } else if (id.startsWith('octo-share')) {
-        const text =
+        const pageUrl = info.pageUrl || tab?.url || '';
+        const meta =
           id === 'octo-share-selection'
-            ? info.selectionText || ''
+            ? { title: tab?.title, url: pageUrl, snippet: info.selectionText || '' }
             : id === 'octo-share-link'
-              ? info.linkUrl || ''
-              : `${tab?.title || ''}\n${info.pageUrl || tab?.url || ''}`.trim();
-        if (!text) return;
-        notify('已发送到 Octo', await shareToOcto(text));
+              ? { title: info.linkUrl, url: info.linkUrl || '' }
+              : { title: tab?.title, url: pageUrl };
+        if (!meta.url && !meta.snippet) return;
+        notify('已发送到 Octo', await shareToOcto(meta));
       }
     } catch (err) {
       notify('操作失败', err instanceof Error ? err.message : String(err));
