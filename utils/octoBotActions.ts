@@ -5,7 +5,6 @@ import {
   BOT_SHARE_TARGET_STORAGE_KEY,
   BOT_TOKEN_STORAGE_KEY,
   GH_REPO_STORAGE_KEY,
-  GH_TARGET_STORAGE_KEY,
   GH_TOKEN_STORAGE_KEY,
   type BotClipDoc,
   type BotShareTarget,
@@ -108,24 +107,19 @@ export async function clipToOcto(text: string, url: string, title: string): Prom
  * the periodic alarm.
  */
 export async function githubDigestToOcto(): Promise<string> {
-  const store = await browser.storage.local.get([GH_REPO_STORAGE_KEY, GH_TOKEN_STORAGE_KEY, GH_TARGET_STORAGE_KEY]);
+  const store = await browser.storage.local.get([GH_REPO_STORAGE_KEY, GH_TOKEN_STORAGE_KEY]);
   const ref = parseRepo(typeof store[GH_REPO_STORAGE_KEY] === 'string' ? store[GH_REPO_STORAGE_KEY] : '');
   if (!ref) throw new BotNotConfiguredError('未设置 GitHub 仓库（owner/repo）');
   const ghToken = typeof store[GH_TOKEN_STORAGE_KEY] === 'string' ? store[GH_TOKEN_STORAGE_KEY] : undefined;
   const status = await fetchRepoStatus(ref, { token: ghToken || undefined });
   const text = formatRepoStatus(status);
 
-  // Resolve the target: the digest's own channel, else the default share target.
+  // Post to the single shared send target (the same one right-click share uses).
   const { token, baseUrl } = await readConfig();
-  const ghTarget = store[GH_TARGET_STORAGE_KEY] as BotShareTarget | undefined;
-  let target = ghTarget?.channelId ? ghTarget : undefined;
-  if (!target) {
-    const dflt = (await browser.storage.local.get(BOT_SHARE_TARGET_STORAGE_KEY))[BOT_SHARE_TARGET_STORAGE_KEY] as
-      | BotShareTarget
-      | undefined;
-    if (!dflt?.channelId) throw new BotNotConfiguredError('未设置汇总目标，请在 Bot 面板选群并设为汇总目标');
-    target = dflt;
-  }
+  const target = (await browser.storage.local.get(BOT_SHARE_TARGET_STORAGE_KEY))[BOT_SHARE_TARGET_STORAGE_KEY] as
+    | BotShareTarget
+    | undefined;
+  if (!target?.channelId) throw new BotNotConfiguredError('未设置发送目标，请在 Bot 面板选群并「设为发送目标」');
 
   // Prefer an Adaptive Card; fall back to plain text if cards are disabled or rejected.
   if (await getCardEnabled(baseUrl, token)) {
