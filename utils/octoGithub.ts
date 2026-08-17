@@ -187,3 +187,42 @@ export function formatRepoStatus(s: RepoStatus, now = Date.now()): string {
   }
   return lines.join('\n');
 }
+
+/**
+ * Build an Adaptive Cards 1.5 display card (octo/v1) for the digest. Verified
+ * elements: TextBlock, FactSet, ActionSet/Action.OpenUrl. Kept well under the
+ * server limits (200 nodes / 512 KB): a header, a fact set, two capped lists.
+ */
+export function buildRepoStatusCard(s: RepoStatus, now = Date.now()): Record<string, unknown> {
+  const body: Array<Record<string, unknown>> = [
+    { type: 'TextBlock', text: `📊 ${s.fullName}`, weight: 'Bolder', size: 'Large', wrap: true },
+    {
+      type: 'TextBlock',
+      text: `★ ${s.stars} · Fork ${s.forks} · 推送 ${ago(s.pushedAt, now)}`,
+      isSubtle: true,
+      spacing: 'None',
+      wrap: true,
+    },
+    {
+      type: 'FactSet',
+      facts: [
+        { title: '🟢 开放 Issue', value: String(s.openIssues) },
+        { title: '🔀 开放 PR', value: String(s.openPrs) },
+      ],
+    },
+  ];
+  const section = (title: string, items: RepoItem[]) => {
+    if (!items.length) return;
+    body.push({ type: 'TextBlock', text: title, weight: 'Bolder', spacing: 'Medium', wrap: true });
+    for (const it of items) body.push({ type: 'TextBlock', text: titleLine(it, now), wrap: true, spacing: 'Small' });
+  };
+  section(`📋 最近 Issue（${s.recentIssues.length}）`, s.recentIssues);
+  section(`🔀 最近 PR（${s.recentPrs.length}）`, s.recentPrs);
+  return {
+    type: 'AdaptiveCard',
+    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+    version: '1.5',
+    body,
+    actions: [{ type: 'Action.OpenUrl', title: '打开仓库', url: s.htmlUrl }],
+  };
+}

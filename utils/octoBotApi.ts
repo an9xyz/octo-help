@@ -208,6 +208,62 @@ export function sendBotGroupMessage(
   return sendBotMessage(baseUrl, token, groupNo, CHANNEL_TYPE_GROUP, text, options);
 }
 
+// ─── Interactive Card (payload.type=17, Adaptive Cards 1.5) ──────────────────
+// Verified live against im.deepminer.com.cn: GET /v1/bot/card/profile reports
+// card_enabled; sending payload {type:17, card:<AC1.5 JSON>, profile:'octo/v1',
+// card_version:'1.5', plain:<fallback>} returns a message_id. type 17 is the
+// InteractiveCard (≠ type 7 名片/contact card).
+
+export const CARD_PROFILE_DISPLAY = 'octo/v1';
+export const CARD_VERSION = '1.5';
+
+/** Does this bot/server have cards enabled? Feature-detect before sending one. */
+export async function getCardEnabled(
+  baseUrl: string,
+  token: string,
+  options: BotRequestOptions = {},
+): Promise<boolean> {
+  try {
+    const res = await botRequest<{ enabled?: boolean; config?: { card_enabled?: boolean } }>(
+      baseUrl,
+      '/v1/bot/card/profile',
+      token,
+      { method: 'GET' },
+      options,
+    );
+    return res?.enabled !== false && res?.config?.card_enabled !== false;
+  } catch {
+    return false;
+  }
+}
+
+/** Send an Adaptive Cards 1.5 display card (payload.type=17). `plain` is the
+ *  old-client fallback text (server recomputes it authoritatively). */
+export async function sendBotCard(
+  baseUrl: string,
+  token: string,
+  channelId: string,
+  channelType: number,
+  card: Record<string, unknown>,
+  plain: string,
+  options: BotRequestOptions = {},
+): Promise<{ message_id?: number }> {
+  return botRequest(
+    baseUrl,
+    '/v1/bot/sendMessage',
+    token,
+    {
+      method: 'POST',
+      body: {
+        channel_id: channelId,
+        channel_type: channelType,
+        payload: { type: 17, card, profile: CARD_PROFILE_DISPLAY, card_version: CARD_VERSION, plain },
+      },
+    },
+    options,
+  );
+}
+
 // ─── Docs (剪存到文档) ────────────────────────────────────────────────
 // Verified live: body edits go through GET .../content (ProseMirror doc JSON +
 // opaque baseVersion) then PATCH .../content with If-Match + block ops. Append

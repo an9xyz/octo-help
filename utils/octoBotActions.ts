@@ -14,9 +14,11 @@ import {
   OCTO_BOT_API_DEFAULT_BASE,
   appendDocBlocks,
   buildClipBlocks,
+  getCardEnabled,
+  sendBotCard,
   sendBotMessage,
 } from './octoBotApi';
-import { fetchRepoStatus, formatRepoStatus, parseRepo } from './octoGithub';
+import { buildRepoStatusCard, fetchRepoStatus, formatRepoStatus, parseRepo } from './octoGithub';
 
 /**
  * Storage-backed orchestration for the bot features, shared by the background
@@ -79,14 +81,30 @@ export async function githubDigestToOcto(): Promise<string> {
   const ref = parseRepo(typeof store[GH_REPO_STORAGE_KEY] === 'string' ? store[GH_REPO_STORAGE_KEY] : '');
   if (!ref) throw new BotNotConfiguredError('未设置 GitHub 仓库（owner/repo）');
   const ghToken = typeof store[GH_TOKEN_STORAGE_KEY] === 'string' ? store[GH_TOKEN_STORAGE_KEY] : undefined;
-  const text = formatRepoStatus(await fetchRepoStatus(ref, { token: ghToken || undefined }));
-  // Prefer the digest's own target; fall back to the default share target.
+  const status = await fetchRepoStatus(ref, { token: ghToken || undefined });
+  const text = formatRepoStatus(status);
+
+  // Resolve the target: the digest's own channel, else the default share target.
+  const { token, baseUrl } = await readConfig();
   const ghTarget = store[GH_TARGET_STORAGE_KEY] as BotShareTarget | undefined;
-  if (ghTarget?.channelId) {
-    const { token, baseUrl } = await readConfig();
-    await sendBotMessage(baseUrl, token, ghTarget.channelId, ghTarget.channelType, text);
-  } else {
-    await shareToOcto(text);
+  let target = ghTarget?.channelId ? ghTarget : undefined;
+  if (!target) {
+    const dflt = (await browser.storage.local.get(BOT_SHARE_TARGET_STORAGE_KEY))[BOT_SHARE_TARGET_STORAGE_KEY] as
+      | BotShareTarget
+      | undefined;
+    if (!dflt?.channelId) throw new BotNotConfiguredError('未设置汇总目标，请在 Bot 面板选群并设为汇总目标');
+    target = dflt;
   }
+
+  // Prefer an Adaptive Card; fall back to plain text if cards are disabled or rejected.
+  if (await getCardEnabled(baseUrl, token)) {
+    try {
+      await sendBotCard(baseUrl, token, target.channelId, target.channelType, buildRepoStatusCard(status), text);
+      return text;
+    } catch {
+      // fall through to text
+    }
+  }
+  await sendBotMessage(baseUrl, token, target.channelId, target.channelType, text);
   return text;
 }

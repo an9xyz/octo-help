@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseRepo, countFromLink, fetchRepoStatus, formatRepoStatus } from './octoGithub';
+import { parseRepo, countFromLink, fetchRepoStatus, formatRepoStatus, buildRepoStatusCard } from './octoGithub';
 
 describe('octoGithub', () => {
   it('parses owner/repo and github URLs', () => {
@@ -64,6 +64,21 @@ describe('octoGithub', () => {
     expect(text).toContain('最近 Issue');
     expect(text).toContain('最近 PR');
     expect(text).toContain('#9');
+  });
+
+  it('builds a valid AdaptiveCard 1.5 with facts and an OpenUrl action', () => {
+    const card = buildRepoStatusCard({
+      fullName: 'o/r', htmlUrl: 'https://github.com/o/r', stars: 5, forks: 1,
+      openIssues: 2, openPrs: 3, pushedAt: new Date().toISOString(),
+      recentIssues: [{ number: 1, title: 'i', state: 'open', updatedAt: new Date().toISOString(), url: 'u' }],
+      recentPrs: [{ number: 2, title: 'p', state: 'merged', updatedAt: new Date().toISOString(), url: 'u' }],
+    });
+    expect(card.type).toBe('AdaptiveCard');
+    expect(card.version).toBe('1.5');
+    const actions = card.actions as Array<{ type: string; url: string }>;
+    expect(actions[0]).toMatchObject({ type: 'Action.OpenUrl', url: 'https://github.com/o/r' });
+    const facts = (card.body as Array<{ type: string; facts?: unknown[] }>).find((b) => b.type === 'FactSet');
+    expect(facts?.facts).toHaveLength(2);
   });
 
   it('reports rate-limit with reset minutes when remaining is 0', async () => {
