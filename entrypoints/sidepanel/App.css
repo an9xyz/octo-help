@@ -152,7 +152,7 @@ select:disabled {
 
 .panel-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 3px;
   margin: 0 2px 12px;
   padding: 3px;
@@ -180,7 +180,8 @@ select:disabled {
 }
 
 .settings-stack[data-tab='general'] > .feature[data-group='conversation'],
-.settings-stack[data-tab='conversation'] > .feature[data-group='general'] {
+.settings-stack[data-tab='conversation'] > .feature[data-group='general'],
+.settings-stack[data-tab='bot'] {
   display: none;
 }
 
@@ -1501,3 +1502,70 @@ select:disabled {
   }
 }
 
+
+/* Bot API test panel inputs */
+.bot-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  border: 1px solid var(--border, #d0d0d8);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: inherit;
+}
+.bot-input:focus {
+  outline: none;
+  border-color: var(--accent, #6c8cff);
+}
+textarea.bot-input {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* Bot test panel: consistent full-width controls + aligned buttons */
+.bot-panel {
+  display: flex;
+  flex-direction: column;
+}
+.bot-panel .config-row.is-stacked {
+  margin: 0 13px;
+  padding: 12px 0;
+}
+.bot-panel .config-row.is-stacked + .config-row.is-stacked {
+  border-top: 1px solid var(--line);
+}
+.bot-panel .select-wrap {
+  flex: 1 1 auto;
+  width: 100%;
+}
+.bot-panel .select-wrap select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  font-size: 12px;
+}
+.bot-panel .bot-input {
+  margin-top: 0;
+}
+/* Buttons align with the inputs (same 13px gutter) and span full width */
+.bot-panel .secondary-button,
+.bot-panel .primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: auto;
+  height: 38px;
+  min-height: 38px;
+  margin: 14px 13px 0;
+  border-radius: 8px;
+}
+.bot-panel .secondary-button {
+  font-size: 12px;
+}
+.bot-panel .feature-note,
+.bot-panel .bot-error {
+  margin: 10px 13px 0;
+}

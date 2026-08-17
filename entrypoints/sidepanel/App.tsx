@@ -48,6 +48,7 @@ import {
 import { isBuiltInCompanionId, isStoredDesktopPet } from '@/utils/octoPetState';
 import { isConvCompactLevel } from '@/utils/octoSettingsParsers';
 import { FeatureSection } from './FeatureSection';
+import { BotTestPanel } from './BotTestPanel';
 import { ThemePicker, ThemeSwatch } from './ThemePicker';
 import { APP_INITIAL_STATE, appReducer, type AppState, type BooleanSettingKey } from './state';
 import { countFoldedConversations, normalizeStoredId, readCompatReport } from './helpers';
@@ -91,7 +92,7 @@ const CONV_COMPACT_OPTIONS: Array<{ id: ConvCompactLevel; label: string; summary
 
 function App() {
   const [state, dispatch] = useReducer(appReducer, APP_INITIAL_STATE);
-  const [panelTab, setPanelTab] = useState<'general' | 'conversation'>('general');
+  const [panelTab, setPanelTab] = useState<'general' | 'conversation' | 'bot'>('general');
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -528,6 +529,14 @@ function App() {
           onClick={() => setPanelTab('conversation')}
         >
           会话列表
+        </button>
+        <button
+          type="button"
+          className={panelTab === 'bot' ? 'is-active' : ''}
+          aria-pressed={panelTab === 'bot'}
+          onClick={() => setPanelTab('bot')}
+        >
+          Bot
         </button>
       </nav>
 
@@ -1094,6 +1103,8 @@ function App() {
         </FeatureSection>
 
       </div>
+
+      {panelTab === 'bot' && <BotTestPanel open onToggleOpen={() => {}} />}
 
       <p className="footnote">仅在 im.deepminer.com.cn 生效 · 所有处理均在本地完成</p>
 

@@ -136,6 +136,12 @@ export const EXPORT_REQUEST_KEY = 'octoExportRequest';
 /** storage.local key where the export result is stored for the side panel. */
 export const EXPORT_RESULT_KEY = 'octoExportResult';
 
+/** storage.local keys for the Bot API test panel: user-supplied bot token and
+ *  gateway base URL. The token is an account-level bearer credential persisted
+ *  in extension storage by explicit user action (see docs/spec-clip-to-doc.md §10). */
+export const BOT_TOKEN_STORAGE_KEY = 'octoBotToken';
+export const BOT_BASE_URL_STORAGE_KEY = 'octoBotBaseUrl';
+
 export type ExportFormat = 'markdown';
 
 export interface DesktopPetAnimationManifest {

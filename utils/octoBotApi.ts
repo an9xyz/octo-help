@@ -1,0 +1,208 @@
+/**
+ * Minimal WRITE client for Octo's Bot REST API (the same surface octo-cli uses).
+ *
+ * Unlike utils/octoApi.ts — which is read-only, same-origin, and authenticates
+ * with the page session's `token` header — this talks to the Bot gateway with a
+ * user-supplied **bot token** via `Authorization: Bearer`. It exists to test the
+ * end-to-end path: list the bot's groups, then make the bot speak in one.
+ *
+ * Auth/route facts verified against Mininglamp-OSS/octo-cli:
+ *   - Bearer header:           internal/client/client.go:954
+ *   - Base URL default:        internal/config/config.go:31  (https://im.deepminer.com.cn)
+ *   - GET  /v1/bot/groups:     specs/group.json   → [{group_no, name, space_id}]
+ *   - POST /v1/bot/sendMessage:specs/message.json → {channel_id, channel_type, payload}
+ *
+ * Group send (channel_type=2) requires a **User Bot** token (bf_); App Bot
+ * (app_) is DM-only and the server rejects it.
+ */
+
+export const OCTO_BOT_API_DEFAULT_BASE = 'https://im.deepminer.com.cn';
+
+/** channel_type: 1=DM, 2=group, 5=thread (message.json). */
+export const CHANNEL_TYPE_DM = 1;
+export const CHANNEL_TYPE_GROUP = 2;
+export const CHANNEL_TYPE_THREAD = 5;
+
+export interface BotIdentity {
+  robot_id: string;
+  name: string;
+  owner_uid: string;
+  /** DM channel to the bot's owner — a target that always exists, for self-tests. */
+  owner_channel_id: string;
+}
+
+export interface OctoGroup {
+  group_no: string;
+  name: string;
+  space_id?: string;
+}
+
+/** A thread (子区) inside a group. `channel_id` is the `{group_no}____{short_id}`
+ *  composite used as the send target with channel_type=5 (verified live). */
+export interface OctoThread {
+  short_id: string;
+  group_no: string;
+  channel_id: string;
+  name: string;
+  member_count?: number;
+  message_count?: number;
+}
+
+export class OctoBotApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'OctoBotApiError';
+  }
+}
+
+interface BotRequestOptions {
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
+}
+
+const DEFAULT_TIMEOUT_MS = 10000;
+
+/** Strip a trailing slash so `${base}/v1/...` never doubles up. */
+function normalizeBase(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, '');
+}
+
+async function botRequest<T>(
+  baseUrl: string,
+  path: string,
+  token: string,
+  init: { method: string; body?: unknown },
+  options: BotRequestOptions,
+): Promise<T> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  try {
+    const response = await fetchImpl(`${normalizeBase(baseUrl)}${path}`, {
+      method: init.method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    const parsed = text ? safeJson(text) : null;
+    if (!response.ok) {
+      const env = (parsed ?? {}) as {
+        msg?: string;
+        error?: { code?: string; message?: string };
+      };
+      throw new OctoBotApiError(
+        env.error?.message || env.msg || `HTTP ${response.status}`,
+        response.status,
+        env.error?.code,
+      );
+    }
+    return parsed as T;
+  } catch (err) {
+    if (err instanceof OctoBotApiError) throw err;
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new OctoBotApiError('请求超时', 0);
+    }
+    throw new OctoBotApiError(err instanceof Error ? err.message : '网络请求失败', 0);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Authenticate the bot and read its identity. Routes by token prefix (app_ =
+ * App Bot, bf_ = User Bot). owner_channel_id is a DM channel that always exists,
+ * so it doubles as a zero-setup send target for connectivity tests.
+ */
+export async function registerBot(
+  baseUrl: string,
+  token: string,
+  options: BotRequestOptions = {},
+): Promise<BotIdentity> {
+  return botRequest<BotIdentity>(baseUrl, '/v1/bot/register', token, { method: 'POST', body: {} }, options);
+}
+
+/** List groups the bot is a member of. Returns [] when the bot is in none
+ *  (the API answers `null`, not `[]`, in that case). */
+export async function listBotGroups(
+  baseUrl: string,
+  token: string,
+  options: BotRequestOptions = {},
+): Promise<OctoGroup[]> {
+  const data = await botRequest<unknown>(baseUrl, '/v1/bot/groups', token, { method: 'GET' }, options);
+  if (!Array.isArray(data)) return [];
+  return data.filter(
+    (g): g is OctoGroup => !!g && typeof (g as OctoGroup).group_no === 'string',
+  );
+}
+
+/** List threads (子区) in a group. Empty array when the group has none. */
+export async function listGroupThreads(
+  baseUrl: string,
+  token: string,
+  groupNo: string,
+  options: BotRequestOptions = {},
+): Promise<OctoThread[]> {
+  const data = await botRequest<unknown>(
+    baseUrl,
+    `/v1/bot/groups/${encodeURIComponent(groupNo)}/threads`,
+    token,
+    { method: 'GET' },
+    options,
+  );
+  if (!Array.isArray(data)) return [];
+  return data.filter(
+    (t): t is OctoThread => !!t && typeof (t as OctoThread).channel_id === 'string',
+  );
+}
+
+/** Send a plain-text message to any channel as the bot. Returns the server result. */
+export async function sendBotMessage(
+  baseUrl: string,
+  token: string,
+  channelId: string,
+  channelType: number,
+  text: string,
+  options: BotRequestOptions = {},
+): Promise<{ message_id?: number; message_seq?: number; client_msg_no?: string }> {
+  return botRequest(
+    baseUrl,
+    '/v1/bot/sendMessage',
+    token,
+    {
+      method: 'POST',
+      body: {
+        channel_id: channelId,
+        channel_type: channelType,
+        payload: { type: 1, content: text },
+      },
+    },
+    options,
+  );
+}
+
+/** Send a plain-text message to a group as the bot. */
+export function sendBotGroupMessage(
+  baseUrl: string,
+  token: string,
+  groupNo: string,
+  text: string,
+  options: BotRequestOptions = {},
+) {
+  return sendBotMessage(baseUrl, token, groupNo, CHANNEL_TYPE_GROUP, text, options);
+}
