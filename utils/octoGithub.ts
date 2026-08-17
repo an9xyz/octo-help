@@ -277,8 +277,25 @@ function itemRow(it: RepoItem, now: number, showLabels: boolean): ACNode {
     separator: true,
     selectAction: { type: 'Action.OpenUrl', title: `#${it.number}`, url: it.url },
     items: [
-      { type: 'RichTextBlock', inlines },
-      { type: 'TextBlock', text: meta.join('  ·  '), size: 'Small', isSubtle: true, spacing: 'None', wrap: true },
+      {
+        type: 'ColumnSet',
+        columns: [
+          {
+            type: 'Column',
+            width: 'stretch',
+            items: [
+              { type: 'RichTextBlock', inlines },
+              { type: 'TextBlock', text: meta.join('  ·  '), size: 'Small', isSubtle: true, spacing: 'None', wrap: true },
+            ],
+          },
+          {
+            type: 'Column',
+            width: 'auto',
+            verticalContentAlignment: 'Center',
+            items: [{ type: 'TextBlock', text: '↗', size: 'Medium', color: 'Accent', horizontalAlignment: 'Right' }],
+          },
+        ],
+      },
     ],
   };
 }
@@ -315,6 +332,7 @@ export function buildRepoStatusCard(s: RepoStatus, now = Date.now()): Record<str
         statTile(s.actionableIssues.length, '可认领', 'Good'),
       ],
     },
+    { type: 'TextBlock', text: '👆 点任意条目直接打开对应 Issue / PR', size: 'Small', isSubtle: true, spacing: 'Small', wrap: true },
   ];
 
   if (s.actionableIssues.length) {
