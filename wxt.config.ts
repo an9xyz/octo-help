@@ -83,7 +83,7 @@ export default defineConfig({
     omnibox: {
       keyword: 'octo',
     },
-    permissions: ['storage', 'unlimitedStorage', 'tabs'],
+    permissions: ['storage', 'unlimitedStorage', 'tabs', 'contextMenus', 'notifications', 'alarms'],
     host_permissions: [...OCTO_MATCHES],
     web_accessible_resources: [
       {

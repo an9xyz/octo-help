@@ -1,5 +1,6 @@
 import { browser, defineBackground } from '#imports';
-import { MESSAGE_SOURCE, OCTO_MATCHES } from '@/utils/octoShared';
+import { MESSAGE_SOURCE, OCTO_MATCHES, BOT_SCHEDULED_STORAGE_KEY, type BotScheduledSend } from '@/utils/octoShared';
+import { shareToOcto, clipToOcto, sendScheduledText } from '@/utils/octoBotActions';
 
 const OCTO_URL_PREFIX = OCTO_MATCHES[0].replace('/*', '');
 
@@ -33,6 +34,78 @@ async function activateOctoTab(query?: string): Promise<void> {
 }
 
 export default defineBackground(() => {
+  // ─── Bot: right-click share / clip + scheduled send ──────────────────
+  const SCHED_PREFIX = 'octo-sched-';
+
+  function notify(title: string, message: string): void {
+    try {
+      void browser.notifications?.create({
+        type: 'basic',
+        iconUrl: browser.runtime.getURL('/icon/48.png'),
+        title,
+        message: message.slice(0, 200),
+      });
+    } catch {
+      // notifications permission may be absent in some builds — non-fatal.
+    }
+  }
+
+  function setupBotMenus(): void {
+    if (!browser.contextMenus) return;
+    browser.contextMenus.removeAll(() => {
+      browser.contextMenus.create({ id: 'octo-share-selection', title: '发送划词到 Octo', contexts: ['selection'] });
+      browser.contextMenus.create({ id: 'octo-share-link', title: '发送链接到 Octo', contexts: ['link'] });
+      browser.contextMenus.create({ id: 'octo-share-page', title: '发送本页到 Octo', contexts: ['page'] });
+      browser.contextMenus.create({ id: 'octo-clip-selection', title: '剪存到 Octo 文档', contexts: ['selection'] });
+    });
+  }
+  setupBotMenus();
+  browser.runtime.onInstalled.addListener(setupBotMenus);
+
+  browser.contextMenus?.onClicked.addListener(async (info, tab) => {
+    const id = String(info.menuItemId);
+    try {
+      if (id === 'octo-clip-selection') {
+        const docTitle = await clipToOcto(
+          info.selectionText || '',
+          info.pageUrl || tab?.url || '',
+          tab?.title || '',
+        );
+        notify('已剪存到文档', docTitle);
+      } else if (id.startsWith('octo-share')) {
+        const text =
+          id === 'octo-share-selection'
+            ? info.selectionText || ''
+            : id === 'octo-share-link'
+              ? info.linkUrl || ''
+              : `${tab?.title || ''}\n${info.pageUrl || tab?.url || ''}`.trim();
+        if (!text) return;
+        notify('已发送到 Octo', await shareToOcto(text));
+      }
+    } catch (err) {
+      notify('操作失败', err instanceof Error ? err.message : String(err));
+    }
+  });
+
+  // Scheduled send: the side panel writes an entry + creates an alarm; we fire it.
+  browser.alarms?.onAlarm.addListener(async (alarm) => {
+    if (!alarm.name.startsWith(SCHED_PREFIX)) return;
+    const wantId = alarm.name.slice(SCHED_PREFIX.length);
+    const res = await browser.storage.local.get(BOT_SCHEDULED_STORAGE_KEY);
+    const list = (res[BOT_SCHEDULED_STORAGE_KEY] as BotScheduledSend[] | undefined) ?? [];
+    const entry = list.find((e) => e.id === wantId);
+    await browser.storage.local.set({
+      [BOT_SCHEDULED_STORAGE_KEY]: list.filter((e) => e.id !== wantId),
+    });
+    if (!entry) return;
+    try {
+      await sendScheduledText(entry.channelId, entry.channelType, entry.text);
+      notify('定时消息已发送', `${entry.label}：${entry.text}`);
+    } catch (err) {
+      notify('定时发送失败', err instanceof Error ? err.message : String(err));
+    }
+  });
+
   // ─── Cross-origin fetch for link previews ────────────────────────────
   // Extension background scripts can fetch any URL without CORS restrictions.
   browser.runtime.onMessage.addListener((message) => {

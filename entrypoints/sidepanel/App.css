@@ -1569,3 +1569,49 @@ textarea.bot-input {
 .bot-panel .bot-error {
   margin: 10px 13px 0;
 }
+
+/* Bot templates */
+.bot-panel .tpl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bot-panel .tpl-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+.bot-panel .tpl-fill {
+  max-width: 180px;
+  padding: 5px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bot-panel .tpl-del {
+  padding: 5px 8px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.bot-panel .tpl-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.bot-panel .tpl-add .bot-input {
+  flex: 1;
+}
+.bot-panel .tpl-add .secondary-button {
+  margin: 0;
+  flex: none;
+  white-space: nowrap;
+}

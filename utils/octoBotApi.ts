@@ -75,7 +75,7 @@ async function botRequest<T>(
   baseUrl: string,
   path: string,
   token: string,
-  init: { method: string; body?: unknown },
+  init: { method: string; body?: unknown; headers?: Record<string, string> },
   options: BotRequestOptions,
 ): Promise<T> {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -87,6 +87,7 @@ async function botRequest<T>(
       headers: {
         Authorization: `Bearer ${token}`,
         ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...init.headers,
       },
       body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
       signal: controller.signal,
@@ -205,4 +206,109 @@ export function sendBotGroupMessage(
   options: BotRequestOptions = {},
 ) {
   return sendBotMessage(baseUrl, token, groupNo, CHANNEL_TYPE_GROUP, text, options);
+}
+
+// ─── Docs (剪存到文档) ────────────────────────────────────────────────
+// Verified live: body edits go through GET .../content (ProseMirror doc JSON +
+// opaque baseVersion) then PATCH .../content with If-Match + block ops. Append
+// = insert at {path:[], position:'inside_end'}. Stale baseVersion → 412.
+
+export interface DocMeta {
+  docId: string;
+  title?: string;
+  shareUrl?: string;
+}
+
+/** ProseMirror block node (paragraph/heading/etc). */
+export type DocBlock = Record<string, unknown>;
+
+/** Create an empty doc; caller becomes owner. */
+export async function createDoc(
+  baseUrl: string,
+  token: string,
+  title: string,
+  options: BotRequestOptions = {},
+): Promise<DocMeta> {
+  return botRequest<DocMeta>(baseUrl, '/v1/bot/docs', token, { method: 'POST', body: { title } }, options);
+}
+
+interface DocContent {
+  doc: { type: string; content?: unknown[] };
+  baseVersion: string;
+}
+
+/** Read a doc's live body + base-version token. */
+export async function getDocContent(
+  baseUrl: string,
+  token: string,
+  docId: string,
+  options: BotRequestOptions = {},
+): Promise<DocContent> {
+  return botRequest<DocContent>(
+    baseUrl,
+    `/v1/bot/docs/${encodeURIComponent(docId)}/content`,
+    token,
+    { method: 'GET' },
+    options,
+  );
+}
+
+/**
+ * Append blocks to the end of a doc under the optimistic-concurrency guard,
+ * re-reading and retrying once on a 412 stale base version (a concurrent edit
+ * moved the body between our read and write).
+ */
+export async function appendDocBlocks(
+  baseUrl: string,
+  token: string,
+  docId: string,
+  blocks: DocBlock[],
+  options: BotRequestOptions = {},
+): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { baseVersion } = await getDocContent(baseUrl, token, docId, options);
+    try {
+      await botRequest(
+        baseUrl,
+        `/v1/bot/docs/${encodeURIComponent(docId)}/content`,
+        token,
+        {
+          method: 'PATCH',
+          headers: { 'If-Match': baseVersion },
+          body: { ops: [{ type: 'insert', at: { path: [], position: 'inside_end' }, content: blocks }] },
+        },
+        options,
+      );
+      return;
+    } catch (err) {
+      // 412 base_version_stale → re-read and retry; anything else propagates.
+      if (err instanceof OctoBotApiError && err.status === 412 && attempt < 2) continue;
+      throw err;
+    }
+  }
+}
+
+/** Max clipped text kept per block, to stay under the op-content size gate. */
+const MAX_CLIP_CHARS = 20000;
+
+/**
+ * Build the ProseMirror blocks for one clip: the selected text as a paragraph,
+ * then a source line with the page title linked to its URL and a timestamp.
+ */
+export function buildClipBlocks(text: string, url: string, title: string, now = new Date()): DocBlock[] {
+  const clipped =
+    text.length > MAX_CLIP_CHARS ? `${text.slice(0, MAX_CLIP_CHARS)}…（已截断）` : text;
+  const stamp = now.toLocaleString('zh-CN', { hour12: false });
+  const sourceInline: DocBlock[] = [{ type: 'text', text: '来源：' }];
+  const label = title.trim() || url;
+  if (url) {
+    sourceInline.push({ type: 'text', text: label, marks: [{ type: 'link', attrs: { href: url } }] });
+  } else {
+    sourceInline.push({ type: 'text', text: label });
+  }
+  sourceInline.push({ type: 'text', text: `  ·  ${stamp}` });
+  return [
+    { type: 'paragraph', content: [{ type: 'text', text: clipped }] },
+    { type: 'paragraph', content: sourceInline },
+  ];
 }

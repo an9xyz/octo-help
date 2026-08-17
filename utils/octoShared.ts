@@ -142,6 +142,33 @@ export const EXPORT_RESULT_KEY = 'octoExportResult';
 export const BOT_TOKEN_STORAGE_KEY = 'octoBotToken';
 export const BOT_BASE_URL_STORAGE_KEY = 'octoBotBaseUrl';
 
+/** Default channel for 「发送到 Octo」 right-click share: {channelId, channelType, label}. */
+export const BOT_SHARE_TARGET_STORAGE_KEY = 'octoBotShareTarget';
+/** Target doc for 「剪存到 Octo 文档」: {docId, title}. */
+export const BOT_CLIP_DOC_STORAGE_KEY = 'octoBotClipDoc';
+/** Saved quick-send message templates: string[]. */
+export const BOT_TEMPLATES_STORAGE_KEY = 'octoBotTemplates';
+/** Pending scheduled sends: {id, at, channelId, channelType, label, text}[]. */
+export const BOT_SCHEDULED_STORAGE_KEY = 'octoBotScheduled';
+
+export interface BotShareTarget {
+  channelId: string;
+  channelType: number;
+  label: string;
+}
+export interface BotClipDoc {
+  docId: string;
+  title: string;
+}
+export interface BotScheduledSend {
+  id: string;
+  at: number;
+  channelId: string;
+  channelType: number;
+  label: string;
+  text: string;
+}
+
 export type ExportFormat = 'markdown';
 
 export interface DesktopPetAnimationManifest {

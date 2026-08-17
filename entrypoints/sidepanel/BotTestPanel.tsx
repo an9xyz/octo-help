@@ -2,10 +2,18 @@ import { browser } from '#imports';
 import { useEffect, useState } from 'react';
 import {
   BOT_BASE_URL_STORAGE_KEY,
+  BOT_CLIP_DOC_STORAGE_KEY,
+  BOT_SCHEDULED_STORAGE_KEY,
+  BOT_SHARE_TARGET_STORAGE_KEY,
+  BOT_TEMPLATES_STORAGE_KEY,
   BOT_TOKEN_STORAGE_KEY,
+  type BotClipDoc,
+  type BotScheduledSend,
+  type BotShareTarget,
 } from '@/utils/octoShared';
 import {
   OCTO_BOT_API_DEFAULT_BASE,
+  createDoc,
   listBotGroups,
   listGroupThreads,
   registerBot,
@@ -40,18 +48,32 @@ export function BotTestPanel({
   const [threads, setThreads] = useState<OctoThread[]>([]);
   const [selectedThread, setSelectedThread] = useState('');
   const [text, setText] = useState('');
-  const [busy, setBusy] = useState<null | 'groups' | 'send' | 'dm' | 'threads'>(null);
+  const [busy, setBusy] = useState<null | 'groups' | 'send' | 'dm' | 'threads' | 'doc' | 'sched'>(null);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [shareTarget, setShareTarget] = useState<BotShareTarget | null>(null);
+  const [clipDoc, setClipDoc] = useState<BotClipDoc | null>(null);
+  const [templates, setTemplates] = useState<string[]>([]);
+  const [newTemplate, setNewTemplate] = useState('');
+  const [scheduleAt, setScheduleAt] = useState('');
 
   useEffect(() => {
     browser.storage.local
-      .get([BOT_TOKEN_STORAGE_KEY, BOT_BASE_URL_STORAGE_KEY])
+      .get([
+        BOT_TOKEN_STORAGE_KEY,
+        BOT_BASE_URL_STORAGE_KEY,
+        BOT_SHARE_TARGET_STORAGE_KEY,
+        BOT_CLIP_DOC_STORAGE_KEY,
+        BOT_TEMPLATES_STORAGE_KEY,
+      ])
       .then((res) => {
         if (typeof res[BOT_TOKEN_STORAGE_KEY] === 'string') setToken(res[BOT_TOKEN_STORAGE_KEY]);
         if (typeof res[BOT_BASE_URL_STORAGE_KEY] === 'string' && res[BOT_BASE_URL_STORAGE_KEY]) {
           setBaseUrl(res[BOT_BASE_URL_STORAGE_KEY]);
         }
+        if (res[BOT_SHARE_TARGET_STORAGE_KEY]) setShareTarget(res[BOT_SHARE_TARGET_STORAGE_KEY] as BotShareTarget);
+        if (res[BOT_CLIP_DOC_STORAGE_KEY]) setClipDoc(res[BOT_CLIP_DOC_STORAGE_KEY] as BotClipDoc);
+        if (Array.isArray(res[BOT_TEMPLATES_STORAGE_KEY])) setTemplates(res[BOT_TEMPLATES_STORAGE_KEY] as string[]);
       })
       .catch(() => {});
   }, []);
@@ -165,6 +187,92 @@ export function BotTestPanel({
     }
   };
 
+  const currentTarget = (): BotShareTarget | null => {
+    if (!selected) return null;
+    const thread = threads.find((t) => t.channel_id === selectedThread);
+    const group = groups.find((g) => g.group_no === selected);
+    return thread
+      ? { channelId: thread.channel_id, channelType: CHANNEL_TYPE_THREAD, label: `${group?.name ?? selected} / ${thread.name}` }
+      : { channelId: selected, channelType: CHANNEL_TYPE_GROUP, label: group?.name ?? selected };
+  };
+
+  const saveShareTarget = () => {
+    const t = currentTarget();
+    if (!t) {
+      setError('先选择群或子区');
+      return;
+    }
+    setShareTarget(t);
+    void browser.storage.local.set({ [BOT_SHARE_TARGET_STORAGE_KEY]: t });
+    setStatus(`默认分享目标已设为「${t.label}」`);
+  };
+
+  const createClipDoc = async () => {
+    setError('');
+    if (!token.trim()) {
+      setError('请先填写 Bot Token');
+      return;
+    }
+    setBusy('doc');
+    try {
+      const meta = await createDoc(baseUrl.trim(), token.trim(), '网页剪存');
+      const doc: BotClipDoc = { docId: meta.docId, title: meta.title || '网页剪存' };
+      setClipDoc(doc);
+      await browser.storage.local.set({ [BOT_CLIP_DOC_STORAGE_KEY]: doc });
+      setStatus(`剪存文档已创建：${doc.title}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建文档失败');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveTemplates = (next: string[]) => {
+    setTemplates(next);
+    void browser.storage.local.set({ [BOT_TEMPLATES_STORAGE_KEY]: next });
+  };
+  const addTemplate = () => {
+    const t = newTemplate.trim();
+    if (!t) return;
+    saveTemplates([...templates, t]);
+    setNewTemplate('');
+  };
+
+  const scheduleSend = async () => {
+    setError('');
+    setStatus('');
+    const t = currentTarget();
+    if (!t) {
+      setError('先选择群或子区');
+      return;
+    }
+    if (!text.trim()) {
+      setError('消息内容不能为空');
+      return;
+    }
+    const at = scheduleAt ? new Date(scheduleAt).getTime() : 0;
+    if (!at || at <= Date.now()) {
+      setError('请选择一个未来时间');
+      return;
+    }
+    setBusy('sched');
+    try {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const entry: BotScheduledSend = { id, at, ...t, text: text.trim() };
+      const res = await browser.storage.local.get(BOT_SCHEDULED_STORAGE_KEY);
+      const list = (res[BOT_SCHEDULED_STORAGE_KEY] as BotScheduledSend[] | undefined) ?? [];
+      await browser.storage.local.set({ [BOT_SCHEDULED_STORAGE_KEY]: [...list, entry] });
+      await browser.alarms.create(`octo-sched-${id}`, { when: at });
+      setStatus(`已定时：${new Date(at).toLocaleString('zh-CN', { hour12: false })} 发送到「${t.label}」`);
+      setText('');
+      setScheduleAt('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '定时设置失败');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const summary = identity
     ? `${identity.name} · ${groups.length ? groups.length + ' 个群' : '未加入群'}`
     : token
@@ -205,6 +313,63 @@ export function BotTestPanel({
       <button type="button" className="secondary-button" disabled={busy !== null} onClick={loadGroups}>
         {busy === 'groups' ? '拉取中…' : '拉取群列表'}
       </button>
+
+      <div className="config-row is-stacked">
+        <div className="config-copy">
+          <span>剪存文档</span>
+          <small>{clipDoc ? `当前：${clipDoc.title}` : '划词右键「剪存到 Octo 文档」的目标'}</small>
+        </div>
+        <button type="button" className="secondary-button" disabled={busy !== null} onClick={createClipDoc}>
+          {busy === 'doc' ? '创建中…' : clipDoc ? '新建另一个剪存文档' : '新建剪存文档'}
+        </button>
+      </div>
+
+      {templates.length > 0 && (
+        <div className="config-row is-stacked">
+          <div className="config-copy">
+            <span>模板</span>
+            <small>点按填入消息框</small>
+          </div>
+          <div className="tpl-chips">
+            {templates.map((t, i) => (
+              <span key={i} className="tpl-chip">
+                <button type="button" className="tpl-fill" title={t} onClick={() => setText(t)}>
+                  {t.length > 18 ? t.slice(0, 18) + '…' : t}
+                </button>
+                <button
+                  type="button"
+                  className="tpl-del"
+                  aria-label="删除模板"
+                  onClick={() => saveTemplates(templates.filter((_, j) => j !== i))}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="config-row is-stacked">
+        <div className="config-copy">
+          <span>新增模板</span>
+          <small>常用话术，保存后一键填入</small>
+        </div>
+        <div className="tpl-add">
+          <input
+            className="bot-input"
+            value={newTemplate}
+            onChange={(e) => setNewTemplate(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addTemplate();
+              }
+            }}
+            placeholder="输入常用消息…"
+          />
+          <button type="button" className="secondary-button" onClick={addTemplate}>保存模板</button>
+        </div>
+      </div>
 
       {identity && groups.length === 0 && (
         <>
@@ -303,6 +468,24 @@ export function BotTestPanel({
           </div>
           <button type="button" className="primary-button" disabled={busy !== null} onClick={send}>
             {busy === 'send' ? '发送中…' : '发送到群'}
+          </button>
+          <button type="button" className="secondary-button" disabled={busy !== null} onClick={saveShareTarget}>
+            设为默认分享目标{shareTarget ? `（当前：${shareTarget.label}）` : ''}
+          </button>
+          <div className="config-row is-stacked">
+            <div className="config-copy">
+              <span>定时发送</span>
+              <small>到点由后台自动发到当前群/子区（需保持浏览器运行）</small>
+            </div>
+            <input
+              className="bot-input"
+              type="datetime-local"
+              value={scheduleAt}
+              onChange={(e) => setScheduleAt(e.currentTarget.value)}
+            />
+          </div>
+          <button type="button" className="secondary-button" disabled={busy !== null} onClick={scheduleSend}>
+            {busy === 'sched' ? '设置中…' : '定时发送'}
           </button>
         </>
       )}

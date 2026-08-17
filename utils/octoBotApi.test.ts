@@ -4,6 +4,8 @@ import {
   listGroupThreads,
   sendBotGroupMessage,
   sendBotMessage,
+  appendDocBlocks,
+  buildClipBlocks,
   OctoBotApiError,
   CHANNEL_TYPE_GROUP,
   CHANNEL_TYPE_THREAD,
@@ -71,6 +73,31 @@ describe('octoBotApi', () => {
     });
     expect(body.channel_id).toBe('g1____s1');
     expect(body.channel_type).toBe(CHANNEL_TYPE_THREAD);
+  });
+
+  it('builds clip blocks with a link mark and truncates oversized text', () => {
+    const blocks = buildClipBlocks('hello', 'https://e.com', 'Title', new Date('2026-01-02T03:04:05'));
+    expect(blocks[0]).toEqual({ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] });
+    const source = blocks[1] as { content: Array<{ text: string; marks?: unknown[] }> };
+    const link = source.content.find((n) => n.marks);
+    expect(link).toMatchObject({ text: 'Title', marks: [{ type: 'link', attrs: { href: 'https://e.com' } }] });
+    const big = buildClipBlocks('x'.repeat(30000), '', '', new Date());
+    expect((big[0] as { content: Array<{ text: string }> }).content[0].text).toContain('（已截断）');
+  });
+
+  it('appendDocBlocks re-reads and retries once on a 412 stale base version', async () => {
+    const calls: string[] = [];
+    let patchCount = 0;
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      calls.push(`${init.method} ${url}`);
+      if (init.method === 'GET') return jsonResponse({ doc: { type: 'doc' }, baseVersion: `v${patchCount}` });
+      patchCount++;
+      if (patchCount === 1) return jsonResponse({ error: { code: 'stale' } }, false, 412);
+      return jsonResponse({ baseVersion: 'v9' });
+    }) as unknown as typeof fetch;
+    await appendDocBlocks('https://x.test', 'bf', 'd1', [{ type: 'paragraph' }], { fetchImpl });
+    expect(patchCount).toBe(2); // failed once (412) then succeeded
+    expect(calls.filter((c) => c.startsWith('GET')).length).toBe(2); // re-read before retry
   });
 
   it('throws a typed error carrying status and code', async () => {
