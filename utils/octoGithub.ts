@@ -234,12 +234,6 @@ export function formatRepoStatus(s: RepoStatus, now = Date.now()): string {
 
 type ACNode = Record<string, unknown>;
 
-function stateColor(state: string): string {
-  if (state === 'open') return 'Good';
-  if (state === 'merged') return 'Accent';
-  return 'Attention'; // closed
-}
-
 /** A stat tile: big number over a small label; neutral bg, only the number tinted. */
 function statTile(value: number, label: string, numColor: string): ACNode {
   return {
@@ -259,14 +253,11 @@ function statTile(value: number, label: string, numColor: string): ACNode {
   };
 }
 
-/** One clickable list row: a colored state dot, an accent number, a neutral title,
- *  then a subtle meta subline (labels · time · comments). */
+/** One clickable list row (node-light: 1 container + 2 text blocks, no columns/
+ *  runs, so 20+ rows stay under the ~200-node card limit). A leading state dot,
+ *  a bold number, the title, and a trailing ↗ signal the whole row is tappable. */
 function itemRow(it: RepoItem, now: number, showLabels: boolean): ACNode {
-  const inlines: ACNode[] = [
-    { type: 'TextRun', text: '● ', color: stateColor(it.state) },
-    { type: 'TextRun', text: `#${it.number} `, color: 'Accent', weight: 'Bolder' },
-    { type: 'TextRun', text: clip(it.title, 56) },
-  ];
+  const dot = it.state === 'open' ? '🟢' : it.state === 'merged' ? '🟣' : '⚪';
   const meta: string[] = [];
   if (showLabels && it.labels.length) meta.push(it.labels.slice(0, 3).join(' · '));
   meta.push(ago(it.updatedAt, now));
@@ -277,25 +268,8 @@ function itemRow(it: RepoItem, now: number, showLabels: boolean): ACNode {
     separator: true,
     selectAction: { type: 'Action.OpenUrl', title: `#${it.number}`, url: it.url },
     items: [
-      {
-        type: 'ColumnSet',
-        columns: [
-          {
-            type: 'Column',
-            width: 'stretch',
-            items: [
-              { type: 'RichTextBlock', inlines },
-              { type: 'TextBlock', text: meta.join('  ·  '), size: 'Small', isSubtle: true, spacing: 'None', wrap: true },
-            ],
-          },
-          {
-            type: 'Column',
-            width: 'auto',
-            verticalContentAlignment: 'Center',
-            items: [{ type: 'TextBlock', text: '↗', size: 'Medium', color: 'Accent', horizontalAlignment: 'Right' }],
-          },
-        ],
-      },
+      { type: 'TextBlock', wrap: true, spacing: 'None', text: `${dot} #${it.number}  ${clip(it.title, 52)}  ↗` },
+      { type: 'TextBlock', text: meta.join('  ·  '), size: 'Small', isSubtle: true, spacing: 'None', wrap: true },
     ],
   };
 }
