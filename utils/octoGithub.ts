@@ -72,12 +72,22 @@ async function ghFetch(path: string, options: GithubOptions): Promise<Response> 
       signal: controller.signal,
     });
     if (!res.ok) {
-      const msg =
-        res.status === 404
-          ? '仓库不存在或无权访问（私有仓库需填 token）'
-          : res.status === 403
-            ? 'GitHub 限流（未登录 60 次/小时），填 token 可提额'
-            : `GitHub HTTP ${res.status}`;
+      const remaining = res.headers.get('x-ratelimit-remaining');
+      const rateLimited = (res.status === 403 || res.status === 429) && remaining === '0';
+      let msg: string;
+      if (rateLimited) {
+        const reset = Number(res.headers.get('x-ratelimit-reset'));
+        const mins = reset ? Math.max(1, Math.ceil((reset * 1000 - Date.now()) / 60000)) : 0;
+        const back = mins ? `，约 ${mins} 分钟后恢复` : '';
+        msg = `GitHub 限流（匿名 60 次/小时，多人共享 IP 更快耗尽）${back}；填 token 可提额到 5000/小时`;
+      } else {
+        msg =
+          res.status === 404
+            ? '仓库不存在或无权访问（私有仓库需填 token）'
+            : res.status === 403
+              ? 'GitHub 拒绝访问（可能需要 token）'
+              : `GitHub HTTP ${res.status}`;
+      }
       throw new GithubError(msg, res.status);
     }
     return res;

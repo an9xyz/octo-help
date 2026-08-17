@@ -52,4 +52,25 @@ describe('octoGithub', () => {
     expect(text).toContain('开放 PR：8');
     expect(text).toContain('PR #6');
   });
+
+  it('reports rate-limit with reset minutes when remaining is 0', async () => {
+    const reset = Math.floor(Date.now() / 1000) + 600; // ~10 min out
+    const fetchImpl = (async () => ({
+      ok: false,
+      status: 403,
+      headers: {
+        get: (h: string) =>
+          h === 'x-ratelimit-remaining' ? '0' : h === 'x-ratelimit-reset' ? String(reset) : null,
+      },
+      json: async () => ({}),
+    })) as unknown as typeof fetch;
+    await fetchRepoStatus({ owner: 'o', repo: 'r' }, { fetchImpl }).then(
+      () => { throw new Error('should have thrown'); },
+      (e) => {
+        expect(e.status).toBe(403);
+        expect(e.message).toContain('限流');
+        expect(e.message).toMatch(/约 \d+ 分钟后恢复/);
+      },
+    );
+  });
 });
