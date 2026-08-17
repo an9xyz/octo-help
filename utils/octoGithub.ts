@@ -240,18 +240,18 @@ function stateColor(state: string): string {
   return 'Attention'; // closed
 }
 
-/** A stat tile: big number over a small label, tinted by container style. */
-function statTile(value: number, label: string, style: string): ACNode {
+/** A stat tile: big number over a small label; neutral bg, only the number tinted. */
+function statTile(value: number, label: string, numColor: string): ACNode {
   return {
     type: 'Column',
     width: 'stretch',
     items: [
       {
         type: 'Container',
-        style,
-        bleed: false,
+        style: 'emphasis',
+        spacing: 'None',
         items: [
-          { type: 'TextBlock', text: String(value), size: 'ExtraLarge', weight: 'Bolder', horizontalAlignment: 'Center', spacing: 'None' },
+          { type: 'TextBlock', text: String(value), size: 'Large', weight: 'Bolder', color: numColor, horizontalAlignment: 'Center', spacing: 'None' },
           { type: 'TextBlock', text: label, size: 'Small', isSubtle: true, horizontalAlignment: 'Center', spacing: 'None', wrap: true },
         ],
       },
@@ -259,28 +259,27 @@ function statTile(value: number, label: string, style: string): ACNode {
   };
 }
 
-/** One clickable list row: `#N title`, an optional labels/meta subline. */
+/** One clickable list row: a colored state dot, an accent number, a neutral title,
+ *  then a subtle meta subline (labels · time · comments). */
 function itemRow(it: RepoItem, now: number, showLabels: boolean): ACNode {
-  const items: ACNode[] = [
-    {
-      type: 'TextBlock',
-      text: `**#${it.number}** ${clip(it.title, 52)}`,
-      wrap: true,
-      color: stateColor(it.state),
-      spacing: 'None',
-    },
+  const inlines: ACNode[] = [
+    { type: 'TextRun', text: '● ', color: stateColor(it.state) },
+    { type: 'TextRun', text: `#${it.number} `, color: 'Accent', weight: 'Bolder' },
+    { type: 'TextRun', text: clip(it.title, 56) },
   ];
   const meta: string[] = [];
   if (showLabels && it.labels.length) meta.push(it.labels.slice(0, 3).join(' · '));
   meta.push(ago(it.updatedAt, now));
   if (typeof it.comments === 'number' && it.comments > 0) meta.push(`💬 ${it.comments}`);
-  items.push({ type: 'TextBlock', text: meta.join('  ·  '), size: 'Small', isSubtle: true, spacing: 'None', wrap: true });
   return {
     type: 'Container',
     spacing: 'Small',
     separator: true,
     selectAction: { type: 'Action.OpenUrl', title: `#${it.number}`, url: it.url },
-    items,
+    items: [
+      { type: 'RichTextBlock', inlines },
+      { type: 'TextBlock', text: meta.join('  ·  '), size: 'Small', isSubtle: true, spacing: 'None', wrap: true },
+    ],
   };
 }
 
@@ -311,9 +310,9 @@ export function buildRepoStatusCard(s: RepoStatus, now = Date.now()): Record<str
       type: 'ColumnSet',
       spacing: 'Medium',
       columns: [
-        statTile(s.openIssues, '开放 Issue', 'attention'),
-        statTile(s.openPrs, '开放 PR', 'accent'),
-        statTile(s.actionableIssues.length, '可认领', 'good'),
+        statTile(s.openIssues, '开放 Issue', 'Default'),
+        statTile(s.openPrs, '开放 PR', 'Accent'),
+        statTile(s.actionableIssues.length, '可认领', 'Good'),
       ],
     },
   ];
@@ -322,7 +321,7 @@ export function buildRepoStatusCard(s: RepoStatus, now = Date.now()): Record<str
     body.push(sectionHeader('🙋 可以改的 Issue'));
     body.push({
       type: 'Container',
-      style: 'good',
+      style: 'emphasis',
       spacing: 'Small',
       items: s.actionableIssues.map((it) => itemRow(it, now, true)),
     });
