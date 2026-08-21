@@ -20,4 +20,10 @@ describe('QQ 2014 sent attachment alignment', () => {
       `${QQ_SELF_MESSAGE_SELECTOR} .wk-msg-row-content > :not(.wk-msg-row-header) {`,
     );
   });
+
+  it('keeps both reply-card DOM variants on the sent bubble edge', () => {
+    expect(beautifyCss).toContain(
+      `${QQ_SELF_MESSAGE_SELECTOR} .wk-msg-row-content .wk-reply-block,\n            ${QQ_SELF_MESSAGE_SELECTOR} .wk-msg-row-content .wk-message-text-reply {`,
+    );
+  });
 });
