@@ -67,6 +67,7 @@ import {
 } from '@/utils/octoSettingsParsers';
 import { postToPage, toNewValues, touchesAny } from '@/utils/octoSettingsRelay';
 import { isDesktopPetPosition } from '@/utils/octoPetState';
+import { metadataFetchTarget } from '@/utils/octoLinkMetadata';
 
 /**
  * ISOLATED-world content script.
@@ -89,6 +90,19 @@ export default defineContentScript({
     // guarded here so repeated toggles never inject twice.
     let kickScriptInjected = false;
     let foldWriteQueue: Promise<unknown> = Promise.resolve();
+    let metadataFetchWindowStartedAt = Date.now();
+    let metadataFetchesInWindow = 0;
+
+    function canRelayMetadataFetch(): boolean {
+      const now = Date.now();
+      if (now - metadataFetchWindowStartedAt >= 60_000) {
+        metadataFetchWindowStartedAt = now;
+        metadataFetchesInWindow = 0;
+      }
+      if (metadataFetchesInWindow >= 24) return false;
+      metadataFetchesInWindow += 1;
+      return true;
+    }
 
     // Inject the MAIN-world script (runs in the page's JS context).
     await injectScript('/octo-main-world.js', { keepInDom: true });
@@ -121,8 +135,11 @@ export default defineContentScript({
       postToPage({ type: MESSAGE_TYPE.convFoldEnabled, enabled });
     const postConvFoldState = (foldedByScope: ReturnType<typeof readConvFoldMap>) =>
       postToPage({ type: MESSAGE_TYPE.convFoldState, foldedByScope });
-    const postLinkPreview = (enabled: boolean) =>
+    let linkPreviewEnabled = true;
+    const postLinkPreview = (enabled: boolean) => {
+      linkPreviewEnabled = enabled;
       postToPage({ type: MESSAGE_TYPE.linkPreview, enabled });
+    };
 
     /**
      * The page cannot resolve extension URLs itself, so the asset paths are
@@ -179,6 +196,7 @@ export default defineContentScript({
     let desktopPetPlacement = readDesktopPetPlacement(stored);
     let builtInCompanion = readBuiltInCompanionInitial(stored);
     let desktopPetEnabled = readDesktopPetEnabledInitial(stored);
+    linkPreviewEnabled = readLinkPreviewEnabled(stored);
 
     // MAIN world ignores settings while suspended. Keep the latest values here
     // and replay them after the master switch reboots the page-side engines.
@@ -199,6 +217,7 @@ export default defineContentScript({
       postConvRecentOnly(convRecentOnly);
       postConvFoldState(convFoldMap);
       postConvFoldEnabled(convFoldEnabled);
+      postLinkPreview(linkPreviewEnabled);
       postDesktopPet();
     };
 
@@ -320,6 +339,47 @@ export default defineContentScript({
       if (event.source !== window) return;
       const data = event.data as PageOutboundMessage | undefined;
       if (!data || data.source !== MESSAGE_SOURCE) return;
+
+      if (data.type === MESSAGE_TYPE.linkPreviewFetch) {
+        const { requestId, url } = data;
+        const target = typeof url === 'string' ? metadataFetchTarget(url) : null;
+        const respond = (html: string | null) => {
+          window.postMessage(
+            {
+              source: MESSAGE_SOURCE,
+              type: MESSAGE_TYPE.linkPreviewFetchResult,
+              requestId,
+              html,
+            },
+            '*',
+          );
+        };
+        if (
+          !currentMaster
+          || !linkPreviewEnabled
+          || !target
+          || typeof requestId !== 'string'
+          || requestId.length < 4
+          || requestId.length > 100
+        ) {
+          respond(null);
+          return;
+        }
+        if (!canRelayMetadataFetch()) {
+          respond(null);
+          return;
+        }
+        void browser.runtime
+          .sendMessage({ source: MESSAGE_SOURCE, type: MESSAGE_TYPE.linkPreviewFetch, url: target, requestId })
+          .then((response: unknown) => {
+            const result = response as { requestId?: unknown; html?: unknown } | undefined;
+            respond(
+              result?.requestId === requestId && typeof result.html === 'string' ? result.html : null,
+            );
+          })
+          .catch(() => respond(null));
+        return;
+      }
 
       // Lazy load of the pixi.js kick effect. Only a content script can call
       // injectScript, so the MAIN world asks us to do it the first time a

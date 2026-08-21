@@ -74,6 +74,17 @@ describe('parseOGFromHTML', () => {
     expect(result.image).toBe('https://site.com/images/hero.png');
   });
 
+  it('uses a same-origin declared favicon for compact link actions', () => {
+    const html = '<link rel="icon" href="/assets/favicon.svg">';
+    expect(parseOGFromHTML(html, 'https://site.com/docs/guide').icon)
+      .toBe('https://site.com/assets/favicon.svg');
+  });
+
+  it('does not load an icon from a third-party origin', () => {
+    const html = '<link rel="icon" href="https://tracking.example/favicon.svg">';
+    expect(parseOGFromHTML(html, 'https://site.com/docs/guide').icon).toBeUndefined();
+  });
+
   it('returns undefined for missing properties', () => {
     const result = parseOGFromHTML('<html></html>', '');
     expect(result.title).toBeUndefined();

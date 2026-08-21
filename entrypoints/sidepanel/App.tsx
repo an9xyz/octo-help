@@ -72,6 +72,8 @@ const BUILT_IN_COMPANIONS: Array<{
   { id: 'zombie', label: '散步僵尸', icon: '🧟', description: '摇晃前进' },
 ];
 
+const LINK_METADATA_PERMISSION_ORIGINS = ['https://*/*'];
+
 /**
  * 会话行精简的四级。累进而非四个独立开关：L2 的标题前缀要先有 L1 删掉子区图标才
  * 讲得通，L3 收掉 L2 刚排好的第二行，L4 的分组表头又替换掉 L2 的前缀。做成一个有序
@@ -93,6 +95,7 @@ const CONV_COMPACT_OPTIONS: Array<{ id: ConvCompactLevel; label: string; summary
 function App() {
   const [state, dispatch] = useReducer(appReducer, APP_INITIAL_STATE);
   const [panelTab, setPanelTab] = useState<'general' | 'conversation' | 'bot'>('general');
+  const [hasLinkMetadataPermission, setHasLinkMetadataPermission] = useState(false);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -143,6 +146,18 @@ function App() {
     } catch {
       dispatch({ type: 'SET', key: stateKey, value: prev });
       dispatch({ type: 'SET_ERROR', errorKey: 'settingsError', message: '设置保存失败，请重试' });
+    }
+  }, []);
+
+  const requestLinkMetadataPermission = useCallback(async () => {
+    try {
+      const granted = await browser.permissions.request({ origins: LINK_METADATA_PERMISSION_ORIGINS });
+      setHasLinkMetadataPermission(granted);
+      if (!granted) {
+        dispatch({ type: 'SET_ERROR', errorKey: 'settingsError', message: '未授权读取网页信息，链接仍会显示基础按钮' });
+      }
+    } catch {
+      dispatch({ type: 'SET_ERROR', errorKey: 'settingsError', message: '网页信息授权失败，请重试' });
     }
   }, []);
 
@@ -262,6 +277,19 @@ function App() {
           dispatch({ type: 'SET_BUSY', key: 'loading', value: false });
         }
       });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    void browser.permissions
+      .contains({ origins: LINK_METADATA_PERMISSION_ORIGINS })
+      .then((granted) => {
+        if (mounted) setHasLinkMetadataPermission(granted);
+      })
+      .catch(() => undefined);
     return () => {
       mounted = false;
     };
@@ -1031,7 +1059,7 @@ function App() {
         <FeatureSection
           icon="🔗"
           title="链接预览"
-          summary={linkPreviewEnabled ? '自动预览所有链接（标题、描述、图片）' : '已关闭，链接保持原样'}
+          summary={linkPreviewEnabled ? '非 GitHub 链接显示快捷按钮，可读取标题和图标' : '已关闭，链接保持原样'}
           enabled={linkPreviewEnabled}
           onToggleEnabled={() => toggleSetting(LINK_PREVIEW_STORAGE_KEY, 'linkPreviewEnabled')}
           open={openFeature === 'linkPreview'}
@@ -1039,9 +1067,20 @@ function App() {
           disabled={loading}
         >
           <p className="feature-note">
-            检测消息中的链接，自动抓取页面标题、描述和预览图，渲染为富卡片。
-            GitHub PR/Issue 还会展示状态、作者和标签。点击卡片可直接跳转。
+            非 GitHub 链接一条一个按钮；GitHub 的现有快捷按钮和 PR/Issue 卡片保持不变。
+            授权后仅对公开 HTTPS、无查询参数的链接读取标题和同源图标；其他链接会安全降级。
           </p>
+          {!hasLinkMetadataPermission && (
+            <button
+              type="button"
+              className="text-button"
+              disabled={loading}
+              onClick={() => void requestLinkMetadataPermission()}
+            >
+              授权读取网页标题和图标
+            </button>
+          )}
+          {hasLinkMetadataPermission && <p className="feature-note">已授权读取网页标题和图标</p>}
         </FeatureSection>
 
         <FeatureSection
