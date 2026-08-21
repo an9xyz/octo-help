@@ -3248,9 +3248,9 @@
             body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-header {
                 flex-direction: row-reverse !important;
             }
-            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown,
-            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-reply-block,
-            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-message-text-reply {
+            /* 消息正文、图片和文件卡都是 content 的直接子项。不要只列 markdown/
+             * reply：那会让附件绕过 auto margin，自己的图片/文件又回到左边。 */
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-content > :not(.wk-msg-row-header) {
                 width: -moz-fit-content !important;
                 width: fit-content !important;
                 max-width: 100% !important;
