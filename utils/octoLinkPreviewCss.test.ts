@@ -11,3 +11,9 @@ describe('QQ 2014 link action alignment', () => {
     );
   });
 });
+
+describe('link action fallback icon', () => {
+  it('uses a web glyph so the fallback does not duplicate the external-link arrow', () => {
+    expect(linkPreviewSource).toContain("'octo-link-action-icon is-fallback', 'aria-hidden': 'true' }, ['🌐']");
+  });
+});
