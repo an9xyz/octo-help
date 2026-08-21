@@ -23,10 +23,13 @@ vi.hoisted(() => {
 });
 import {
   domainLabel,
+  externalLinkFallback,
+  extractExternalUrls,
   extractUrls,
   isMeaningfulTitle,
   isOpaqueSegment,
   isUsableUrl,
+  metadataFetchTarget,
   parseHexColor,
   parseOGFromHTML,
   readableTextColor,
@@ -274,6 +277,69 @@ describe('extractUrls', () => {
   it('handles URLs with paths and query strings', () => {
     const urls = extractUrls('Check https://example.com/path?a=1&b=2');
     expect(urls).toContain('https://example.com/path?a=1&b=2');
+  });
+});
+
+// ─── external link actions ───────────────────────────────────────────────
+
+describe('extractExternalUrls', () => {
+  it('keeps distinct non-GitHub URLs in message order', () => {
+    expect(
+      extractExternalUrls(
+        '文档 https://docs.example.com/guide ，看板 https://linear.app/acme/issue/ABC-1',
+      ),
+    ).toEqual([
+      'https://docs.example.com/guide',
+      'https://linear.app/acme/issue/ABC-1',
+    ]);
+  });
+
+  it('deduplicates URLs and leaves GitHub handling to the existing shortcut feature', () => {
+    expect(
+      extractExternalUrls(
+        [
+          'https://github.com/octo-help/octo-help/pull/42',
+          'https://docs.example.com/guide',
+          'https://docs.example.com/guide。',
+          'https://www.github.com/octo-help/octo-help/issues/7',
+        ].join(' '),
+      ),
+    ).toEqual(['https://docs.example.com/guide']);
+  });
+});
+
+describe('externalLinkFallback', () => {
+  it('uses a readable path title and a same-origin favicon without retaining query data', () => {
+    expect(externalLinkFallback('https://www.example.com/guides/hello-world?token=secret')).toEqual({
+      title: 'hello world',
+      icon: 'https://www.example.com/favicon.ico',
+    });
+  });
+
+  it('falls back to the domain when the path contains no readable name', () => {
+    expect(externalLinkFallback('https://www.example.com/')).toEqual({
+      title: 'example.com',
+      icon: 'https://www.example.com/favicon.ico',
+    });
+  });
+});
+
+describe('metadataFetchTarget', () => {
+  it('only allows public HTTPS URLs without a query string', () => {
+    expect(metadataFetchTarget('https://docs.example.com/guides/hello-world')).toBe(
+      'https://docs.example.com/guides/hello-world',
+    );
+  });
+
+  it.each([
+    'http://docs.example.com/guides/hello-world',
+    'https://docs.example.com/guides/hello-world?ticket=sensitive',
+    'https://user:password@docs.example.com/guides/hello-world',
+    'https://localhost/private',
+    'https://127.0.0.1/private',
+    'https://github.com/octo-help/octo-help/pull/42',
+  ])('does not request metadata for %s', (url) => {
+    expect(metadataFetchTarget(url)).toBeNull();
   });
 });
 
