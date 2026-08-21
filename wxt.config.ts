@@ -85,9 +85,6 @@ export default defineConfig({
     },
     permissions: ['storage', 'unlimitedStorage', 'tabs', 'contextMenus', 'notifications', 'alarms'],
     host_permissions: [...OCTO_MATCHES],
-    // Link metadata is optional: users explicitly authorize it from the side
-    // panel before the background may read titles/icons from external sites.
-    optional_host_permissions: ['https://*/*'],
     web_accessible_resources: [
       {
         // MAIN-world scripts plus assets referenced from the page context.

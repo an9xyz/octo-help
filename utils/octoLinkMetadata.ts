@@ -1,7 +1,6 @@
 /**
- * URL parsing and safety policy shared by the MAIN-world link UI and the
- * isolated-world relay. Keeping it dependency-free prevents the content script
- * from importing the preview renderer just to validate one metadata request.
+ * URL parsing for local link-action labels. The renderer never requests the
+ * linked page, so this module stays dependency-free and side-effect free.
  */
 
 const URL_PATTERN = /https?:\/\/[^\s<>"'，。！？；：、)]+/gi;
@@ -33,33 +32,6 @@ function isGitHubHost(hostname: string): boolean {
 export function isGitHubUrl(raw: string): boolean {
   const url = normalizedHttpUrl(raw);
   return url != null && isGitHubHost(url.hostname);
-}
-
-function isPrivateNetworkHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, '');
-  if (
-    host === 'localhost'
-    || host.endsWith('.localhost')
-    || host.endsWith('.local')
-    || host.endsWith('.internal')
-  ) {
-    return true;
-  }
-
-  const octets = host.split('.');
-  if (octets.length === 4 && octets.every((octet) => /^\d+$/.test(octet))) {
-    const values = octets.map(Number);
-    if (values.some((value) => value < 0 || value > 255)) return true;
-    return values[0] === 10
-      || values[0] === 127
-      || (values[0] === 169 && values[1] === 254)
-      || (values[0] === 172 && values[1] >= 16 && values[1] <= 31)
-      || (values[0] === 192 && values[1] === 168)
-      || values[0] === 0;
-  }
-
-  const ipv6 = host.replace(/^\[|\]$/g, '');
-  return ipv6 === '::1' || /^f[cd][0-9a-f:]*$/i.test(ipv6) || /^fe[89ab][0-9a-f:]*$/i.test(ipv6);
 }
 
 /** @internal exported for testing */
@@ -107,34 +79,13 @@ export function extractExternalUrls(text: string): string[] {
   return urls;
 }
 
-/** Fast no-network fallback. The favicon request never carries URL query data. */
+/** Local fallback: its static web glyph makes no request to the linked site. */
 export function externalLinkFallback(urlStr: string): { title: string; icon: string } {
   const url = normalizedHttpUrl(urlStr);
   if (!url) return { title: urlStr, icon: '' };
   const domain = url.hostname.replace(/^www\./i, '');
   return {
     title: titleFromUrl(url.href) ?? domain,
-    icon: `${url.origin}/favicon.ico`,
+    icon: '',
   };
-}
-
-/**
- * Returns a URL safe to request automatically for metadata. Normal link
- * buttons stay available even when this returns null.
- */
-export function metadataFetchTarget(urlStr: string): string | null {
-  const url = normalizedHttpUrl(urlStr);
-  if (
-    !url
-    || url.protocol !== 'https:'
-    || !!url.username
-    || !!url.password
-    || !!url.search
-    || isPrivateNetworkHost(url.hostname)
-    || isGitHubHost(url.hostname)
-  ) {
-    return null;
-  }
-  url.hash = '';
-  return url.href;
 }

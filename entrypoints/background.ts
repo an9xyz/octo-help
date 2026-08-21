@@ -1,35 +1,8 @@
 import { browser, defineBackground } from '#imports';
-import { MESSAGE_SOURCE, MESSAGE_TYPE, OCTO_MATCHES } from '@/utils/octoShared';
+import { OCTO_MATCHES } from '@/utils/octoShared';
 import { clipToOcto, githubDigestToOcto } from '@/utils/octoBotActions';
-import { metadataFetchTarget } from '@/utils/octoLinkMetadata';
 
 const OCTO_URL_PREFIX = OCTO_MATCHES[0].replace('/*', '');
-const MAX_METADATA_HTML_BYTES = 256 * 1024;
-
-async function readMetadataHtml(response: Response): Promise<string | null> {
-  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-  if (!contentType.includes('text/html') || !response.body) return null;
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let totalBytes = 0;
-  let html = '';
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalBytes += value.byteLength;
-      if (totalBytes > MAX_METADATA_HTML_BYTES) {
-        await reader.cancel();
-        return null;
-      }
-      html += decoder.decode(value, { stream: true });
-    }
-    return html + decoder.decode();
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Find an Octo tab in any window, activate it, then send a message to focus the composer.
@@ -110,36 +83,6 @@ export default defineBackground(() => {
     } catch (err) {
       console.error('[octo] gh-digest failed', err);
       notify('GitHub 汇总失败', err instanceof Error ? err.message : String(err));
-    }
-  });
-
-  // ─── Cross-origin fetch for link previews ────────────────────────────
-  // Only the content-script relay may request it, and the target policy is
-  // shared with that relay so a forged MAIN-world message cannot turn this into
-  // a local-network or signed-URL fetch primitive.
-  browser.runtime.onMessage.addListener((message) => {
-    const msg = message as Record<string, unknown>;
-    if (msg?.source === MESSAGE_SOURCE && msg?.type === MESSAGE_TYPE.linkPreviewFetch) {
-      const url = typeof msg.url === 'string' ? metadataFetchTarget(msg.url) : null;
-      const requestId = msg.requestId as string;
-      if (!url || typeof requestId !== 'string' || requestId.length < 4 || requestId.length > 100) {
-        return Promise.resolve({ source: MESSAGE_SOURCE, type: MESSAGE_TYPE.linkPreviewFetchResult, requestId, html: null });
-      }
-
-      return fetch(url, {
-        cache: 'no-store',
-        credentials: 'omit',
-        redirect: 'error',
-        referrerPolicy: 'no-referrer',
-        signal: AbortSignal.timeout(4000),
-      })
-        .then(async (response) => {
-          if (!response.ok)
-            return { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.linkPreviewFetchResult, requestId, html: null };
-          const html = await readMetadataHtml(response);
-          return { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.linkPreviewFetchResult, requestId, html };
-        })
-        .catch(() => ({ source: MESSAGE_SOURCE, type: MESSAGE_TYPE.linkPreviewFetchResult, requestId, html: null }));
     }
   });
 

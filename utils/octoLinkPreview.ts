@@ -1,21 +1,17 @@
 /**
  * Link actions — rich GitHub cards plus compact actions for other message URLs.
  *
- * Non-GitHub URLs get one button each. When the user has granted the optional
- * metadata permission, safe URLs upgrade their fallback label/icon from OG
- * metadata. DOM methods (not innerHTML) avoid Chrome's
+ * Non-GitHub URLs get one button each with a locally derived label and static
+ * web icon. DOM methods (not innerHTML) avoid Chrome's
  * `about:blank#blocked` navigation restriction.
  */
 
 import { OCTO_SELECTORS } from './octoSelectors';
-import { MESSAGE_SOURCE, MESSAGE_TYPE } from './octoShared';
 import {
   externalLinkFallback,
   extractExternalUrls,
   extractUrls,
   isGitHubUrl,
-  metadataFetchTarget,
-  titleFromUrl,
 } from './octoLinkMetadata';
 
 export {
@@ -23,7 +19,6 @@ export {
   extractExternalUrls,
   extractUrls,
   isOpaqueSegment,
-  metadataFetchTarget,
   titleFromUrl,
 } from './octoLinkMetadata';
 
@@ -33,7 +28,6 @@ const ROOT_CLASS = 'octo-link-preview';
 const ACTION_ROOT_CLASS = 'octo-link-actions';
 const STYLE_ID = 'octo-link-preview-style';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const MAX_METADATA_ACTIONS_PER_MESSAGE = 6;
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -62,15 +56,9 @@ interface ExternalLinkAction {
   icon: string;
 }
 
-interface ExternalLinkActionCacheEntry {
-  data: ExternalLinkAction;
-  fetchedAt: number;
-}
-
 // ─── Cache ─────────────────────────────────────────────────────────────────
 
 const previewCache = new Map<string, CacheEntry>();
-const externalLinkActionCache = new Map<string, ExternalLinkActionCacheEntry>();
 
 function getCached(url: string): LinkPreviewData | null {
   const entry = previewCache.get(url);
@@ -90,24 +78,6 @@ function setCache(url: string, data: LinkPreviewData): void {
   previewCache.set(url, { data, fetchedAt: Date.now() });
 }
 
-function getExternalLinkActionCache(url: string): ExternalLinkAction | null {
-  const entry = externalLinkActionCache.get(url);
-  if (!entry) return null;
-  if (Date.now() - entry.fetchedAt > CACHE_TTL_MS) {
-    externalLinkActionCache.delete(url);
-    return null;
-  }
-  return entry.data;
-}
-
-function setExternalLinkActionCache(url: string, data: ExternalLinkAction): void {
-  if (externalLinkActionCache.size >= 100) {
-    const oldest = externalLinkActionCache.entries().next().value;
-    if (oldest) externalLinkActionCache.delete(oldest[0]);
-  }
-  externalLinkActionCache.set(url, { data, fetchedAt: Date.now() });
-}
-
 // ─── Handlers ──────────────────────────────────────────────────────────────
 
 interface PreviewHandler {
@@ -123,48 +93,6 @@ interface OGTags {
   image?: string;
   siteName?: string;
   icon?: string;
-}
-
-let fetchRequestId = 0;
-const pendingFetchesLP = new Map<string, { resolve: (html: string | null) => void; timer: number }>();
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('message', (event: MessageEvent) => {
-  if (event.source !== window) return;
-  const data = event.data as Record<string, unknown>;
-  if (data?.source === MESSAGE_SOURCE && data?.type === MESSAGE_TYPE.linkPreviewFetchResult) {
-    const rid = typeof data.requestId === 'string' ? data.requestId : '';
-    const pending = pendingFetchesLP.get(rid);
-    if (pending) {
-      clearTimeout(pending.timer);
-      pending.resolve(typeof data.html === 'string' && data.html.length <= 300_000 ? data.html : null);
-      pendingFetchesLP.delete(rid);
-    }
-  }
-});
-}
-
-async function fetchViaBackground(url: string): Promise<string | null> {
-  return new Promise<string | null>((resolve) => {
-    const requestId = `lp-${++fetchRequestId}-${Date.now()}`;
-    const timer = window.setTimeout(() => {
-      pendingFetchesLP.delete(requestId);
-      resolve(null);
-    }, 6000);
-    pendingFetchesLP.set(requestId, { resolve, timer });
-    window.postMessage(
-      { source: MESSAGE_SOURCE, type: MESSAGE_TYPE.linkPreviewFetch, url, requestId },
-      '*',
-    );
-  });
-}
-
-async function fetchOGTags(url: string): Promise<OGTags | null> {
-  const target = metadataFetchTarget(url);
-  if (!target) return null;
-  const html = await fetchViaBackground(target);
-  if (!html) return null;
-  return parseOGFromHTML(html, target);
 }
 
 /** @internal exported for testing */
@@ -376,46 +304,6 @@ const handlers: PreviewHandler[] = [
       } catch { return null; }
     },
   },
-  {
-    // 2. Everything else — OG tags when the host allows it, otherwise the URL's
-    //    own slug. If neither yields a real name we return null and NO card is
-    //    rendered: a card that only echoes the URL is strictly worse than
-    //    nothing, because the link is already visible in the message right
-    //    above it. Silence is the correct output for "we learned nothing".
-    pattern: /^https?:\/\//,
-    async fetch(match) {
-      const url = match[0];
-      const { domain, favicon } = domainLabel(url);
-      const og = await fetchOGTags(url);
-
-      if (og?.title && isMeaningfulTitle(og.title, domain)) {
-        return {
-          url,
-          title: og.title,
-          description:
-            og.description && isMeaningfulTitle(og.description, domain)
-              ? og.description
-              : undefined,
-          source: 'web',
-          image: og.image,
-          authorAvatar: favicon || undefined,
-          authorName: og.siteName || domain,
-        };
-      }
-
-      // No usable metadata: try the name in the path.
-      const slugTitle = titleFromUrl(url);
-      if (!slugTitle) return null;
-
-      return {
-        url,
-        title: slugTitle,
-        source: 'web',
-        authorAvatar: favicon || undefined,
-        authorName: domain,
-      };
-    },
-  },
 ];
 
 // ─── Preview resolution ────────────────────────────────────────────────────
@@ -431,22 +319,6 @@ async function resolvePreview(url: string): Promise<LinkPreviewData | null> {
     }
   }
   return null;
-}
-
-async function resolveExternalLinkAction(url: string): Promise<ExternalLinkAction> {
-  const cached = getExternalLinkActionCache(url);
-  if (cached) return cached;
-
-  const fallback = externalLinkFallback(url);
-  const tags = await fetchOGTags(url);
-  const domain = domainLabel(url).domain;
-  const data: ExternalLinkAction = {
-    url,
-    title: tags?.title && isMeaningfulTitle(tags.title, domain) ? tags.title : fallback.title,
-    icon: tags?.icon || fallback.icon,
-  };
-  setExternalLinkActionCache(url, data);
-  return data;
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────
@@ -563,23 +435,6 @@ function renderExternalLinkAction(data: ExternalLinkAction): HTMLAnchorElement {
   return action;
 }
 
-function updateExternalLinkAction(action: HTMLAnchorElement, data: ExternalLinkAction): void {
-  const label = action.querySelector<HTMLElement>('.octo-link-action-label');
-  if (label) label.textContent = data.title;
-  const icon = action.querySelector<HTMLElement>('.octo-link-action-icon');
-  icon?.replaceWith(linkActionIcon(data.icon));
-}
-
-async function hydrateExternalLinkActions(root: HTMLElement, urls: string[]): Promise<void> {
-  for (const url of urls.slice(0, MAX_METADATA_ACTIONS_PER_MESSAGE)) {
-    const data = await resolveExternalLinkAction(url);
-    if (!root.isConnected) return;
-    const action = [...root.querySelectorAll<HTMLAnchorElement>('[data-octo-link-url]')]
-      .find((node) => node.dataset.octoLinkUrl === url);
-    if (action) updateExternalLinkAction(action, data);
-  }
-}
-
 function renderExternalLinkActions(host: HTMLElement, item: HTMLElement, urls: string[]): void {
   const existing = item.querySelector<HTMLElement>(`.${ACTION_ROOT_CLASS}`);
   if (!urls.length) {
@@ -599,7 +454,6 @@ function renderExternalLinkActions(host: HTMLElement, item: HTMLElement, urls: s
   }
   if (existing) existing.replaceWith(root);
   else host.appendChild(root);
-  void hydrateExternalLinkActions(root, urls);
 }
 
 function renderCardNode(data: LinkPreviewData): HTMLElement {
@@ -801,7 +655,6 @@ export function stopOctoLinkPreview(): void {
   if (scanTimer != null) window.clearTimeout(scanTimer);
   scanTimer = null;
   pendingFetches.clear();
-  externalLinkActionCache.clear();
   document.querySelectorAll(`.${ROOT_CLASS}`).forEach((node) => node.remove());
   document.querySelectorAll(`.${ACTION_ROOT_CLASS}`).forEach((node) => node.remove());
   // The bookkeeping attributes are ours too, so they have to go with the nodes:

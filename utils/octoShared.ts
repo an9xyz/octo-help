@@ -237,8 +237,6 @@ export const MESSAGE_TYPE = {
   exportRequest: 'exportRequest',
   exportResult: 'exportResult',
   linkPreview: 'linkPreview',
-  linkPreviewFetch: 'linkPreviewFetch',
-  linkPreviewFetchResult: 'linkPreviewFetchResult',
 } as const;
 
 export interface MasterMessage {
@@ -441,14 +439,6 @@ export interface LinkPreviewMessage {
   enabled: boolean;
 }
 
-/** MAIN world -> content script: request bounded HTML metadata for one link. */
-export interface LinkPreviewFetchMessage {
-  source: typeof MESSAGE_SOURCE;
-  type: typeof MESSAGE_TYPE.linkPreviewFetch;
-  url: string;
-  requestId: string;
-}
-
 /**
  * Direction split of the postMessage protocol.
  *
@@ -486,7 +476,6 @@ export type PageOutboundMessage =
   | RequestKickScriptMessage
   | CompatReportMessage
   | ConvFoldChangeMessage
-  | ExportResultMessage
-  | LinkPreviewFetchMessage;
+  | ExportResultMessage;
 
 export type OctoMessage = PageInboundMessage | PageOutboundMessage;

@@ -29,7 +29,6 @@ import {
   isMeaningfulTitle,
   isOpaqueSegment,
   isUsableUrl,
-  metadataFetchTarget,
   parseHexColor,
   parseOGFromHTML,
   readableTextColor,
@@ -332,25 +331,6 @@ describe('externalLinkFallback', () => {
       title: 'example.com',
       icon: '',
     });
-  });
-});
-
-describe('metadataFetchTarget', () => {
-  it('only allows public HTTPS URLs without a query string', () => {
-    expect(metadataFetchTarget('https://docs.example.com/guides/hello-world')).toBe(
-      'https://docs.example.com/guides/hello-world',
-    );
-  });
-
-  it.each([
-    'http://docs.example.com/guides/hello-world',
-    'https://docs.example.com/guides/hello-world?ticket=sensitive',
-    'https://user:password@docs.example.com/guides/hello-world',
-    'https://localhost/private',
-    'https://127.0.0.1/private',
-    'https://github.com/octo-help/octo-help/pull/42',
-  ])('does not request metadata for %s', (url) => {
-    expect(metadataFetchTarget(url)).toBeNull();
   });
 });
 
