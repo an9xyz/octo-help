@@ -320,17 +320,17 @@ describe('extractExternalUrls', () => {
 });
 
 describe('externalLinkFallback', () => {
-  it('uses a readable path title and a same-origin favicon without retaining query data', () => {
+  it('uses a readable path title and a local web-icon fallback without a network request', () => {
     expect(externalLinkFallback('https://www.example.com/guides/hello-world?token=secret')).toEqual({
       title: 'hello world',
-      icon: 'https://www.example.com/favicon.ico',
+      icon: '',
     });
   });
 
   it('falls back to the domain when the path contains no readable name', () => {
     expect(externalLinkFallback('https://www.example.com/')).toEqual({
       title: 'example.com',
-      icon: 'https://www.example.com/favicon.ico',
+      icon: '',
     });
   });
 });
