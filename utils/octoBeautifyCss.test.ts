@@ -26,4 +26,10 @@ describe('QQ 2014 sent attachment alignment', () => {
       `${QQ_SELF_MESSAGE_SELECTOR} .wk-msg-row-content .wk-reply-block,\n            ${QQ_SELF_MESSAGE_SELECTOR} .wk-msg-row-content .wk-message-text-reply {`,
     );
   });
+
+  it('keeps reply cards within the QQ bubble width when their preview contains a long URL', () => {
+    expect(beautifyCss).toContain(
+      `${QQ_SELF_MESSAGE_SELECTOR} .wk-msg-row-content .wk-message-text-reply {\n                width: -moz-fit-content !important;\n                width: fit-content !important;\n                max-width: var(--q14-bubble-max) !important;`,
+    );
+  });
 });
