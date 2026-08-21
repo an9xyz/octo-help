@@ -17,7 +17,7 @@ describe('global theme modal palette', () => {
 describe('QQ 2014 sent attachment alignment', () => {
   it('keeps every direct message surface, including image and file cards, on the sent bubble edge', () => {
     expect(beautifyCss).toContain(
-      `${QQ_SELF_MESSAGE_SELECTOR} .wk-msg-row-content > :not(.wk-msg-row-header) {`,
+      `${QQ_SELF_MESSAGE_SELECTOR} .wk-msg-row-content > :not(.wk-msg-row-header),`,
     );
   });
 

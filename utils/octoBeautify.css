@@ -3248,9 +3248,11 @@
             body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-header {
                 flex-direction: row-reverse !important;
             }
-            /* 消息正文、图片和文件卡都是 content 的直接子项。不要只列 markdown/
-             * reply：那会让附件绕过 auto margin，自己的图片/文件又回到左边。 */
-            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-content > :not(.wk-msg-row-header) {
+            /* 消息正文、图片和文件卡都是 content 的直接子项。引用在新旧 DOM 里
+             * 也可能多包一层，故显式覆盖两种 reply 容器，不能只列 markdown。 */
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-content > :not(.wk-msg-row-header),
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-content .wk-reply-block,
+            body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .wk-msg-row-content .wk-message-text-reply {
                 width: -moz-fit-content !important;
                 width: fit-content !important;
                 max-width: 100% !important;
