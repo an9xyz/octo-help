@@ -458,6 +458,10 @@ function ensureStyle(): void {
   style.textContent = `
     .${ROOT_CLASS} { margin-top: 6px; max-width: 420px; }
     .${ACTION_ROOT_CLASS} { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .octo-link-actions,
+    body[data-octo-skin="qq2014"]:not([data-octo-qq-self-left]) .wk-msg-row--send:not(:has(.ai-badge)) .octo-github-links {
+      justify-content: flex-end;
+    }
     .${ACTION_ROOT_CLASS} .octo-link-action {
       display: inline-flex; min-width: 0; max-width: min(100%, 340px); align-items: center; gap: 6px;
       min-height: 28px; box-sizing: border-box; padding: 4px 9px; border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
@@ -526,7 +530,7 @@ function el(tag: string, attrs: Record<string, string | undefined> = {}, childre
 
 function linkActionIcon(icon: string): HTMLElement {
   if (!icon) {
-    return el('span', { class: 'octo-link-action-icon is-fallback', 'aria-hidden': 'true' }, ['↗']);
+    return el('span', { class: 'octo-link-action-icon is-fallback', 'aria-hidden': 'true' }, ['🌐']);
   }
   const image = el('img', {
     class: 'octo-link-action-icon',
