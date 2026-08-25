@@ -20,6 +20,18 @@
                 height: 0 !important;
             }
 
+            /* Octo's Fleet-link click delegation wraps every text message in a
+             * `width: fit-content` flex column. Our bubble is also fit-content;
+             * with the extra child wrapper in current octo-web those nested
+             * intrinsic sizes can resolve to the CJK min-content width (one
+             * character), producing the narrow vertical bubbles. Let the click
+             * wrapper stretch to the known row width; the inner .wk-markdown
+             * bubble still sizes to its content and keeps its max-width below. */
+            .wk-msg-row-body-hitarea {
+                width: auto !important;
+                max-width: 100% !important;
+            }
+
             /* KaTeX 只生成原生 MathML；块公式在窄气泡内滚动，不撑宽会话。 */
             .wk-markdown .katex:has(> math[display="block"]),
             .wk-fold-msg-text .katex:has(> math[display="block"]) {

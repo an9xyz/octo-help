@@ -12,3 +12,11 @@ describe('global theme modal palette', () => {
     expect(beautifyCss).toContain(`${GLOBAL_THEME_SCOPE} .wk-modal:not(.wk-bot-detail-modal) .wk-modal-shell,`);
   });
 });
+
+describe('message bubble sizing', () => {
+  it('neutralizes octo-web nested fit-content hit areas', () => {
+    expect(beautifyCss).toMatch(
+      /\.wk-msg-row-body-hitarea\s*\{[^}]*width:\s*auto\s*!important;[^}]*max-width:\s*100%\s*!important;/s,
+    );
+  });
+});
