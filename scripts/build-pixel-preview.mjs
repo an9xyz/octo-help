@@ -145,8 +145,8 @@ ${skin}
 
 <script>
 // 与 utils/octoBeautify.ts 的 spawnPixelHit / onPixelHover 同逻辑
-const SPRITE = 48, W = SPRITE + 8, RISE_MIN = 28, RISE_MAX = 96, COIN_TOP = 4, LAND_MAX = 10, MS = 1550, COOLDOWN = 1700, HOVER_DELAY = 350, SCROLL_QUIET = 300;
-const COIN_MIN = 1, COIN_MAX = 10, COIN_INSET = 44, REACH_MAX = 420;
+const SPRITE = 48, W = SPRITE + 8, RISE_MIN = 28, RISE_MAX = 96, PEARL_TOP = 4, LAND_MAX = 10, MS = 1550, COOLDOWN = 1700, HOVER_DELAY = 350, SCROLL_QUIET = 300;
+const PEARL_MIN = 1, PEARL_MAX = 10, PEARL_INSET = 44, REACH_MAX = 420;
 const cooling = new WeakSet();
 function spawn(bubble) {
   const r = bubble.getBoundingClientRect();
@@ -164,23 +164,23 @@ function spawn(bubble) {
   fx.style.height = height + 'px';
   fx.style.setProperty('--oph-rise', Math.max(RISE_MIN, height - SPRITE * 2) + 'px');
   const span = Math.min(Math.round(r.width) + 8, REACH_MAX);
-  const reach = Math.max(48, span - COIN_INSET);
+  const reach = Math.max(48, span - PEARL_INSET);
 
   const crate = document.createElement('div');
-  crate.className = 'oph-crate';
+  crate.className = 'oph-chest';
   fx.appendChild(crate);
 
-  const coinCount = COIN_MIN + Math.floor(Math.random() * (COIN_MAX - COIN_MIN + 1));
-  for (let i = 0; i < coinCount; i++) {
-    const at = coinCount <= 1 ? 0.5 : i / (coinCount - 1);
-    const coin = document.createElement('div');
-    coin.className = 'oph-coin oph-coin-' + (at < 0.34 ? 'c' : at < 0.67 ? 'a' : 'b');
-    const dist = COIN_INSET + reach * ((i + Math.random()) / coinCount);
-    coin.style.setProperty('--oph-x', Math.round(flipped ? dist : -dist) + 'px');
-    coin.style.setProperty('--oph-y', Math.round(Math.random() * LAND_MAX) + 'px');
-    coin.style.animationDuration = (1.02 + Math.random() * 0.26).toFixed(2) + 's';
-    coin.style.animationDelay = Math.round(Math.random() * 90) + 'ms';
-    fx.appendChild(coin);
+  const pearlCount = PEARL_MIN + Math.floor(Math.random() * (PEARL_MAX - PEARL_MIN + 1));
+  for (let i = 0; i < pearlCount; i++) {
+    const at = pearlCount <= 1 ? 0.5 : i / (pearlCount - 1);
+    const pearl = document.createElement('div');
+    pearl.className = 'oph-pearl oph-pearl-' + (at < 0.34 ? 'c' : at < 0.67 ? 'a' : 'b');
+    const dist = PEARL_INSET + reach * ((i + Math.random()) / pearlCount);
+    pearl.style.setProperty('--oph-x', Math.round(flipped ? dist : -dist) + 'px');
+    pearl.style.setProperty('--oph-y', Math.round(Math.random() * LAND_MAX) + 'px');
+    pearl.style.animationDuration = (1.02 + Math.random() * 0.26).toFixed(2) + 's';
+    pearl.style.animationDelay = Math.round(Math.random() * 90) + 'ms';
+    fx.appendChild(pearl);
   }
 
   const hero = document.createElement('div');
