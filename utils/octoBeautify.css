@@ -3514,7 +3514,7 @@
                 --octo-px-ground: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAO0lEQVR42mNgYGD4TxE+4cPzHxcGKSAkT7kBHQYM/3FhkAJC8gxUDQNinIwhRrEBpPoZi9hoOhhNB/8BXgilUGi3qVYAAAAASUVORK5CYII=");
                 --octo-px-coin: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAARElEQVR42mNgGAVUBP/RMHUN/rEDFVPLIgyDcVhEG8MptQTDkBMVEIxNbtSCUQsGgQUDltmoUlzQsiyiS2k6CkYBfgAAi5I6GLg6iwQAAAAASUVORK5CYII=");
                 --octo-px-frame-ai: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANUlEQVR42mNgYGBgEBCQ+E8MZkBW/OfFBrz4RAUDRBNM8Y8bFXjxqAbaawBxCGGssU1M0gAAZalmdIJs3+4AAAAASUVORK5CYII=");
-                --octo-px-frame-me: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANElEQVR42mNgYGBgEBCQ+E8MZkBWfOPLH7yYoeANRBNM8Yon+PGoBtprAHEIYayxTUzSAAAoRHusdSSaiwAAAABJRU5ErkJggg==");
+                --octo-px-frame-me: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANElEQVR42mNgYGBgEBCQ+E8MZkBWvOfFH7yYwWIFRBNMsc0e/HhUA+01gDiEMNbYJiZpAAAG1Ut0RWinEQAAAABJRU5ErkJggg==");
                 --octo-px-frame-other: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAAM0lEQVR42mNgYGBgEBCQ+E8MZkBWfOfPH7yYYcUKiCaY4g0E8KgG2msAcQhhrLFNTNIAAPsXg5Q/LaAaAAAAAElFTkSuQmCC");
             }
             /* PIXEL-SPRITES:END */
@@ -3526,8 +3526,11 @@
             body[data-octo-skin="pixel"] {
                 --px-ai: #f8d878;
                 --px-ai-dk: #c87800;
-                --px-me: #a8e4fc;
-                --px-me-dk: #0070ec;
+                /* $21 而不是更浅的 $31：三档原来的亮度是 0.70 / 0.71 / 0.86，
+                   自己和他人只差 1.20:1，两档在列表里几乎分不开 —— 而"这条是不是
+                   我发的"恰恰是最需要一眼看出来的。 */
+                --px-me: #3cbcfc;
+                --px-me-dk: #0038a8;
                 --px-other: #b0fcfc;
                 --px-other-dk: #00a8a8;
                 --px-ink: #101018;
@@ -3610,7 +3613,9 @@
              * ------------------------------------------------------- */
             .octo-pixel-hit {
                 position: fixed;
-                z-index: 2147483000;
+                /* 只要压在消息之上就够。原来的 2147483000 会盖住 Octo 的模态框、
+                   下拉和所有浮层 —— 装饰不该有那个优先级。 */
+                z-index: 9999;
                 width: 56px;
                 /* height 与 --oph-rise 由 spawnPixelHit() 按气泡高度写入 */
                 pointer-events: none;
@@ -3648,7 +3653,9 @@
                之前写的 24px 是 1x，整套皮肤里就它一个是另一种像素密度。 */
             .octo-pixel-hit .oph-coin {
                 left: 4px;
-                top: 24px;
+                /* 与 COIN_TOP_PX 对应：起点越低，能落的余量越少，
+                   而余量的上限由不得越过气泡顶沿这条硬约束决定。 */
+                top: 4px;
                 width: 48px;
                 height: 48px;
                 background-image: var(--octo-px-coin);

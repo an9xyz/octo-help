@@ -79,7 +79,7 @@
                 --octo-px-ground: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAO0lEQVR42mNgYGD4TxE+4cPzHxcGKSAkT7kBHQYM/3FhkAJC8gxUDQNinIwhRrEBpPoZi9hoOhhNB/8BXgilUGi3qVYAAAAASUVORK5CYII=");
                 --octo-px-coin: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAARElEQVR42mNgGAVUBP/RMHUN/rEDFVPLIgyDcVhEG8MptQTDkBMVEIxNbtSCUQsGgQUDltmoUlzQsiyiS2k6CkYBfgAAi5I6GLg6iwQAAAAASUVORK5CYII=");
                 --octo-px-frame-ai: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANUlEQVR42mNgYGBgEBCQ+E8MZkBW/OfFBrz4RAUDRBNM8Y8bFXjxqAbaawBxCGGssU1M0gAAZalmdIJs3+4AAAAASUVORK5CYII=");
-                --octo-px-frame-me: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANElEQVR42mNgYGBgEBCQ+E8MZkBWfOPLH7yYoeANRBNM8Yon+PGoBtprAHEIYayxTUzSAAAoRHusdSSaiwAAAABJRU5ErkJggg==");
+                --octo-px-frame-me: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANElEQVR42mNgYGBgEBCQ+E8MZkBWvOfFH7yYwWIFRBNMsc0e/HhUA+01gDiEMNbYJiZpAAAG1Ut0RWinEQAAAABJRU5ErkJggg==");
                 --octo-px-frame-other: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAAM0lEQVR42mNgYGBgEBCQ+E8MZkBWfOfPH7yYYcUKiCaY4g0E8KgG2msAcQhhrLFNTNIAAPsXg5Q/LaAaAAAAAElFTkSuQmCC");
             }
             /* PIXEL-SPRITES:END */
@@ -91,8 +91,11 @@
             body[data-octo-skin="pixel"] {
                 --px-ai: #f8d878;
                 --px-ai-dk: #c87800;
-                --px-me: #a8e4fc;
-                --px-me-dk: #0070ec;
+                /* $21 而不是更浅的 $31：三档原来的亮度是 0.70 / 0.71 / 0.86，
+                   自己和他人只差 1.20:1，两档在列表里几乎分不开 —— 而"这条是不是
+                   我发的"恰恰是最需要一眼看出来的。 */
+                --px-me: #3cbcfc;
+                --px-me-dk: #0038a8;
                 --px-other: #b0fcfc;
                 --px-other-dk: #00a8a8;
                 --px-ink: #101018;
@@ -175,7 +178,9 @@
              * ------------------------------------------------------- */
             .octo-pixel-hit {
                 position: fixed;
-                z-index: 2147483000;
+                /* 只要压在消息之上就够。原来的 2147483000 会盖住 Octo 的模态框、
+                   下拉和所有浮层 —— 装饰不该有那个优先级。 */
+                z-index: 9999;
                 width: 56px;
                 /* height 与 --oph-rise 由 spawnPixelHit() 按气泡高度写入 */
                 pointer-events: none;
@@ -213,7 +218,9 @@
                之前写的 24px 是 1x，整套皮肤里就它一个是另一种像素密度。 */
             .octo-pixel-hit .oph-coin {
                 left: 4px;
-                top: 24px;
+                /* 与 COIN_TOP_PX 对应：起点越低，能落的余量越少，
+                   而余量的上限由不得越过气泡顶沿这条硬约束决定。 */
+                top: 4px;
                 width: 48px;
                 height: 48px;
                 background-image: var(--octo-px-coin);
@@ -514,27 +521,26 @@
 
 <script>
 // 与 utils/octoBeautify.ts 的 spawnPixelHit / onPixelHover 同逻辑
-const SPRITE = 48, W = SPRITE + 8, MIN_H = SPRITE * 3, COIN_TOP = 24, MS = 1550, COOLDOWN = 1700;
+const SPRITE = 48, W = SPRITE + 8, RISE_MIN = 28, COIN_TOP = 4, LAND_MAX = 10, MS = 1550, COOLDOWN = 1700;
 const COIN_MIN = 1, COIN_MAX = 10, COIN_INSET = 44, REACH_MAX = 420;
 const cooling = new WeakSet();
 function spawn(bubble) {
   const r = bubble.getBoundingClientRect();
   if (!r.width || !r.height) return;
-  const height = Math.max(MIN_H, Math.round(r.height) + SPRITE);
+  const height = Math.round(r.height) + SPRITE;
   let left = r.right + 8, flipped = false;
   if (left + W > window.innerWidth - 6) { left = r.left - 8 - W; flipped = true; }
   if (left < 6) return;
-  const top = Math.max(6, Math.min(r.bottom + 8 - height, window.innerHeight - height - 6));
+  const top = Math.max(6, Math.min(Math.round(r.bottom) - height, window.innerHeight - height - 6));
   const fx = document.createElement('div');
   fx.className = 'octo-pixel-hit';
   fx.setAttribute('aria-hidden', 'true');
   fx.style.left = Math.round(left) + 'px';
   fx.style.top = Math.round(top) + 'px';
   fx.style.height = height + 'px';
-  fx.style.setProperty('--oph-rise', (height - SPRITE * 2) + 'px');
+  fx.style.setProperty('--oph-rise', Math.max(RISE_MIN, height - SPRITE * 2) + 'px');
   const span = Math.min(Math.round(r.width) + 8, REACH_MAX);
   const reach = Math.max(48, span - COIN_INSET);
-  const land = Math.max(24, height - Math.round(r.height) - COIN_TOP);
 
   const crate = document.createElement('div');
   crate.className = 'oph-crate';
@@ -547,7 +553,7 @@ function spawn(bubble) {
     coin.className = 'oph-coin oph-coin-' + (at < 0.34 ? 'c' : at < 0.67 ? 'a' : 'b');
     const dist = COIN_INSET + reach * ((i + Math.random()) / coinCount);
     coin.style.setProperty('--oph-x', Math.round(flipped ? dist : -dist) + 'px');
-    coin.style.setProperty('--oph-y', Math.round(land + Math.random() * 24 - 12) + 'px');
+    coin.style.setProperty('--oph-y', Math.round(Math.random() * LAND_MAX) + 'px');
     coin.style.animationDuration = (1.02 + Math.random() * 0.26).toFixed(2) + 's';
     coin.style.animationDelay = Math.round(Math.random() * 90) + 'ms';
     fx.appendChild(coin);
@@ -563,6 +569,7 @@ function spawn(bubble) {
 document.addEventListener('pointerover', (e) => {
   const bubble = e.target instanceof Element ? e.target.closest('.wk-markdown, .wk-fold-msg-text') : null;
   if (!bubble || cooling.has(bubble)) return;
+  if (document.querySelector('.octo-pixel-hit')) return;
   cooling.add(bubble);
   setTimeout(() => cooling.delete(bubble), COOLDOWN);
   spawn(bubble);

@@ -1078,14 +1078,25 @@ const PIXEL_HIT_COOLDOWN_MS = 1700;
 const PIXEL_SPRITE_PX = 48;
 const PIXEL_HIT_W = PIXEL_SPRITE_PX + 8;
 /**
- * 下限 = 箱子 + 角色 + 一个身高的起跳余量。
- * 余量原本给了 24px，减掉上下两个精灵后角色只能跳半个身高，看不出在跳；
- * 单行消息又正好落在这个下限上，于是最常见的那条消息动画最弱。
+ * 起跳距离的下限。气泡矮到装不下一次完整起跳时（48px 的角色 + 48px 的箱子
+ * 本就比一条单行消息高），角色会顶穿箱子一点 —— 这比让箱子飘到上一条消息
+ * 旁边好：宁可跳得浅，也要让人看出这套动画属于哪条消息。
  */
-const PIXEL_HIT_MIN_H = PIXEL_SPRITE_PX * 3;
-/** Must match `.oph-coin { top }` in BEAUTIFY_CSS — the coins' landing distance
- *  is measured from there. */
-const COIN_TOP_PX = 24;
+const PIXEL_RISE_MIN = 28;
+/** Must match `.oph-coin { top }` in BEAUTIFY_CSS. */
+const COIN_TOP_PX = 4;
+/** Where the coin's art ends inside its 48px box (the sprite has empty rows
+ *  below it), i.e. how far down its visible bottom edge sits. */
+const COIN_ART_BOTTOM_PX = 34;
+/**
+ * How far a coin may fall. The crate occupies the scene's top PIXEL_SPRITE_PX,
+ * so that line is also the bubble's top edge — and a coin must never cross it.
+ * Coins are opaque sprites: landing one *on* the bubble means covering the
+ * message with decoration, and a message being obscured while someone reads it
+ * matters far more than how the animation looks. So they pile up along the
+ * bubble's top edge instead of scattering across its face.
+ */
+const COIN_LAND_MAX_PX = PIXEL_SPRITE_PX - COIN_ART_BOTTOM_PX - COIN_TOP_PX;
 /** How many coins a bump can throw. Rolled per hit. */
 const COIN_MIN = 1;
 const COIN_MAX = 10;
@@ -1117,11 +1128,11 @@ let pixelHitCooldown = new WeakSet<Element>();
 function spawnPixelHit(bubble: Element): void {
   const r = bubble.getBoundingClientRect();
   if (!r.width || !r.height) return;
-  // The scene spans the bubble instead of being a fixed-height block parked
-  // next to it: crate level with the bubble's top edge, character standing on
-  // its bottom edge. A fixed 160px box put the crate ~120px above a one-line
-  // message, which read as an unrelated animation floating in the margin.
-  const height = Math.max(PIXEL_HIT_MIN_H, Math.round(r.height) + PIXEL_SPRITE_PX);
+  // The scene spans the bubble exactly: the crate's bottom edge sits on the
+  // bubble's top edge, the character stands on its bottom edge. The previous
+  // fixed 144px box floated the crate ~80px above a one-line message — right
+  // next to the message above it, which is the one it appeared to belong to.
+  const height = Math.round(r.height) + PIXEL_SPRITE_PX;
   // Prefer the gutter to the right of the bubble; fall back to the left; if
   // neither side fits, skip it.
   let left = r.right + 8;
@@ -1131,7 +1142,7 @@ function spawnPixelHit(bubble: Element): void {
     flipped = true;
   }
   if (left < 6) return;
-  const top = Math.max(6, Math.min(r.bottom + 8 - height, window.innerHeight - height - 6));
+  const top = Math.max(6, Math.min(Math.round(r.bottom) - height, window.innerHeight - height - 6));
 
   const fx = document.createElement('div');
   fx.className = PIXEL_HIT_CLASS;
@@ -1141,7 +1152,7 @@ function spawnPixelHit(bubble: Element): void {
   fx.style.height = `${height}px`;
   // Character sits at the bottom, crate at the top — the rise is whatever is
   // left between them, so the jump always lands on the crate's underside.
-  fx.style.setProperty('--oph-rise', `${height - PIXEL_SPRITE_PX * 2}px`);
+  fx.style.setProperty('--oph-rise', `${Math.max(PIXEL_RISE_MIN, height - PIXEL_SPRITE_PX * 2)}px`);
   // Coins are thrown *at the bubble* and settle on it, rather than looping
   // inside the gutter: signed so they fly toward the message whichever side the
   // scene ended up on, capped so a very wide bubble does not fling them across
@@ -1151,9 +1162,7 @@ function spawnPixelHit(bubble: Element): void {
   // inside the bubble rather than in the 8px gap beside it.
   const span = Math.min(Math.round(r.width) + 8, COIN_REACH_MAX_PX);
   const reach = Math.max(48, span - COIN_INSET_PX);
-  // Where the bubble's top edge sits relative to a coin's starting offset, i.e.
-  // how far a coin has to fall to come to rest on the bubble.
-  const land = Math.max(24, height - Math.round(r.height) - COIN_TOP_PX);
+
   const coinCount = COIN_MIN + Math.floor(Math.random() * (COIN_MAX - COIN_MIN + 1));
   // Built node by node rather than with innerHTML: this runs in the page MAIN
   // world, where an innerHTML template becomes an injection sink the moment any
@@ -1171,7 +1180,7 @@ function spawnPixelHit(bubble: Element): void {
     const ratio = (i + Math.random()) / coinCount;
     const dist = COIN_INSET_PX + reach * ratio;
     coin.style.setProperty('--oph-x', `${Math.round(flipped ? dist : -dist)}px`);
-    coin.style.setProperty('--oph-y', `${Math.round(land + Math.random() * 24 - 12)}px`);
+    coin.style.setProperty('--oph-y', `${Math.round(Math.random() * COIN_LAND_MAX_PX)}px`);
     // Stagger duration and start so a burst scatters instead of marching in step.
     coin.style.animationDuration = `${(1.02 + Math.random() * 0.26).toFixed(2)}s`;
     coin.style.animationDelay = `${Math.round(Math.random() * 90)}ms`;
@@ -1193,6 +1202,12 @@ function onPixelHover(e: Event): void {
   if (!(target instanceof Element)) return;
   const bubble = target.closest(OCTO_SELECTORS.anyMessageBody);
   if (!bubble || pixelHitCooldown.has(bubble)) return;
+  // One scene at a time. The per-bubble cooldown alone does not stop a pointer
+  // swept down the list from arming ten of them at once — each on a different
+  // bubble, all still on screen — which is a shower of coins, not an effect.
+  // Queried from the DOM rather than tracked in a flag so a scene removed by
+  // anything else (teardown, the user's own extension) cannot wedge it shut.
+  if (document.querySelector(`.${PIXEL_HIT_CLASS}`)) return;
   pixelHitCooldown.add(bubble);
   window.setTimeout(() => pixelHitCooldown.delete(bubble), PIXEL_HIT_COOLDOWN_MS);
   try {

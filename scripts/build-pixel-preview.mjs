@@ -145,27 +145,26 @@ ${skin}
 
 <script>
 // 与 utils/octoBeautify.ts 的 spawnPixelHit / onPixelHover 同逻辑
-const SPRITE = 48, W = SPRITE + 8, MIN_H = SPRITE * 3, COIN_TOP = 24, MS = 1550, COOLDOWN = 1700;
+const SPRITE = 48, W = SPRITE + 8, RISE_MIN = 28, COIN_TOP = 4, LAND_MAX = 10, MS = 1550, COOLDOWN = 1700;
 const COIN_MIN = 1, COIN_MAX = 10, COIN_INSET = 44, REACH_MAX = 420;
 const cooling = new WeakSet();
 function spawn(bubble) {
   const r = bubble.getBoundingClientRect();
   if (!r.width || !r.height) return;
-  const height = Math.max(MIN_H, Math.round(r.height) + SPRITE);
+  const height = Math.round(r.height) + SPRITE;
   let left = r.right + 8, flipped = false;
   if (left + W > window.innerWidth - 6) { left = r.left - 8 - W; flipped = true; }
   if (left < 6) return;
-  const top = Math.max(6, Math.min(r.bottom + 8 - height, window.innerHeight - height - 6));
+  const top = Math.max(6, Math.min(Math.round(r.bottom) - height, window.innerHeight - height - 6));
   const fx = document.createElement('div');
   fx.className = 'octo-pixel-hit';
   fx.setAttribute('aria-hidden', 'true');
   fx.style.left = Math.round(left) + 'px';
   fx.style.top = Math.round(top) + 'px';
   fx.style.height = height + 'px';
-  fx.style.setProperty('--oph-rise', (height - SPRITE * 2) + 'px');
+  fx.style.setProperty('--oph-rise', Math.max(RISE_MIN, height - SPRITE * 2) + 'px');
   const span = Math.min(Math.round(r.width) + 8, REACH_MAX);
   const reach = Math.max(48, span - COIN_INSET);
-  const land = Math.max(24, height - Math.round(r.height) - COIN_TOP);
 
   const crate = document.createElement('div');
   crate.className = 'oph-crate';
@@ -178,7 +177,7 @@ function spawn(bubble) {
     coin.className = 'oph-coin oph-coin-' + (at < 0.34 ? 'c' : at < 0.67 ? 'a' : 'b');
     const dist = COIN_INSET + reach * ((i + Math.random()) / coinCount);
     coin.style.setProperty('--oph-x', Math.round(flipped ? dist : -dist) + 'px');
-    coin.style.setProperty('--oph-y', Math.round(land + Math.random() * 24 - 12) + 'px');
+    coin.style.setProperty('--oph-y', Math.round(Math.random() * LAND_MAX) + 'px');
     coin.style.animationDuration = (1.02 + Math.random() * 0.26).toFixed(2) + 's';
     coin.style.animationDelay = Math.round(Math.random() * 90) + 'ms';
     fx.appendChild(coin);
@@ -194,6 +193,7 @@ function spawn(bubble) {
 document.addEventListener('pointerover', (e) => {
   const bubble = e.target instanceof Element ? e.target.closest('.wk-markdown, .wk-fold-msg-text') : null;
   if (!bubble || cooling.has(bubble)) return;
+  if (document.querySelector('.octo-pixel-hit')) return;
   cooling.add(bubble);
   setTimeout(() => cooling.delete(bubble), COOLDOWN);
   spawn(bubble);
