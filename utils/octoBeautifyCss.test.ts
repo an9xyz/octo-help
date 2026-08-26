@@ -72,6 +72,27 @@ describe('pixel skin', () => {
     expect(beautifyCss).toContain('var(--oph-y, 40px)');
   });
 
+  it('builds the bot card banner by stacking sprites, at integer scales only', () => {
+    const banner = beautifyCss.slice(
+      beautifyCss.indexOf(`${SKIN} .wk-bot-detail-header::before`),
+    ).slice(0, 700);
+    for (const sprite of ['stand', 'crate', 'cloud', 'ground']) {
+      expect(banner).toContain(`var(--octo-px-${sprite})`);
+    }
+    // 24px 与 16px 的源精灵只能按整数倍放；1.83 倍那种会把一个源像素
+    // 切成宽窄不一的块，边缘立刻发脏。
+    for (const [, size] of banner.matchAll(/\/ (\d+)px \d+px/g)) {
+      expect([32, 48, 64, 96]).toContain(Number(size));
+    }
+  });
+
+  it('ships a whole-site palette that only sets --octo-global-* vars', () => {
+    expect(beautifyCss).toContain('body[data-octo-global-theme="pixel"] {');
+    expect(beautifyCss).toContain('--octo-global-accent: #0070ec;');
+    // 硬投影：任何 blur 半径都会把它拉出 8-bit
+    expect(beautifyCss).toContain('--octo-global-shadow: 3px 3px 0 rgba(16, 16, 24, 0.16);');
+  });
+
   it('hides the whole scene under reduced motion', () => {
     expect(beautifyCss).toContain('.octo-pixel-hit { display: none !important; }');
   });

@@ -17,6 +17,7 @@ const cssPath = new URL('../utils/octoBeautify.css', import.meta.url);
 const css = readFileSync(cssPath, 'utf8');
 const at = css.indexOf('像素乐园皮肤');
 if (at < 0) throw new Error('octoBeautify.css 里找不到像素乐园皮肤段');
+// 从皮肤段一直取到文件尾：全站配色和 Bot 卡都追加在它后面。
 const skin = css.slice(css.lastIndexOf('/*', at));
 
 const html = `<!doctype html>
@@ -49,6 +50,36 @@ const html = `<!doctype html>
   .wk-reply-block {
     display: block; font-size: 13px; opacity: .85;
     padding: 4px 8px; margin-bottom: 6px; border-left: 2px solid #bbb;
+  }
+
+  /* Bot 卡骨架 —— 皮肤只覆盖配色和 banner，布局本来由基础层提供，
+     这里补出最小的一份，好让 ::before/::after 的覆盖能落到实处。 */
+  .wk-bot-detail-modal { max-width: 400px; margin: 40px auto 0; }
+  .wk-modal-shell { background: #fff; border-radius: 16px; overflow: hidden; }
+  .wk-bot-detail-content { display: flex; flex-direction: column; }
+  .wk-bot-detail-header {
+    position: relative; height: 176px; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 14px 18px;
+  }
+  .wk-bot-detail-header::before,
+  .wk-bot-detail-header::after {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 176px;
+  }
+  .wk-bot-detail-header > * { position: relative; z-index: 1; }
+  .wk-bot-detail-header-avatar {
+    width: 64px; height: 64px; background: #cfe0ff; align-self: flex-start;
+    margin-bottom: 8px;
+  }
+  .wk-bot-detail-name { font-size: 20px; font-weight: 700; }
+  .wk-bot-detail-id { font-size: 12px; }
+  .wk-bot-detail-section { margin: 14px 18px 0; padding: 10px 12px; font-size: 13px; }
+  .wk-bot-detail-label {
+    display: inline-block; font-size: 11px; padding: 2px 8px; margin-bottom: 6px;
+  }
+  .wk-bot-detail-primary-action {
+    margin: 16px 18px 20px; padding: 10px; font: inherit; font-weight: 700;
+    cursor: pointer;
   }
 </style>
 <style>
@@ -91,6 +122,23 @@ ${skin}
       <div class="wk-msg-row-content">
         <div class="wk-msg-row-header">助手 <span class="ai-badge">AI</span></div>
         <div class="wk-markdown">AI 的消息是浅金气泡。这一条特意写长一些，好让气泡撑到多行，用来验证撞箱场景的高度确实跟着气泡走 —— 宝箱应该始终贴在气泡顶沿附近，角色始终站在底沿，而不是固定悬在某个高度上。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wk-bot-detail-modal">
+    <div class="wk-modal-shell" data-octo-rarity="SSR">
+      <div class="wk-bot-detail-content" data-octo-rarity="SSR">
+        <div class="wk-bot-detail-header">
+          <div class="wk-bot-detail-header-avatar"></div>
+          <div class="wk-bot-detail-name">值班机器人</div>
+          <div class="wk-bot-detail-id">@oncall-bot</div>
+        </div>
+        <div class="wk-bot-detail-section">
+          <span class="wk-bot-detail-label">简介</span>
+          把值班信息推到群里，支持 /oncall 查询当前值班人。
+        </div>
+        <button class="wk-bot-detail-primary-action">发消息</button>
       </div>
     </div>
   </div>

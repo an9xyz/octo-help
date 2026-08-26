@@ -27,10 +27,12 @@ export const NES = {
   black: [0x00, 0x00, 0x00], white: [0xfc, 0xfc, 0xfc],
   blue: [0x00, 0x70, 0xec], ltblue: [0x3c, 0xbc, 0xfc], dkblue: [0x00, 0x00, 0xa8],
   gold: [0xf8, 0xb8, 0x00], dkgold: [0xc8, 0x78, 0x00], drkgold: [0x88, 0x50, 0x00],
+  brick: [0xc8, 0x4c, 0x0c], dkbrick: [0x88, 0x30, 0x00],
 };
 export const PAL = {
   K: NES.black, W: NES.white, B: NES.blue, L: NES.ltblue, D: NES.dkblue,
   Y: NES.gold, O: NES.dkgold, X: NES.drkgold,
+  R: NES.brick, r: NES.dkbrick,
 };
 
 // Shared head + face. Reused verbatim by every character pose: redrawing the
@@ -130,6 +132,45 @@ export const SPRITES = {
     'KOOOOOOOOOOOOOOOOOOOOOOK',
     'KXXXXXXXXXXXXXXXXXXXXXXK',
     'KKKKKKKKKKKKKKKKKKKKKKKK',
+  ],
+  // Banner 元素：Bot 卡的 header 用 CSS 把这些和角色/宝箱叠成一幅横版场景，
+  // 比手画一整张 400x120 的大图省得多，改起来也只动这两块。
+  cloud: [
+    '................................',
+    '................................',
+    '.........KKKKKKKK...............',
+    '.......KKWWWWWWWWKK.............',
+    '......KWWWWWWWWWWWWK............',
+    '....KKWWWWWWWWWWWWWWKK..........',
+    '..KKWWWWWWWWWWWWWWWWWWKK........',
+    '.KWWWWWWWWWWWWWWWWWWWWWWK.......',
+    'KWWWWWWWWWWWWWWWWWWWWWWWWK......',
+    'KWWWWWWWWWWWWWWWWWWWWWWWWK......',
+    'KKKKKKKKKKKKKKKKKKKKKKKKKK......',
+    '................................',
+    '................................',
+    '................................',
+    '................................',
+    '................................',
+  ],
+  // 错缝砖墙，左右无缝：每行末尾的缝正好接上下一块的行首。
+  ground: [
+    'KKKKKKKKKKKKKKKK',
+    'RRRRRRRKRRRRRRRK',
+    'RRRRRRRKRRRRRRRK',
+    'rrrrrrrKrrrrrrrK',
+    'KKKKKKKKKKKKKKKK',
+    'RRRKRRRRRRRKRRRR',
+    'RRRKRRRRRRRKRRRR',
+    'rrrKrrrrrrrKrrrr',
+    'KKKKKKKKKKKKKKKK',
+    'RRRRRRRKRRRRRRRK',
+    'RRRRRRRKRRRRRRRK',
+    'rrrrrrrKrrrrrrrK',
+    'KKKKKKKKKKKKKKKK',
+    'RRRKRRRRRRRKRRRR',
+    'RRRKRRRRRRRKRRRR',
+    'rrrKrrrrrrrKrrrr',
   ],
   coin: [
     '........................',

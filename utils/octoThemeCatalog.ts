@@ -62,6 +62,7 @@ export const GLOBAL_THEMES: GlobalThemeDef[] = [
   { id: "cyber-dark", label: "赛博紫 · 暗", icon: "\u{1F319}", description: "适合夜间使用的暗色工作区", category: "dark", colors: ["#151720", "#242735", "#8d7cff"], keywords: ["暗色", "夜间", "黑色"] },
   { id: "mist", label: "雾青工作台", icon: "◈", description: "安静的雾青与灰蓝色工作台", category: "light", colors: ["#f4f8f8", "#dce9e8", "#5d8583"], keywords: ["青色", "灰色", "极简"] },
   { id: "worldcup", label: "美加墨世界杯", icon: "\u{1F3C6}", description: "以海军蓝、球场绿点缀整个 Octo", category: "special", colors: ["#f7f3ea", "#13294b", "#0b6e4f"], keywords: ["足球", "世界杯", "运动"] },
+  { id: "pixel", label: "像素乐园", icon: "\u{1F3AE}", description: "FC 配色的浅蓝工作台，硬边无模糊", category: "special", colors: ["#dfe7f5", "#0070ec", "#f8b800"], keywords: ["像素", "8bit", "复古", "游戏"] },
 ];
 export const DEFAULT_GLOBAL_THEME = "none";
 
