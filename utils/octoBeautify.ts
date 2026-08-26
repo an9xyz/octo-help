@@ -1058,6 +1058,164 @@ function syncBalls(): void {
   else if (ballsMounted) unmountBalls();
 }
 
+// ---- pixel skin: hover-to-bump ------------------------------------------
+// The scene is injected into <body> — outside the message's React tree, so
+// reconciliation cannot wipe it mid-animation — and removes itself when done.
+//
+// Delegation on document rather than a node per bubble is deliberate: this pass
+// must not get more expensive as a conversation grows. Mounting a sprite per
+// message (the way the worldcup ball does) costs nothing at 20 messages and
+// wrecks sync at 3000.
+
+const PIXEL_HIT_CLASS = 'octo-pixel-hit';
+/** Must outlast the slowest coin: 1.15s base + up to 0.13s duration jitter +
+ *  up to 0.09s start delay. The coins outlast the jump on purpose — they have to
+ *  sit on the bubble for a beat, otherwise they read as flying past. */
+const PIXEL_HIT_MS = 1550;
+const PIXEL_HIT_COOLDOWN_MS = 1700;
+/** 48 = 24px 精灵的 2 倍。整数倍是硬要求：1.33 倍这种会让 pixelated
+ *  把一个源像素切成宽窄不一的块，边缘立刻变脏。 */
+const PIXEL_SPRITE_PX = 48;
+const PIXEL_HIT_W = PIXEL_SPRITE_PX + 8;
+/**
+ * 下限 = 箱子 + 角色 + 一个身高的起跳余量。
+ * 余量原本给了 24px，减掉上下两个精灵后角色只能跳半个身高，看不出在跳；
+ * 单行消息又正好落在这个下限上，于是最常见的那条消息动画最弱。
+ */
+const PIXEL_HIT_MIN_H = PIXEL_SPRITE_PX * 3;
+/** Must match `.oph-coin { top }` in BEAUTIFY_CSS — the coins' landing distance
+ *  is measured from there. */
+const COIN_TOP_PX = 24;
+/** How many coins a bump can throw. Rolled per hit. */
+const COIN_MIN = 1;
+const COIN_MAX = 10;
+/**
+ * Distance from the scene to where the nearest coin may land, in px.
+ * The scene sits 8px off the bubble and a coin's art is centred in its 48px box,
+ * so anything closer than this drops into the gap between the two instead of
+ * onto the message.
+ */
+const COIN_INSET_PX = 44;
+/** Cap on how far a coin is thrown, so a very wide bubble does not fling one
+ *  across the whole conversation. */
+const COIN_REACH_MAX_PX = 420;
+
+/**
+ * Arc shape per coin: low lob for the ones landing short, high lob for the ones
+ * thrown far. Tying the arc to the distance is what keeps a ten-coin burst from
+ * looking like ten copies of the same throw.
+ */
+function coinArc(index: number, count: number): 'a' | 'b' | 'c' {
+  const at = count <= 1 ? 0.5 : index / (count - 1);
+  if (at < 0.34) return 'c';
+  return at < 0.67 ? 'a' : 'b';
+}
+
+let pixelHoverBound = false;
+let pixelHitCooldown = new WeakSet<Element>();
+
+function spawnPixelHit(bubble: Element): void {
+  const r = bubble.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  // The scene spans the bubble instead of being a fixed-height block parked
+  // next to it: crate level with the bubble's top edge, character standing on
+  // its bottom edge. A fixed 160px box put the crate ~120px above a one-line
+  // message, which read as an unrelated animation floating in the margin.
+  const height = Math.max(PIXEL_HIT_MIN_H, Math.round(r.height) + PIXEL_SPRITE_PX);
+  // Prefer the gutter to the right of the bubble; fall back to the left; if
+  // neither side fits, skip it.
+  let left = r.right + 8;
+  let flipped = false;
+  if (left + PIXEL_HIT_W > window.innerWidth - 6) {
+    left = r.left - 8 - PIXEL_HIT_W;
+    flipped = true;
+  }
+  if (left < 6) return;
+  const top = Math.max(6, Math.min(r.bottom + 8 - height, window.innerHeight - height - 6));
+
+  const fx = document.createElement('div');
+  fx.className = PIXEL_HIT_CLASS;
+  fx.setAttribute('aria-hidden', 'true');
+  fx.style.left = `${Math.round(left)}px`;
+  fx.style.top = `${Math.round(top)}px`;
+  fx.style.height = `${height}px`;
+  // Character sits at the bottom, crate at the top — the rise is whatever is
+  // left between them, so the jump always lands on the crate's underside.
+  fx.style.setProperty('--oph-rise', `${height - PIXEL_SPRITE_PX * 2}px`);
+  // Coins are thrown *at the bubble* and settle on it, rather than looping
+  // inside the gutter: signed so they fly toward the message whichever side the
+  // scene ended up on, capped so a very wide bubble does not fling them across
+  // the whole conversation.
+  // Coins are spread from the bubble's near edge to its far edge. The reach is
+  // measured from COIN_INSET_PX, not from the scene, so ratio 0 already lands
+  // inside the bubble rather than in the 8px gap beside it.
+  const span = Math.min(Math.round(r.width) + 8, COIN_REACH_MAX_PX);
+  const reach = Math.max(48, span - COIN_INSET_PX);
+  // Where the bubble's top edge sits relative to a coin's starting offset, i.e.
+  // how far a coin has to fall to come to rest on the bubble.
+  const land = Math.max(24, height - Math.round(r.height) - COIN_TOP_PX);
+  const coinCount = COIN_MIN + Math.floor(Math.random() * (COIN_MAX - COIN_MIN + 1));
+  // Built node by node rather than with innerHTML: this runs in the page MAIN
+  // world, where an innerHTML template becomes an injection sink the moment any
+  // part of it stops being a literal (same reasoning as playGachaReveal).
+  const crate = document.createElement('div');
+  crate.className = 'oph-crate';
+  fx.appendChild(crate);
+
+  // Each coin gets its own slice of the spread and rolls inside it. Pure
+  // randomness would let them pile onto one spot; fixed positions gave the
+  // trick away after two bumps.
+  for (let i = 0; i < coinCount; i++) {
+    const coin = document.createElement('div');
+    coin.className = `oph-coin oph-coin-${coinArc(i, coinCount)}`;
+    const ratio = (i + Math.random()) / coinCount;
+    const dist = COIN_INSET_PX + reach * ratio;
+    coin.style.setProperty('--oph-x', `${Math.round(flipped ? dist : -dist)}px`);
+    coin.style.setProperty('--oph-y', `${Math.round(land + Math.random() * 24 - 12)}px`);
+    // Stagger duration and start so a burst scatters instead of marching in step.
+    coin.style.animationDuration = `${(1.02 + Math.random() * 0.26).toFixed(2)}s`;
+    coin.style.animationDelay = `${Math.round(Math.random() * 90)}ms`;
+    fx.appendChild(coin);
+  }
+
+  const hero = document.createElement('div');
+  hero.className = 'oph-hero';
+  fx.appendChild(hero);
+  (document.body || document.documentElement).appendChild(fx);
+  window.setTimeout(() => fx.remove(), PIXEL_HIT_MS);
+}
+
+function onPixelHover(e: Event): void {
+  if (!started) return;
+  if (themeById(currentThemeId).skin !== 'pixel') return;
+  if (prefersReducedMotion()) return;
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+  const bubble = target.closest(OCTO_SELECTORS.anyMessageBody);
+  if (!bubble || pixelHitCooldown.has(bubble)) return;
+  pixelHitCooldown.add(bubble);
+  window.setTimeout(() => pixelHitCooldown.delete(bubble), PIXEL_HIT_COOLDOWN_MS);
+  try {
+    spawnPixelHit(bubble);
+  } catch {
+    /* noop — a decorative animation is never worth breaking a hover. */
+  }
+}
+
+function bindPixelHover(): void {
+  if (pixelHoverBound) return;
+  pixelHoverBound = true;
+  document.addEventListener('pointerover', onPixelHover, true);
+}
+
+/** Must stay callable when the feature never started — see PAGE_FEATURES. */
+function unbindPixelHover(): void {
+  if (!pixelHoverBound) return;
+  pixelHoverBound = false;
+  document.removeEventListener('pointerover', onPixelHover, true);
+  pixelHitCooldown = new WeakSet<Element>();
+}
+
 // ---- unified debounced DOM sync ------------------------------------------
 
 function debounce(fn: () => void, wait: number): () => void {
@@ -1196,6 +1354,7 @@ export function initBeautify(initialThemeId: string): void {
     watchThemeAttr();
     bindClicks();
     bindWecomCardClicks();
+    bindPixelHover();
     bodyObserver = new MutationObserver(onBodyMutations);
     bodyObserver.observe(document.body, { childList: true, subtree: true });
     sync();
@@ -1245,6 +1404,7 @@ export function teardownBeautify(): void {
   // Stop listening for page-side interactions.
   removeClicks();
   removeWecomCardClicks();
+  unbindPixelHover();
 
   // Put the original TeX source back when the enhancement is turned off.
   restoreMessageMath();
@@ -1280,6 +1440,7 @@ export function teardownBeautify(): void {
     .querySelectorAll<HTMLAnchorElement>('[data-octo-wecom]')
     .forEach(clearWecomLinkState);
   document.querySelectorAll('.octo-gacha-fx').forEach((el) => el.remove());
+  document.querySelectorAll('.octo-pixel-hit').forEach((el) => el.remove());
   document.querySelectorAll<HTMLElement>('[data-octo-rarity]').forEach((el) => {
     el.removeAttribute('data-octo-rarity');
     el.style.removeProperty('--octo-card-rx');

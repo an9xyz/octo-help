@@ -20,3 +20,59 @@ describe('message bubble sizing', () => {
     );
   });
 });
+
+describe('pixel skin', () => {
+  const SKIN = 'body[data-octo-skin="pixel"]';
+
+  it('inlines every sprite the skin references', () => {
+    for (const name of ['stand', 'jump', 'crate', 'crate-used', 'coin']) {
+      expect(beautifyCss).toContain(`--octo-px-${name}: url("data:image/png;base64,`);
+    }
+  });
+
+  it('keeps the generated sprite block inside its markers', () => {
+    // Hand-written rules live outside them; build-pixel-sprites.mjs rewrites
+    // only what is between. Losing a marker makes the script fail loudly.
+    expect(beautifyCss).toContain('/* PIXEL-SPRITES:BEGIN');
+    expect(beautifyCss).toContain('/* PIXEL-SPRITES:END */');
+  });
+
+  it('gives AI, self and other bubbles three distinct fills', () => {
+    expect(beautifyCss).toContain(`${SKIN} .wk-msg-row:has(.ai-badge) .wk-markdown,`);
+    expect(beautifyCss).toContain(`${SKIN} .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown {`);
+    expect(beautifyCss).toContain(
+      `${SKIN} .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown {`,
+    );
+  });
+
+  it('scales sprites with nearest-neighbour so they never blur', () => {
+    expect(beautifyCss).toContain('.octo-pixel-hit > * {\n                position: absolute;\n                image-rendering: pixelated;');
+  });
+
+  it('drives the bump scene entirely from keyframes', () => {
+    for (const kf of ['oph-crate-face', 'oph-crate-bump', 'oph-hero-pose', 'oph-hero-jump', 'oph-coin-a', 'oph-coin-b', 'oph-coin-c']) {
+      expect(beautifyCss).toContain(`@keyframes ${kf} {`);
+    }
+  });
+
+  it('never puts !important on an animated transform', () => {
+    // `!important` on transform/opacity would override the keyframes themselves,
+    // silently freezing the scene on its first frame.
+    const scene = beautifyCss.slice(beautifyCss.indexOf('.octo-pixel-hit {'));
+    const bumpBlock = scene.slice(0, scene.indexOf('@media (prefers-reduced-motion'));
+    expect(bumpBlock).not.toMatch(/transform:[^;]*!important/);
+    expect(bumpBlock).not.toMatch(/opacity:[^;]*!important/);
+  });
+
+  it('reads each coin landing off the coin itself, not the scene', () => {
+    // The coin count is rolled per hit, so the landing vars cannot live on the
+    // container — a fixed --oph-x1..xN set would cap how many coins can fly.
+    expect(beautifyCss).not.toMatch(/--oph-x\d/);
+    expect(beautifyCss).toContain('var(--oph-x, -60px)');
+    expect(beautifyCss).toContain('var(--oph-y, 40px)');
+  });
+
+  it('hides the whole scene under reduced motion', () => {
+    expect(beautifyCss).toContain('.octo-pixel-hit { display: none !important; }');
+  });
+});

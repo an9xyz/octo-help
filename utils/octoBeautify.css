@@ -3495,3 +3495,256 @@
             body[theme-mode="dark"] .wk-fold-msg-text a[data-octo-wecom]::before {
                 border-color: rgba(255, 255, 255, 0.16) !important;
             }
+
+            /* ========================================================
+             * 像素乐园皮肤（body[data-octo-skin="pixel"]）—— FC 8-bit 质感（浅色）
+             *
+             * 精灵是 24×24 手绘 bitmap，由 scripts/build-pixel-sprites.mjs 生成
+             * 并内联在下面的标记区里。全部 1x：放大交给 image-rendering: pixelated，
+             * 最近邻在任何尺寸都锐利，所以不需要第二套分辨率。
+             * 换角色形象 = 改那个脚本里的 bitmap 再跑一次，本段规则不用动。
+             * ====================================================== */
+            /* PIXEL-SPRITES:BEGIN — 由 scripts/build-pixel-sprites.mjs 生成，勿手改 */
+            body[data-octo-skin="pixel"] {
+                --octo-px-stand: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAnElEQVR42sWW2w2AIAxFGdmxHM4RmmiIRgX6uK0CTfohfRwqUEhJlx1Ut5yBy4apE4Qn5kG9kq+XypB4chAyDkBEt1pJG18L8A6wIKwvCsjfKKDwnV5B9zWYs005Gzv25RzUDW74aQaSy4B61lIVodk/AfqYUQXSekFbC0H7usNeQtBLA/cRAfoO8PmJv+m3CriFti9v1B56aYTkAFdpPEDqUNArAAAAAElFTkSuQmCC");
+                --octo-px-jump: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAlElEQVR42sWW3Q2AIAyEGdmxGM4RSDRGIwpXelQpTfpAae+D8BtC2zbSu+0sXFbOO0G8MAaNEo+XyxC7OAnxA6SUbtdEq1wN8CzQIDCXBRxtFvDKnT6D4WswZ5uiPhj7cg7KC879NBPiMqActTQLAlBDckE71gHQxWAsGt+EQYBczAAM4i6AULy1GGAUZtflVzN9VXZNnhpxvM347gAAAABJRU5ErkJggg==");
+                --octo-px-crate: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAbklEQVR42mNgYGD4T2PM8P/HDtpgFAtgNlLJ0AGwgOZBNKAW4EohVLEAJG+z5w8YMxS8QcUMFFqA13AiLCHaAtyGr6DcAvyGD1kL4IbTwgIUwym0AMMSEgwfPBlteJRFoxUO7YPoRAVtMNwCWmIA6vv+5aDlZKkAAAAASUVORK5CYII=");
+                --octo-px-crate-used: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAVUlEQVR42mNgYGD4T2PM8P9EBW0wigUwG6lk6ABYQPMgGlALcKUQqlgAku8IwI6J0YvXAnyGE2PJqAWjFtAhmdIlow2Psmi0wqF9EBHKTORiuAW0xABv0UKt1T7a0AAAAABJRU5ErkJggg==");
+                --octo-px-coin: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAARElEQVR42mNgGAVUBP/RMHUN/rEDFVPLIgyDcVhEG8MptQTDkBMVEIxNbtSCUQsGgQUDltmoUlzQsiyiS2k6CkYBfgAAi5I6GLg6iwQAAAAASUVORK5CYII=");
+                --octo-px-frame-ai: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANUlEQVR42mNgYGBgEBCQ+E8MZkBW/OfFBrz4RAUDRBNM8Y8bFXjxqAbaawBxCGGssU1M0gAAZalmdIJs3+4AAAAASUVORK5CYII=");
+                --octo-px-frame-me: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANElEQVR42mNgYGBgEBCQ+E8MZkBWfOPLH7yYoeANRBNM8Yon+PGoBtprAHEIYayxTUzSAAAoRHusdSSaiwAAAABJRU5ErkJggg==");
+                --octo-px-frame-other: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAAM0lEQVR42mNgYGBgEBCQ+E8MZkBWfOfPH7yYYcUKiCaY4g0E8KgG2msAcQhhrLFNTNIAAPsXg5Q/LaAaAAAAAElFTkSuQmCC");
+            }
+            /* PIXEL-SPRITES:END */
+
+            /* 气泡底色走 NES 浅色行（$3x），高饱和留给前景的角色/宝箱/代币。
+               两者原先共用同一批颜色：金箱蹦在金气泡上、蓝角色跳在蓝气泡上，
+               只剩描边可辨。顺带浅底 + 深字也比高饱和深底配白字更耐读 —— 
+               气泡里装的是长消息，不是标签。 */
+            body[data-octo-skin="pixel"] {
+                --px-ai: #f8d878;
+                --px-ai-dk: #c87800;
+                --px-me: #a8e4fc;
+                --px-me-dk: #0070ec;
+                --px-other: #b0fcfc;
+                --px-other-dk: #00a8a8;
+                --px-ink: #101018;
+            }
+
+            /* 三档气泡：直角 + 粗描边 + inset 双色斜面，模拟 8-bit 砖块的 bevel。
+               不用 border-image/滤镜，inset box-shadow 在任何缩放下都不糊。 */
+            /* 气泡边框走九宫格贴图，不是 CSS 线条。
+               `border: 2px solid` + inset 阴影只是在「模仿」像素框：它没有像素
+               图案，浏览器一缩放就不再是像素了。这里 12×12 的 tile 切 4、
+               border-width 取 8px，一个源像素正好落 2 个屏幕像素 —— 和 48px
+               精灵是同一套 2px 网格。边条是竖向渐变、横向平铺，拉伸不会变形。 */
+            body[data-octo-skin="pixel"] .wk-markdown,
+            body[data-octo-skin="pixel"] .wk-fold-msg-text {
+                border-radius: 0 !important;
+                border: 8px solid transparent !important;
+                border-image-slice: 4 fill !important;
+                border-image-repeat: stretch !important;
+                /* 硬投影，偏移 4px = 2 个源像素。FC 的投影是实心色块不是高斯模糊，
+                   任何 blur 半径都会立刻把它拉出像素风之外。 */
+                box-shadow: 4px 4px 0 rgba(16, 16, 24, 0.22) !important;
+                color: var(--px-ink) !important;
+                image-rendering: pixelated !important;
+            }
+            body[data-octo-skin="pixel"] .wk-msg-row:has(.ai-badge) .wk-markdown,
+            body[data-octo-skin="pixel"] .wk-msg-row--continue[data-ai-continue="true"] .wk-markdown,
+            body[data-octo-skin="pixel"] .wk-fold-msg-text {
+                border-image-source: var(--octo-px-frame-ai) !important;
+                background: var(--px-ai) !important; /* 贴图没加载出来时的兜底底色 */
+            }
+            body[data-octo-skin="pixel"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown {
+                border-image-source: var(--octo-px-frame-me) !important;
+                background: var(--px-me) !important;
+                color: var(--px-ink) !important;
+            }
+            body[data-octo-skin="pixel"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown {
+                border-image-source: var(--octo-px-frame-other) !important;
+                background: var(--px-other) !important;
+                color: var(--px-ink) !important;
+            }
+
+            /* 这里原本给 AI 气泡挂了一只 32px 的常驻角标。32/24 = 1.33 倍，
+               不是整数倍缩放，pixelated 会把源像素切成宽窄不一的块、边缘发脏；
+               而 24px 太糊、48px 又盖住气泡。角色改为只在 hover 场景里露面。 */
+
+            /* 引用块 = 管道：左侧立一根像素管，引文在右侧。
+               用 ::before 承载，不往 React 管的行里插节点。 */
+            body[data-octo-skin="pixel"] .wk-msg-row .wk-reply-block,
+            body[data-octo-skin="pixel"] .wk-msg-row .wk-message-text-reply {
+                position: relative !important;
+                border-left: none !important;
+                border-radius: 0 !important;
+                padding-left: 22px !important;
+                background: rgba(16, 16, 24, 0.06) !important;
+            }
+            body[data-octo-skin="pixel"] .wk-msg-row .wk-reply-block::before,
+            body[data-octo-skin="pixel"] .wk-msg-row .wk-message-text-reply::before {
+                content: "" !important;
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                bottom: 0 !important;
+                width: 14px !important;
+                background:
+                    linear-gradient(90deg,
+                        #00606f 0 4px,
+                        #00a8a8 4px 6px,
+                        #6ff0e6 6px 8px,
+                        #00a8a8 8px 10px,
+                        #00606f 10px 14px) !important;
+                box-shadow: inset 0 0 0 2px var(--px-ink) !important;
+                image-rendering: pixelated !important;
+            }
+
+            /* ---- 悬停顶箱爆币 ----------------------------------------
+             * 场景由 spawnPixelHit() 注入 <body>（在消息的 React 树之外，
+             * 免得 reconcile 把它清掉），播完自移除。整段是一次性 keyframes，
+             * 静止时页面上没有这个节点，所以零重绘。
+             * 注意 transform 上不加 !important —— 那会盖掉 keyframes 本身。
+             * ------------------------------------------------------- */
+            .octo-pixel-hit {
+                position: fixed;
+                z-index: 2147483000;
+                width: 56px;
+                /* height 与 --oph-rise 由 spawnPixelHit() 按气泡高度写入 */
+                pointer-events: none;
+                /* 刻意不含 paint：金币要飞出这个盒子、落到消息气泡上，
+                   paint containment 会把溢出的部分整个裁掉。 */
+                contain: layout style;
+            }
+            .octo-pixel-hit > * {
+                position: absolute;
+                image-rendering: pixelated;
+                background-position: center;
+                background-size: contain;
+                background-repeat: no-repeat;
+                /* 偏移正好是一个源像素（2px），投影因此落在像素网格上而不是糊在半格。
+                   不加 !important：这几个节点全程在跑 keyframes。 */
+                filter: drop-shadow(2px 2px 0 rgba(16, 16, 24, 0.38));
+            }
+            .octo-pixel-hit .oph-crate {
+                left: 4px;
+                top: 0;
+                width: 48px;
+                height: 48px;
+                background-image: var(--octo-px-crate);
+                animation: oph-crate-face .75s steps(1, end) 1 both, oph-crate-bump .75s steps(1, end) 1 both, oph-crate-flash .75s steps(1, end) 1 both;
+            }
+            .octo-pixel-hit .oph-hero {
+                left: 4px;
+                bottom: 0;
+                width: 48px;
+                height: 48px;
+                background-image: var(--octo-px-stand);
+                animation: oph-hero-pose .75s steps(1, end) 1 both, oph-hero-jump .75s steps(1, end) 1 both;
+            }
+            /* 48px = 24px 源精灵的 2 倍，和角色、宝箱同一个缩放级别。
+               之前写的 24px 是 1x，整套皮肤里就它一个是另一种像素密度。 */
+            .octo-pixel-hit .oph-coin {
+                left: 4px;
+                top: 24px;
+                width: 48px;
+                height: 48px;
+                background-image: var(--octo-px-coin);
+                opacity: 0;
+            }
+            .octo-pixel-hit .oph-coin-a { animation: oph-coin-a 1.15s steps(1, end) 1 forwards; }
+            .octo-pixel-hit .oph-coin-b { animation: oph-coin-b 1.15s steps(1, end) 1 forwards; }
+            .octo-pixel-hit .oph-coin-c { animation: oph-coin-c 1.15s steps(1, end) 1 forwards; }
+
+            /* 全部走 steps(1, end)：FC 的动作是逐帧跳变，不是亚像素插值。
+               连续缓动会让精灵停在半个像素上 —— 既糊掉像素网格，也没有那个手感。
+               40%~52% 三帧钉在同一位置，就是撞击的顿帧（hit stop），打击感全靠它。 */
+            @keyframes oph-crate-face {
+                0%, 39% { background-image: var(--octo-px-crate); }
+                40%, 100% { background-image: var(--octo-px-crate-used); }
+            }
+            @keyframes oph-crate-bump {
+                0%, 39% { transform: translateY(0); }
+                42% { transform: translateY(-12px); }
+                52% { transform: translateY(-12px); }
+                58% { transform: translateY(4px); }
+                64% { transform: translateY(-2px); }
+                70%, 100% { transform: translateY(0); }
+            }
+            /* 撞到的那一下闪一帧白。keyframes 里要带上投影，否则会把
+               .octo-pixel-hit > * 上的静态 filter 整个覆盖掉。 */
+            @keyframes oph-crate-flash {
+                0%, 39% { filter: drop-shadow(2px 2px 0 rgba(16, 16, 24, 0.38)); }
+                42% { filter: drop-shadow(2px 2px 0 rgba(16, 16, 24, 0.38)) brightness(2.6); }
+                50%, 100% { filter: drop-shadow(2px 2px 0 rgba(16, 16, 24, 0.38)); }
+            }
+            @keyframes oph-hero-pose {
+                0%, 5% { background-image: var(--octo-px-stand); }
+                6%, 84% { background-image: var(--octo-px-jump); }
+                85%, 100% { background-image: var(--octo-px-stand); }
+            }
+            @keyframes oph-hero-jump {
+                0% { transform: translateY(0) scale(1, 1); }
+                6% { transform: translateY(6px) scale(1.12, .86); }
+                11% { transform: translateY(2px) scale(1.04, .96); }
+                16% { transform: translateY(calc(var(--oph-rise, 64px) * -0.30)) scale(.94, 1.08); }
+                22% { transform: translateY(calc(var(--oph-rise, 64px) * -0.56)) scale(.96, 1.05); }
+                28% { transform: translateY(calc(var(--oph-rise, 64px) * -0.76)) scale(1, 1); }
+                34% { transform: translateY(calc(var(--oph-rise, 64px) * -0.90)) scale(1, 1); }
+                40% { transform: translateY(calc(var(--oph-rise, 64px) * -1)) scale(1.06, .94); }
+                52% { transform: translateY(calc(var(--oph-rise, 64px) * -1)) scale(1.06, .94); }
+                58% { transform: translateY(calc(var(--oph-rise, 64px) * -0.86)) scale(1, 1); }
+                66% { transform: translateY(calc(var(--oph-rise, 64px) * -0.60)) scale(1, 1); }
+                74% { transform: translateY(calc(var(--oph-rise, 64px) * -0.30)) scale(1, 1); }
+                82% { transform: translateY(0) scale(1.12, .86); }
+                90% { transform: translateY(0) scale(.96, 1.06); }
+                100% { transform: translateY(0) scale(1, 1); }
+            }
+            /* scaleX 在 1 和 .35 之间跳 = 经典 FC 金币的翻面自旋。
+               位移和自旋必须写在同一个 keyframe 里 —— 两条 transform 动画
+               不会叠加，后一条会整个盖掉前一条。
+               三条弧线（a 中抛 / b 高抛 / c 低平）形状固定，终点 --oph-x/--oph-y
+               挂在每枚币自己身上、由 JS 每次重掷 —— 变量挂在币上而不是容器上，
+               币数才能是随机的。 */
+            @keyframes oph-coin-a {
+                0%, 41% { opacity: 0; transform: translate(0, 0) scaleX(1); }
+                44% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .13), -18px) scaleX(.35); }
+                50% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .33), -30px) scaleX(1); }
+                58% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .58), -26px) scaleX(.35); }
+                66% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .77), -8px) scaleX(1); }
+                74% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .92), calc(var(--oph-y, 40px) * .55)) scaleX(.35); }
+                82% { opacity: 1; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+                88% { opacity: 1; transform: translate(var(--oph-x, -60px), calc(var(--oph-y, 40px) - 8px)) scaleX(.6); }
+                94% { opacity: 1; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+                100% { opacity: 0; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+            }
+            @keyframes oph-coin-b {
+                0%, 41% { opacity: 0; transform: translate(0, 0) scaleX(1); }
+                44% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .12), -26px) scaleX(.35); }
+                50% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .32), -46px) scaleX(1); }
+                58% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .56), -42px) scaleX(.35); }
+                66% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .76), -18px) scaleX(1); }
+                74% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .92), calc(var(--oph-y, 40px) * .5)) scaleX(.35); }
+                82% { opacity: 1; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+                88% { opacity: 1; transform: translate(var(--oph-x, -60px), calc(var(--oph-y, 40px) - 10px)) scaleX(.6); }
+                94% { opacity: 1; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+                100% { opacity: 0; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+            }
+            @keyframes oph-coin-c {
+                0%, 41% { opacity: 0; transform: translate(0, 0) scaleX(1); }
+                44% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .10), -14px) scaleX(.35); }
+                50% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .30), -24px) scaleX(1); }
+                58% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .55), -18px) scaleX(.35); }
+                66% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .80), 2px) scaleX(1); }
+                74% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .93), calc(var(--oph-y, 40px) * .6)) scaleX(.35); }
+                82% { opacity: 1; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+                88% { opacity: 1; transform: translate(var(--oph-x, -60px), calc(var(--oph-y, 40px) - 6px)) scaleX(.6); }
+                94% { opacity: 1; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+                100% { opacity: 0; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
+            }
+
+            /* 无障碍：开了「减弱动态效果」时整个场景不该出现。JS 侧已经不注入，
+               这里再兜一层，防止有节点因异常残留在页面上继续动。 */
+            @media (prefers-reduced-motion: reduce) {
+                .octo-pixel-hit { display: none !important; }
+            }

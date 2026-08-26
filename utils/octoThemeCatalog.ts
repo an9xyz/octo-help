@@ -52,6 +52,7 @@ export const THEMES: ThemeDef[] = [
   { id: "worldcup", label: "美加墨世界杯", icon: "\u{1F3C6}", base: "light", skin: "worldcup", description: "球场绿、海军蓝与金色赛事元素", category: "special", colors: ["#f7f3ea", "#0b6e4f", "#c6a04a"], keywords: ["足球", "世界杯", "运动"] },
   { id: "qq2012", label: "QQ 2012 经典", icon: "\u{1F427}", base: "light", skin: "qq2012", description: "经典 QQ 会话列表与清透气泡", category: "classic", colors: ["#eaf7ff", "#56b8e9", "#8ed667"], keywords: ["怀旧", "QQ", "经典"] },
   { id: "qq2014", label: "QQ 2014 气泡", icon: "\u{1F4AC}", base: "light", skin: "qq2014", description: "熟悉的彩色气泡与紧凑对话", category: "classic", colors: ["#f3fbff", "#73c7f0", "#b9e77b"], keywords: ["怀旧", "QQ", "气泡"] },
+  { id: "pixel", label: "像素乐园", icon: "\u{1F3AE}", base: "light", skin: "pixel", description: "8-bit 像素气泡，悬停顶箱爆币", category: "special", colors: ["#eef2fb", "#0070ec", "#f8b800"], keywords: ["像素", "8bit", "复古", "游戏"] },
 ];
 export const DEFAULT_THEME = "cyber-light";
 
