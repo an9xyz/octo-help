@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseRepo, countFromLink, fetchRepoStatus, formatRepoStatus, buildRepoStatusCard } from './octoGithub';
+import { parseRepo, countFromLink, fetchRepoStatus, formatRepoStatus, buildRepoStatusCard, reviewDecision } from './octoGithub';
 
 describe('octoGithub', () => {
   it('parses owner/repo and github URLs', () => {
@@ -25,13 +25,27 @@ describe('octoGithub', () => {
           json: async () => [{}],
         } as unknown as Response;
       }
-      if (url.includes('/pulls?state=all')) {
+      if (url.includes('/pulls?state=open&sort')) {
         return {
           ok: true, status: 200, headers: { get: () => null },
           json: async () => [
-            { number: 9, title: 'merged pr', state: 'closed', merged_at: now, updated_at: now, html_url: 'u' },
-            { number: 8, title: 'open pr', state: 'open', merged_at: null, updated_at: now, html_url: 'u' },
+            { number: 9, title: 'clean pr', state: 'open', updated_at: now, html_url: 'u', user: { login: 'alice' } },
+            { number: 8, title: 'changes pr', state: 'open', updated_at: now, html_url: 'u', user: { login: 'bob' } },
+            { number: 7, title: 'draft pr', state: 'open', updated_at: now, html_url: 'u', draft: true, user: { login: 'carol' } },
           ],
+        } as unknown as Response;
+      }
+      if (/\/pulls\/\d+\/reviews/.test(url)) {
+        const n = Number(/\/pulls\/(\d+)\//.exec(url)![1]);
+        return {
+          ok: true, status: 200, headers: { get: () => null },
+          json: async () => (n === 8 ? [{ state: 'CHANGES_REQUESTED', user: { login: 'rev' } }] : []),
+        } as unknown as Response;
+      }
+      if (/\/pulls\/\d+$/.test(url)) {
+        return {
+          ok: true, status: 200, headers: { get: () => null },
+          json: async () => ({ mergeable: true, mergeable_state: 'clean' }),
         } as unknown as Response;
       }
       if (url.includes('/issues?')) {
@@ -57,13 +71,19 @@ describe('octoGithub', () => {
     expect(status.openPrs).toBe(8);
     expect(status.openIssues).toBe(2); // 10 - 8
     expect(status.recentIssues.map((i) => i.number)).toEqual([5, 3]); // PR filtered out
-    expect(status.recentPrs.find((p) => p.number === 9)?.state).toBe('merged');
+    expect(status.recentPrs.map((p) => p.number)).toEqual([9, 8]); // draft #7 filtered out
+    expect(status.recentPrs.find((p) => p.number === 9)?.mergeable).toBe(true);
+    expect(status.recentPrs.find((p) => p.number === 8)?.reviewDecision).toBe('changes_requested');
     const text = formatRepoStatus(status);
     expect(text).toContain('开放 Issue 2');
     expect(text).toContain('开放 PR 8');
     expect(text).toContain('最近开放 Issue');
-    expect(text).toContain('最近 PR');
-    expect(text).toContain('#9');
+    expect(text).toContain('开放 PR（');
+    expect(text).toContain('@bob');
+    expect(text).toContain('🔴 需修改'); // #8 has requested changes, not 可合并
+    expect(text).toContain('✅ 可合并'); // #9 clean
+    // PRs render before issues
+    expect(text.indexOf('开放 PR（')).toBeLessThan(text.indexOf('最近开放 Issue'));
   });
 
   it('flags actionable (good first issue / help wanted) open issues', async () => {
@@ -72,7 +92,7 @@ describe('octoGithub', () => {
       if (url.endsWith('/pulls?state=open&per_page=1')) {
         return { ok: true, status: 200, headers: { get: () => null }, json: async () => [] } as unknown as Response;
       }
-      if (url.includes('/pulls?state=all')) {
+      if (url.includes('/pulls?state=open&sort')) {
         return { ok: true, status: 200, headers: { get: () => null }, json: async () => [] } as unknown as Response;
       }
       if (url.includes('/issues?')) {
@@ -92,6 +112,22 @@ describe('octoGithub', () => {
     }) as unknown as typeof fetch;
     const status = await fetchRepoStatus({ owner: 'o', repo: 'r' }, { fetchImpl });
     expect(status.actionableIssues.map((i) => i.number)).toEqual([1, 3]);
+  });
+
+  it('resolves review decision from the latest review per reviewer', () => {
+    expect(reviewDecision([])).toBe('review_required');
+    expect(reviewDecision([{ state: 'COMMENTED', user: { login: 'a' } }])).toBe('review_required');
+    expect(reviewDecision([{ state: 'APPROVED', user: { login: 'a' } }])).toBe('approved');
+    // one reviewer requesting changes blocks, even if another approved
+    expect(reviewDecision([
+      { state: 'APPROVED', user: { login: 'a' } },
+      { state: 'CHANGES_REQUESTED', user: { login: 'b' } },
+    ])).toBe('changes_requested');
+    // a later approval from the same reviewer overrides their earlier request
+    expect(reviewDecision([
+      { state: 'CHANGES_REQUESTED', user: { login: 'a' } },
+      { state: 'APPROVED', user: { login: 'a' } },
+    ])).toBe('approved');
   });
 
   it('builds a valid AdaptiveCard 1.5 with stat tiles and an OpenUrl action', () => {

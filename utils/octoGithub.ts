@@ -26,6 +26,11 @@ export interface RepoItem {
   url: string;
   labels: string[];
   comments?: number;
+  /** PR-only: author, conflict/merge signals, and the review decision. */
+  author?: string;
+  mergeable?: boolean | null;
+  mergeableState?: string;
+  reviewDecision?: 'approved' | 'changes_requested' | 'review_required';
 }
 
 export interface RepoStatus {
@@ -131,10 +136,45 @@ export async function fetchRepoStatus(ref: RepoRef, options: GithubOptions = {})
   const prCountItems = (await prCountRes.json()) as unknown[];
   const openPrs = countFromLink(prCountRes.headers.get('link'), prCountItems.length);
 
-  // Recent 10 PRs (any state; merged shows as 'merged').
+  // Recent 10 OPEN PRs (closed/merged/draft filtered at the source). Drafts are
+  // dropped here since the API can't exclude them.
   const prsRaw = (await (
-    await ghFetch(`${base}/pulls?state=all&sort=updated&direction=desc&per_page=10`, options)
-  ).json()) as Array<{ number: number; title: string; state: string; merged_at: string | null; updated_at: string; html_url: string; labels?: Array<{ name: string }> }>;
+    await ghFetch(`${base}/pulls?state=open&sort=updated&direction=desc&per_page=10`, options)
+  ).json()) as Array<{ number: number; title: string; state: string; updated_at: string; html_url: string; draft?: boolean; user?: { login: string } | null; labels?: Array<{ name: string }> }>;
+  const recentPrs: RepoItem[] = prsRaw
+    .filter((r) => !r.draft)
+    .map((r) => ({
+      number: r.number,
+      title: r.title,
+      state: 'open',
+      updatedAt: r.updated_at,
+      url: r.html_url,
+      author: r.user?.login,
+      labels: (r.labels ?? []).map((l) => l.name),
+    }));
+
+  // “Can it be merged” needs two signals not present in the list response:
+  //  - mergeable / mergeable_state (conflicts, behind, blocked) from the PR detail
+  //  - the review decision (changes-requested) from the reviews endpoint
+  // A PR can be mergeable_state:clean yet still carry an unresolved changes-requested
+  // review, so we surface the review decision too. Enrich every displayed PR (not
+  // just the first few) so lower-ranked open PRs still show a merge status.
+  // ponytail: 2 calls per PR × up to 10 PRs; a token lifts the 60/h anon limit.
+  await Promise.all(
+    recentPrs.map(async (p) => {
+      try {
+        const [detail, reviews] = await Promise.all([
+          ghFetch(`${base}/pulls/${p.number}`, options).then((r) => r.json()) as Promise<{ mergeable: boolean | null; mergeable_state?: string }>,
+          ghFetch(`${base}/pulls/${p.number}/reviews?per_page=100`, options).then((r) => r.json()) as Promise<Array<{ state: string; user?: { login: string } | null }>>,
+        ]);
+        p.mergeable = detail.mergeable;
+        p.mergeableState = detail.mergeable_state;
+        p.reviewDecision = reviewDecision(reviews);
+      } catch {
+        // leave enrichment undefined on error — non-fatal for the digest.
+      }
+    }),
+  );
 
   // Open issues (the issues endpoint includes PRs, so drop them). Used for both
   // the recent-open list and the actionable (labelled) subset.
@@ -164,14 +204,7 @@ export async function fetchRepoStatus(ref: RepoRef, options: GithubOptions = {})
     openIssues: Math.max(0, meta.open_issues_count - openPrs),
     openPrs,
     pushedAt: meta.pushed_at,
-    recentPrs: prsRaw.map((r) => ({
-      number: r.number,
-      title: r.title,
-      state: r.merged_at ? 'merged' : r.state,
-      updatedAt: r.updated_at,
-      url: r.html_url,
-      labels: (r.labels ?? []).map((l) => l.name),
-    })),
+    recentPrs,
     recentIssues: openIssueItems.slice(0, 10),
     actionableIssues: openIssueItems.filter((it) => isActionable(it.labels)).slice(0, 8),
   };
@@ -187,11 +220,53 @@ function ago(iso: string, now: number): string {
   return `${Math.floor(h / 24)}天前`;
 }
 
-/** Short state marker for readability in a plain-text digest. */
-function mark(state: string): string {
-  if (state === 'open') return '🟢';
-  if (state === 'merged') return '🟣';
+/** State marker: 🟢 open, 🟣 merged, ⚪ closed. */
+function stateDot(it: RepoItem): string {
+  if (it.state === 'merged') return '🟣';
+  if (it.state === 'open') return '🟢';
   return '⚪'; // closed
+}
+
+/** Latest meaningful review per reviewer decides the PR's review state. Reviews
+ *  come back chronologically, so a later entry overrides an earlier one; COMMENTED
+ *  never changes the decision and DISMISSED clears a reviewer's prior verdict. */
+export function reviewDecision(
+  reviews: Array<{ state: string; user?: { login: string } | null }>,
+): 'approved' | 'changes_requested' | 'review_required' {
+  const latest = new Map<string, string>();
+  for (const r of reviews) {
+    const login = r.user?.login;
+    if (!login) continue;
+    if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED' || r.state === 'DISMISSED') {
+      latest.set(login, r.state);
+    }
+  }
+  const states = [...latest.values()];
+  if (states.includes('CHANGES_REQUESTED')) return 'changes_requested';
+  if (states.includes('APPROVED')) return 'approved';
+  return 'review_required';
+}
+
+/** A short “can it be merged” label for an open PR, or null when still unknown.
+ *  Requested changes win over a clean merge state — mergeable:true alone is not
+ *  enough to say “可合并”. */
+function prStatusLabel(it: RepoItem): string | null {
+  if (it.mergeable === false || it.mergeableState === 'dirty') return '❌ 有冲突不可合并';
+  if (it.reviewDecision === 'changes_requested') return '🔴 需修改';
+  if (it.mergeableState === 'behind') return '🔄 落后需更新';
+  if (it.mergeableState === 'blocked') return '🚧 待评审/检查';
+  if (it.mergeableState === 'unstable') return '⚠️ 检查未通过';
+  if (it.mergeable === true) return '✅ 可合并';
+  return null; // null/unknown — GitHub still computing
+}
+
+/** PR-only extras: author and merge status, when known. */
+function prExtras(it: RepoItem): string[] {
+  const out: string[] = [];
+  if (it.author) out.push(`@${it.author}`);
+  const status = prStatusLabel(it);
+  if (status) out.push(status);
+  return out;
 }
 
 function clip(t: string, n = 44): string {
@@ -199,7 +274,9 @@ function clip(t: string, n = 44): string {
 }
 
 function titleLine(item: RepoItem, now: number): string {
-  return `${mark(item.state)} #${item.number} ${clip(item.title)}（${ago(item.updatedAt, now)}）`;
+  const extras = prExtras(item);
+  const tail = extras.length ? ` ${extras.join(' · ')}` : '';
+  return `${stateDot(item)} #${item.number} ${clip(item.title)}${tail}（${ago(item.updatedAt, now)}）`;
 }
 
 /** Format a plain-text digest (also the card's fallback text). */
@@ -209,6 +286,10 @@ export function formatRepoStatus(s: RepoStatus, now = Date.now()): string {
     `★ ${s.stars} · Fork ${s.forks} · 推送 ${ago(s.pushedAt, now)}`,
     `🟢 开放 Issue ${s.openIssues} · 🔀 开放 PR ${s.openPrs} · 🙋 可认领 ${s.actionableIssues.length}`,
   ];
+  if (s.recentPrs.length) {
+    lines.push('', `🔀 开放 PR（${s.recentPrs.length}）`);
+    for (const it of s.recentPrs) lines.push(titleLine(it, now));
+  }
   if (s.actionableIssues.length) {
     lines.push('', '🙋 可以改的 Issue');
     for (const it of s.actionableIssues) {
@@ -219,10 +300,6 @@ export function formatRepoStatus(s: RepoStatus, now = Date.now()): string {
   if (s.recentIssues.length) {
     lines.push('', `📋 最近开放 Issue（${s.recentIssues.length}）`);
     for (const it of s.recentIssues) lines.push(titleLine(it, now));
-  }
-  if (s.recentPrs.length) {
-    lines.push('', `🔀 最近 PR（${s.recentPrs.length}）`);
-    for (const it of s.recentPrs) lines.push(titleLine(it, now));
   }
   return lines.join('\n');
 }
@@ -257,8 +334,8 @@ function statTile(value: number, label: string, numColor: string): ACNode {
  *  runs, so 20+ rows stay under the ~200-node card limit). A leading state dot,
  *  a bold number, the title, and a trailing ↗ signal the whole row is tappable. */
 function itemRow(it: RepoItem, now: number, showLabels: boolean): ACNode {
-  const dot = it.state === 'open' ? '🟢' : it.state === 'merged' ? '🟣' : '⚪';
-  const meta: string[] = [];
+  const dot = stateDot(it);
+  const meta: string[] = [...prExtras(it)];
   if (showLabels && it.labels.length) meta.push(it.labels.slice(0, 3).join(' · '));
   meta.push(ago(it.updatedAt, now));
   if (typeof it.comments === 'number' && it.comments > 0) meta.push(`💬 ${it.comments}`);
@@ -309,6 +386,11 @@ export function buildRepoStatusCard(s: RepoStatus, now = Date.now()): Record<str
     { type: 'TextBlock', text: '👆 点任意条目直接打开对应 Issue / PR', size: 'Small', isSubtle: true, spacing: 'Small', wrap: true },
   ];
 
+  if (s.recentPrs.length) {
+    body.push(sectionHeader(`🔀 开放 PR（${s.recentPrs.length}）`));
+    for (const it of s.recentPrs) body.push(itemRow(it, now, false));
+  }
+
   if (s.actionableIssues.length) {
     body.push(sectionHeader('🙋 可以改的 Issue'));
     body.push({
@@ -322,11 +404,6 @@ export function buildRepoStatusCard(s: RepoStatus, now = Date.now()): Record<str
   if (s.recentIssues.length) {
     body.push(sectionHeader(`📋 最近开放 Issue（${s.recentIssues.length}）`));
     for (const it of s.recentIssues) body.push(itemRow(it, now, true));
-  }
-
-  if (s.recentPrs.length) {
-    body.push(sectionHeader(`🔀 最近 PR（${s.recentPrs.length}）`));
-    for (const it of s.recentPrs) body.push(itemRow(it, now, false));
   }
 
   return {
