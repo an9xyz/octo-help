@@ -1068,8 +1068,8 @@ function syncBalls(): void {
 // wrecks sync at 3000.
 
 const PIXEL_HIT_CLASS = 'octo-pixel-hit';
-/** Must outlast the slowest coin: 1.15s base + up to 0.13s duration jitter +
- *  up to 0.09s start delay. The coins outlast the jump on purpose — they have to
+/** Must outlast the slowest pearl: 1.15s base + up to 0.13s duration jitter +
+ *  up to 0.09s start delay. The pearls outlast the jump on purpose — they have to
  *  sit on the bubble for a beat, otherwise they read as flying past. */
 const PIXEL_HIT_MS = 1550;
 const PIXEL_HIT_COOLDOWN_MS = 1700;
@@ -1091,40 +1091,40 @@ const PIXEL_RISE_MIN = 28;
  * 身高处，仍在气泡范围内，归属一样看得出来。
  */
 const PIXEL_RISE_MAX = PIXEL_SPRITE_PX * 2;
-/** Must match `.oph-coin { top }` in BEAUTIFY_CSS. */
-const COIN_TOP_PX = 4;
-/** Where the coin's art ends inside its 48px box (the sprite has empty rows
+/** Must match `.oph-pearl { top }` in BEAUTIFY_CSS. */
+const PEARL_TOP_PX = 4;
+/** Where the pearl's art ends inside its 48px box (the sprite has empty rows
  *  below it), i.e. how far down its visible bottom edge sits. */
-const COIN_ART_BOTTOM_PX = 34;
+const PEARL_ART_BOTTOM_PX = 34;
 /**
- * How far a coin may fall. The crate occupies the scene's top PIXEL_SPRITE_PX,
- * so that line is also the bubble's top edge — and a coin must never cross it.
+ * How far a pearl may fall. The crate occupies the scene's top PIXEL_SPRITE_PX,
+ * so that line is also the bubble's top edge — and a pearl must never cross it.
  * Coins are opaque sprites: landing one *on* the bubble means covering the
  * message with decoration, and a message being obscured while someone reads it
  * matters far more than how the animation looks. So they pile up along the
  * bubble's top edge instead of scattering across its face.
  */
-const COIN_LAND_MAX_PX = PIXEL_SPRITE_PX - COIN_ART_BOTTOM_PX - COIN_TOP_PX;
-/** How many coins a bump can throw. Rolled per hit. */
-const COIN_MIN = 1;
-const COIN_MAX = 10;
+const PEARL_LAND_MAX_PX = PIXEL_SPRITE_PX - PEARL_ART_BOTTOM_PX - PEARL_TOP_PX;
+/** How many pearls a bump can throw. Rolled per hit. */
+const PEARL_MIN = 1;
+const PEARL_MAX = 10;
 /**
- * Distance from the scene to where the nearest coin may land, in px.
- * The scene sits 8px off the bubble and a coin's art is centred in its 48px box,
+ * Distance from the scene to where the nearest pearl may land, in px.
+ * The scene sits 8px off the bubble and a pearl's art is centred in its 48px box,
  * so anything closer than this drops into the gap between the two instead of
  * onto the message.
  */
-const COIN_INSET_PX = 44;
-/** Cap on how far a coin is thrown, so a very wide bubble does not fling one
+const PEARL_INSET_PX = 44;
+/** Cap on how far a pearl is thrown, so a very wide bubble does not fling one
  *  across the whole conversation. */
-const COIN_REACH_MAX_PX = 420;
+const PEARL_REACH_MAX_PX = 420;
 
 /**
- * Arc shape per coin: low lob for the ones landing short, high lob for the ones
- * thrown far. Tying the arc to the distance is what keeps a ten-coin burst from
+ * Arc shape per pearl: low lob for the ones landing short, high lob for the ones
+ * thrown far. Tying the arc to the distance is what keeps a ten-pearl burst from
  * looking like ten copies of the same throw.
  */
-function coinArc(index: number, count: number): 'a' | 'b' | 'c' {
+function pearlArc(index: number, count: number): 'a' | 'b' | 'c' {
   const at = count <= 1 ? 0.5 : index / (count - 1);
   if (at < 0.34) return 'c';
   return at < 0.67 ? 'a' : 'b';
@@ -1195,33 +1195,33 @@ function spawnPixelHit(bubble: Element): void {
   // scene ended up on, capped so a very wide bubble does not fling them across
   // the whole conversation.
   // Coins are spread from the bubble's near edge to its far edge. The reach is
-  // measured from COIN_INSET_PX, not from the scene, so ratio 0 already lands
+  // measured from PEARL_INSET_PX, not from the scene, so ratio 0 already lands
   // inside the bubble rather than in the 8px gap beside it.
-  const span = Math.min(Math.round(r.width) + 8, COIN_REACH_MAX_PX);
-  const reach = Math.max(48, span - COIN_INSET_PX);
+  const span = Math.min(Math.round(r.width) + 8, PEARL_REACH_MAX_PX);
+  const reach = Math.max(48, span - PEARL_INSET_PX);
 
-  const coinCount = COIN_MIN + Math.floor(Math.random() * (COIN_MAX - COIN_MIN + 1));
+  const pearlCount = PEARL_MIN + Math.floor(Math.random() * (PEARL_MAX - PEARL_MIN + 1));
   // Built node by node rather than with innerHTML: this runs in the page MAIN
   // world, where an innerHTML template becomes an injection sink the moment any
   // part of it stops being a literal (same reasoning as playGachaReveal).
   const crate = document.createElement('div');
-  crate.className = 'oph-crate';
+  crate.className = 'oph-chest';
   fx.appendChild(crate);
 
-  // Each coin gets its own slice of the spread and rolls inside it. Pure
+  // Each pearl gets its own slice of the spread and rolls inside it. Pure
   // randomness would let them pile onto one spot; fixed positions gave the
   // trick away after two bumps.
-  for (let i = 0; i < coinCount; i++) {
-    const coin = document.createElement('div');
-    coin.className = `oph-coin oph-coin-${coinArc(i, coinCount)}`;
-    const ratio = (i + Math.random()) / coinCount;
-    const dist = COIN_INSET_PX + reach * ratio;
-    coin.style.setProperty('--oph-x', `${Math.round(flipped ? dist : -dist)}px`);
-    coin.style.setProperty('--oph-y', `${Math.round(Math.random() * COIN_LAND_MAX_PX)}px`);
+  for (let i = 0; i < pearlCount; i++) {
+    const pearl = document.createElement('div');
+    pearl.className = `oph-pearl oph-pearl-${pearlArc(i, pearlCount)}`;
+    const ratio = (i + Math.random()) / pearlCount;
+    const dist = PEARL_INSET_PX + reach * ratio;
+    pearl.style.setProperty('--oph-x', `${Math.round(flipped ? dist : -dist)}px`);
+    pearl.style.setProperty('--oph-y', `${Math.round(Math.random() * PEARL_LAND_MAX_PX)}px`);
     // Stagger duration and start so a burst scatters instead of marching in step.
-    coin.style.animationDuration = `${(1.02 + Math.random() * 0.26).toFixed(2)}s`;
-    coin.style.animationDelay = `${Math.round(Math.random() * 90)}ms`;
-    fx.appendChild(coin);
+    pearl.style.animationDuration = `${(1.02 + Math.random() * 0.26).toFixed(2)}s`;
+    pearl.style.animationDelay = `${Math.round(Math.random() * 90)}ms`;
+    fx.appendChild(pearl);
   }
 
   const hero = document.createElement('div');
@@ -1258,7 +1258,7 @@ function onPixelHover(e: Event): void {
     if (Date.now() - pixelScrolledAt < PIXEL_SCROLL_QUIET_MS) return;
     // One scene at a time. The per-bubble cooldown alone does not stop a pointer
     // swept down the list from arming ten of them at once — each on a different
-    // bubble, all still on screen — which is a shower of coins, not an effect.
+    // bubble, all still on screen — which is a shower of pearls, not an effect.
     // Queried from the DOM rather than tracked in a flag so a scene removed by
     // anything else (teardown, the user's own extension) cannot wedge it shut.
     if (document.querySelector(`.${PIXEL_HIT_CLASS}`)) return;
@@ -1277,7 +1277,7 @@ function onPixelHover(e: Event): void {
  *
  * It is `position: fixed` at coordinates taken from getBoundingClientRect() the
  * moment it spawned, so the instant the list moves it is pinned to a spot its
- * message has left — a crate and a fistful of coins hanging over nothing. There
+ * message has left — a crate and a fistful of pearls hanging over nothing. There
  * is no cheap fix for that: following the bubble would mean repositioning every
  * frame. Since nobody is watching a hover flourish while scrolling anyway,
  * dropping it is both the honest and the cheap answer.
