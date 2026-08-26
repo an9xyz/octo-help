@@ -205,9 +205,14 @@ export const SPRITES = {
  *
  * A real FC dialog box is a tile-built frame, not a CSS line: `border: 2px
  * solid` plus an inset shadow only imitates the look, and it stops being a
- * pixel at all once the browser scales it. These are 12x12 tiles sliced at 4,
- * drawn with border-width 8px so each source pixel lands on exactly 2 screen
+ * pixel at all once the browser scales it. These are 8x8 tiles sliced at 2,
+ * drawn with border-width 4px so each source pixel lands on exactly 2 screen
  * pixels — the same 2px grid the 48px sprites use.
+ *
+ * Four source pixels of frame (the first cut of this) worked out to 8px of
+ * chrome wrapped around every single message, which is a lot of noise down a
+ * long list and pads each bubble out by that much. Two is enough to read as a
+ * frame.
  *
  * Two details are what make it read as FC rather than as a generic double-lined
  * box: the corners drop their outermost pixel (the stepped "pixel round corner"
@@ -216,24 +221,20 @@ export const SPRITES = {
  * instead of being a flat outline.
  */
 export const FRAME_TIERS = {
-  'frame-ai':    { H: [0xfc, 0xe8, 0xb0], M: [0xc8, 0x78, 0x00], C: [0xf8, 0xd8, 0x78] },
-  'frame-me':    { H: [0xbc, 0xe8, 0xfc], M: [0x00, 0x38, 0xa8], C: [0x3c, 0xbc, 0xfc] },
-  'frame-other': { H: [0xdc, 0xfc, 0xfc], M: [0x00, 0xa8, 0xa8], C: [0xb0, 0xfc, 0xfc] },
+  'frame-ai':    { H: [0xfc, 0xf8, 0xe0], M: [0xf8, 0xb8, 0x00], C: [0xfc, 0xf0, 0xc8] },
+  'frame-me':    { H: [0xe8, 0xf6, 0xff], M: [0x00, 0x70, 0xec], C: [0xd8, 0xec, 0xfc] },
+  'frame-other': { H: [0xe4, 0xff, 0xff], M: [0x00, 0xa8, 0xa8], C: [0xd8, 0xfc, 0xfc] },
 };
 
 export const FRAME = [
-  '.KKKKKKKKKK.',
-  'KKHHHHHHHHMK',
-  'KHCCCCCCCCMK',
-  'KHCCCCCCCCMK',
-  'KHCCCCCCCCMK',
-  'KHCCCCCCCCMK',
-  'KHCCCCCCCCMK',
-  'KHCCCCCCCCMK',
-  'KHCCCCCCCCMK',
-  'KHCCCCCCCCMK',
-  'KMMMMMMMMMKK',
-  '.KKKKKKKKKK.',
+  '.KKKKKK.',
+  'KKHHHHKK',
+  'KHCCCCMK',
+  'KHCCCCMK',
+  'KHCCCCMK',
+  'KHCCCCMK',
+  'KMMMMMMK',
+  '.KKKKKK.',
 ];
 
 // ---- PNG encoding (8-bit RGBA) -------------------------------------------

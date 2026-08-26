@@ -3513,9 +3513,9 @@
                 --octo-px-cloud: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAAP0lEQVR42mNgGAXEgf8EMG0t/vPnD15MK4cQtBiHQ+jja1qEBkUWU+oQqllMTrTQzHJiHTHwDqATHgWjYHACAPtDF7fPW2mlAAAAAElFTkSuQmCC");
                 --octo-px-ground: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAO0lEQVR42mNgYGD4TxE+4cPzHxcGKSAkT7kBHQYM/3FhkAJC8gxUDQNinIwhRrEBpPoZi9hoOhhNB/8BXgilUGi3qVYAAAAASUVORK5CYII=");
                 --octo-px-coin: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAARElEQVR42mNgGAVUBP/RMHUN/rEDFVPLIgyDcVhEG8MptQTDkBMVEIxNbtSCUQsGgQUDltmoUlzQsiyiS2k6CkYBfgAAi5I6GLg6iwQAAAAASUVORK5CYII=");
-                --octo-px-frame-ai: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANUlEQVR42mNgYGBgEBCQ+E8MZkBW/OfFBrz4RAUDRBNM8Y8bFXjxqAbaawBxCGGssU1M0gAAZalmdIJs3+4AAAAASUVORK5CYII=");
-                --octo-px-frame-me: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAANElEQVR42mNgYGBgEBCQ+E8MZkBWvOfFH7yYwWIFRBNMsc0e/HhUA+01gDiEMNbYJiZpAAAG1Ut0RWinEQAAAABJRU5ErkJggg==");
-                --octo-px-frame-other: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAAM0lEQVR42mNgYGBgEBCQ+E8MZkBWfOfPH7yYYcUKiCaY4g0E8KgG2msAcQhhrLFNTNIAAPsXg5Q/LaAaAAAAAElFTkSuQmCC");
+                --octo-px-frame-ai: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAMElEQVR42mNgYGBgEBCQ+I8NMyBL/vnxAAXDFcElP5xAwT92MNBVAYiDDWP4BJs3AQOdlDVDIEJmAAAAAElFTkSuQmCC");
+                --octo-px-frame-me: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAMUlEQVR42mNgYGBgEBCQ+I8NMyBLvvj2HwXDFcEkb7z5g4IZCt7QVQGIgw1j+ASbNwF7/JH1xAD0SgAAAABJRU5ErkJggg==");
+                --octo-px-frame-other: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAMklEQVR42mNgYGBgEBCQ+I8NMyBLPvn/HwXDFcEkb/z5g4IZVqygqwIQBxvG8Ak2bwIA+eqSpelDsyEAAAAASUVORK5CYII=");
             }
             /* PIXEL-SPRITES:END */
 
@@ -3524,14 +3524,14 @@
                只剩描边可辨。顺带浅底 + 深字也比高饱和深底配白字更耐读 —— 
                气泡里装的是长消息，不是标签。 */
             body[data-octo-skin="pixel"] {
-                --px-ai: #f8d878;
-                --px-ai-dk: #c87800;
-                /* $21 而不是更浅的 $31：三档原来的亮度是 0.70 / 0.71 / 0.86，
-                   自己和他人只差 1.20:1，两档在列表里几乎分不开 —— 而"这条是不是
-                   我发的"恰恰是最需要一眼看出来的。 */
-                --px-me: #3cbcfc;
-                --px-me-dk: #0038a8;
-                --px-other: #b0fcfc;
+                /* 三档的区分交给边框主色（饱和、色相拉开），底色一律退到极浅。
+                   拿底色去区分要么分不开（浅色三档只差 1.2:1），要么压着一段
+                   长文本读起来累 —— FC 的对话框本来也是浅底配彩框。 */
+                --px-ai: #fcf0c8;
+                --px-ai-dk: #f8b800;
+                --px-me: #d8ecfc;
+                --px-me-dk: #0070ec;
+                --px-other: #d8fcfc;
                 --px-other-dk: #00a8a8;
                 --px-ink: #101018;
             }
@@ -3540,35 +3540,40 @@
                不用 border-image/滤镜，inset box-shadow 在任何缩放下都不糊。 */
             /* 气泡边框走九宫格贴图，不是 CSS 线条。
                `border: 2px solid` + inset 阴影只是在「模仿」像素框：它没有像素
-               图案，浏览器一缩放就不再是像素了。这里 12×12 的 tile 切 4、
-               border-width 取 8px，一个源像素正好落 2 个屏幕像素 —— 和 48px
+               图案，浏览器一缩放就不再是像素了。这里 8×8 的 tile 切 2、
+               border-width 取 4px，一个源像素正好落 2 个屏幕像素 —— 和 48px
                精灵是同一套 2px 网格。边条是竖向渐变、横向平铺，拉伸不会变形。 */
             body[data-octo-skin="pixel"] .wk-markdown,
             body[data-octo-skin="pixel"] .wk-fold-msg-text {
                 border-radius: 0 !important;
-                border: 8px solid transparent !important;
-                border-image-slice: 4 fill !important;
+                border: 4px solid transparent !important;
+                border-image-slice: 2 fill !important;
                 border-image-repeat: stretch !important;
-                /* 硬投影，偏移 4px = 2 个源像素。FC 的投影是实心色块不是高斯模糊，
+                /* 硬投影，偏移 2px = 一个源像素。FC 的投影是实心色块不是高斯模糊，
                    任何 blur 半径都会立刻把它拉出像素风之外。 */
-                box-shadow: 4px 4px 0 rgba(16, 16, 24, 0.22) !important;
+                box-shadow: 2px 2px 0 rgba(16, 16, 24, 0.20) !important;
                 color: var(--px-ink) !important;
                 image-rendering: pixelated !important;
+                /* 边框已经占了 4px，内距相应收掉，别让气泡整个胖一圈 */
+                padding: 6px 10px !important;
             }
             body[data-octo-skin="pixel"] .wk-msg-row:has(.ai-badge) .wk-markdown,
             body[data-octo-skin="pixel"] .wk-msg-row--continue[data-ai-continue="true"] .wk-markdown,
             body[data-octo-skin="pixel"] .wk-fold-msg-text {
                 border-image-source: var(--octo-px-frame-ai) !important;
-                background: var(--px-ai) !important; /* 贴图没加载出来时的兜底底色 */
+                background: var(--px-ai) !important;
+                --octo-bg: var(--px-ai) !important; /* 贴图没加载出来时的兜底底色 */
             }
             body[data-octo-skin="pixel"] .wk-msg-row--send:not(:has(.ai-badge)) .wk-markdown {
                 border-image-source: var(--octo-px-frame-me) !important;
                 background: var(--px-me) !important;
+                --octo-bg: var(--px-me) !important;
                 color: var(--px-ink) !important;
             }
             body[data-octo-skin="pixel"] .wk-msg-row:not(.wk-msg-row--send):not(:has(.ai-badge)):not([data-ai-continue="true"]) .wk-markdown {
                 border-image-source: var(--octo-px-frame-other) !important;
                 background: var(--px-other) !important;
+                --octo-bg: var(--px-other) !important;
                 color: var(--px-ink) !important;
             }
 
@@ -3583,8 +3588,8 @@
                 position: relative !important;
                 border-left: none !important;
                 border-radius: 0 !important;
-                padding-left: 22px !important;
-                background: rgba(16, 16, 24, 0.06) !important;
+                padding: 3px 6px 3px 16px !important;
+                background: rgba(16, 16, 24, 0.05) !important;
             }
             body[data-octo-skin="pixel"] .wk-msg-row .wk-reply-block::before,
             body[data-octo-skin="pixel"] .wk-msg-row .wk-message-text-reply::before {
@@ -3593,14 +3598,14 @@
                 left: 0 !important;
                 top: 0 !important;
                 bottom: 0 !important;
-                width: 14px !important;
+                width: 10px !important;
                 background:
                     linear-gradient(90deg,
-                        #00606f 0 4px,
-                        #00a8a8 4px 6px,
-                        #6ff0e6 6px 8px,
-                        #00a8a8 8px 10px,
-                        #00606f 10px 14px) !important;
+                        #00606f 0 2px,
+                        #00a8a8 2px 4px,
+                        #6ff0e6 4px 6px,
+                        #00a8a8 6px 8px,
+                        #00606f 8px 10px) !important;
                 box-shadow: inset 0 0 0 2px var(--px-ink) !important;
                 image-rendering: pixelated !important;
             }
@@ -3752,6 +3757,21 @@
                 100% { opacity: 0; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
             }
 
+            /* 滚动时把气泡的 hover 反馈整个停掉。
+               指针并没有动，是消息从它底下滑过，于是每条经过的都被 hover 一次、
+               上浮 2px 又落回，整个列表在滚动时起伏 —— 这是「滑动体感」最直接的
+               来源。属性由 onPixelScroll 挂上，停止滚动 300ms 后摘掉。
+               只在本皮肤作用域内关：那个 hover 是基础层的，动它会波及所有主题。 */
+            body[data-octo-skin="pixel"][data-octo-px-scrolling] .wk-markdown,
+            body[data-octo-skin="pixel"][data-octo-px-scrolling] .wk-fold-msg-text {
+                transition: none !important;
+            }
+            body[data-octo-skin="pixel"][data-octo-px-scrolling] .wk-markdown:hover,
+            body[data-octo-skin="pixel"][data-octo-px-scrolling] .wk-fold-msg-text:hover {
+                transform: none !important;
+                filter: none !important;
+            }
+
             /* 无障碍：开了「减弱动态效果」时整个场景不该出现。JS 侧已经不注入，
                这里再兜一层，防止有节点因异常残留在页面上继续动。 */
             @media (prefers-reduced-motion: reduce) {
@@ -3822,9 +3842,13 @@
                 border-radius: 0 !important;
                 box-shadow: 6px 6px 0 rgba(16, 16, 24, 0.28) !important;
             }
-            body[data-octo-skin="pixel"] .wk-bot-detail-section,
-            body[data-octo-skin="pixel"] .wk-bot-detail-command-block,
-            body[data-octo-skin="pixel"] .wk-bot-detail-nav-row {
+            /* 信息区块。类名取自 packages/dmworkbase 的 BotDetailModal 源码：
+               这张卡真正渲染的是 -desc / -remark-line / -commands / -cmd，
+               而 -section / -command-block / -nav-row 在 DOM 里根本不存在。 */
+            body[data-octo-skin="pixel"] .wk-bot-detail-desc,
+            body[data-octo-skin="pixel"] .wk-bot-detail-remark-line,
+            body[data-octo-skin="pixel"] .wk-bot-detail-commands,
+            body[data-octo-skin="pixel"] .wk-bot-detail-cmd {
                 border-radius: 0 !important;
                 border: 2px solid var(--px-ink) !important;
                 background: #f4f7ff !important;
@@ -3842,16 +3866,15 @@
                 image-rendering: pixelated !important;
             }
 
-            /* 名字：实心描边字，不用发光 —— NES 没有辉光这回事 */
+            /* 名字：深色实心字 + 一层硬投影，不发光也不描边。
+               上一版是白字套 6 层 2px 描边 —— 英文还看得过去，中文笔画本就密，
+               描边一糊直接连成一片黑（真机上「发车员」三个字基本读不出来）。
+               描边这种做法只适合字形简单、字号又大的场合。 */
             body[data-octo-skin="pixel"] .wk-bot-detail-name {
-                color: #fff !important;
-                -webkit-text-fill-color: #fff !important;
+                color: var(--px-ink) !important;
+                -webkit-text-fill-color: var(--px-ink) !important;
                 background: none !important;
-                text-shadow:
-                    2px 0 0 var(--px-ink), -2px 0 0 var(--px-ink),
-                    0 2px 0 var(--px-ink), 0 -2px 0 var(--px-ink),
-                    2px 2px 0 var(--px-ink), -2px 2px 0 var(--px-ink),
-                    4px 4px 0 rgba(16, 16, 24, 0.35) !important;
+                text-shadow: 2px 2px 0 rgba(16, 16, 24, 0.20) !important;
                 animation: none !important;
                 filter: none !important;
             }
@@ -3865,10 +3888,12 @@
                 border: 2px solid var(--px-ink) !important;
             }
 
-            /* 主按钮 = 金砖，按下去有 2px 位移，硬投影同步收掉 */
-            body[data-octo-skin="pixel"] .wk-bot-detail-primary-action,
-            body[data-octo-skin="pixel"] .wk-bot-detail-claw-btn,
-            body[data-octo-skin="pixel"] .wk-bot-detail-manage-btn {
+            /* 主按钮 = 金砖，按下去有 2px 位移，硬投影同步收掉。
+               「发送消息」是个不带 className 的 Semi <Button block>，所以按
+               .semi-button-block 命中 —— 卡里的整宽按钮只有主操作是 block，
+               铅笔那类图标按钮不是，正好分开。 */
+            body[data-octo-skin="pixel"] .wk-bot-detail-content .semi-button-block,
+            body[data-octo-skin="pixel"] .wk-bot-detail-claw-btn {
                 border-radius: 0 !important;
                 border: 2px solid var(--px-ink) !important;
                 background: var(--px-ai) !important;
@@ -3876,9 +3901,12 @@
                 box-shadow: 4px 4px 0 rgba(16, 16, 24, 0.28) !important;
                 text-shadow: none !important;
             }
-            body[data-octo-skin="pixel"] .wk-bot-detail-primary-action:active,
-            body[data-octo-skin="pixel"] .wk-bot-detail-claw-btn:active,
-            body[data-octo-skin="pixel"] .wk-bot-detail-manage-btn:active {
+            body[data-octo-skin="pixel"] .wk-bot-detail-content .semi-button-block:hover {
+                background: #ffd040 !important;
+                color: var(--px-ink) !important;
+            }
+            body[data-octo-skin="pixel"] .wk-bot-detail-content .semi-button-block:active,
+            body[data-octo-skin="pixel"] .wk-bot-detail-claw-btn:active {
                 transform: translate(2px, 2px);
                 box-shadow: 2px 2px 0 rgba(16, 16, 24, 0.28) !important;
             }
@@ -3893,4 +3921,203 @@
                 box-shadow:
                     0 0 0 4px var(--px-ai),
                     8px 8px 0 rgba(16, 16, 24, 0.3) !important;
+            }
+
+            /* ---- 像素乐园 · Bot 卡余下的圆角面 --------------------------
+             * 真机截图里这几处还是原生观感：关闭键是圆形灰底、稀有度角标是圆角
+             * 药丸、卡壳四角仍带圆角。它们分属不同的 DOM 层级，按类名逐个覆盖
+             * 漏了就是漏了 —— 所以这里连结构选择器一起挂。
+             * ---------------------------------------------------------- */
+            /* 关闭键：圆形 → 方形像素键。类名来自 WKModal 自己渲染的
+               .wk-modal-custom-close-btn（既不是 Semi 的，也不是基础层注释里
+               写的 .wk-bot-detail-route-close）。 */
+            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-custom-close-btn {
+                border-radius: 0 !important;
+                border: 2px solid var(--px-ink) !important;
+                background: #fff !important;
+                box-shadow: 2px 2px 0 rgba(16, 16, 24, 0.28) !important;
+                backdrop-filter: none !important;
+            }
+            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-custom-close-btn:active {
+                transform: translate(2px, 2px);
+                box-shadow: none !important;
+            }
+            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-custom-close-btn .semi-icon {
+                color: var(--px-ink) !important;
+                filter: none !important;
+            }
+
+            /* 稀有度角标：药丸 → 方牌，辉光换成硬投影 */
+            body[data-octo-skin="pixel"] .wk-bot-detail-content[data-octo-rarity]::after {
+                border-radius: 0 !important;
+                border: 2px solid var(--px-ink) !important;
+                box-shadow: 2px 2px 0 rgba(16, 16, 24, 0.3) !important;
+                text-shadow: none !important;
+                filter: none !important;
+                animation: none !important;
+                backdrop-filter: none !important;
+            }
+
+            /* 卡壳与它内层的滚动容器：圆角一路清到底，
+               只清最外层的话，内层一裁又把圆角露出来。 */
+            body[data-octo-skin="pixel"] .wk-bot-detail-modal .semi-modal-content,
+            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-shell,
+            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-body,
+            body[data-octo-skin="pixel"] .wk-bot-detail-content,
+            body[data-octo-skin="pixel"] .wk-bot-detail-header {
+                border-radius: 0 !important;
+            }
+
+            /* 头像：外框已是方的，内层图片还是圆的，方框套圆图很别扭 */
+            body[data-octo-skin="pixel"] .wk-bot-detail-header-avatar img,
+            body[data-octo-skin="pixel"] .wk-bot-detail-avatar img {
+                border-radius: 0 !important;
+            }
+
+            /* 在线状态点：圆点 → 像素方点 */
+            body[data-octo-skin="pixel"] .wk-bot-detail-header [class*="status"],
+            body[data-octo-skin="pixel"] .wk-bot-detail-header [class*="online"] {
+                border-radius: 0 !important;
+            }
+
+            /* ========================================================
+             * 像素乐园 · 用户资料卡 + 两卡通用的像素质感
+             *
+             * 用户卡和 Bot 卡是两套完全不同的 DOM：Bot 卡走 WKModal，用户卡走
+             * RoutePage + 通用的 Sections 组件（类名 .wk-route-* / .wk-section-*，
+             * 见 packages/dmworkbase/src/Components/{RoutePage,Sections,UserInfo}）。
+             * .wk-route 是所有路由页共用的外壳，所以这里用 :has(.wk-userinfo)
+             * 把作用域收在用户卡上，不去动侧栏那些同样走 RoutePage 的面板。
+             * ====================================================== */
+            body[data-octo-skin="pixel"] .wk-route-box:has(.wk-userinfo),
+            body[data-octo-skin="pixel"] .wk-route-content:has(.wk-userinfo),
+            body[data-octo-skin="pixel"] .wk-userinfo,
+            body[data-octo-skin="pixel"] .wk-userinfo-content {
+                border-radius: 0 !important;
+            }
+            body[data-octo-skin="pixel"] .wk-route-box:has(.wk-userinfo) {
+                border: 2px solid var(--px-ink) !important;
+                box-shadow: 6px 6px 0 rgba(16, 16, 24, 0.28) !important;
+            }
+            /* 头部关闭键：与 Bot 卡那颗保持同一种手感 */
+            body[data-octo-skin="pixel"] .wk-route-box:has(.wk-userinfo) .wk-route-header-close {
+                border-radius: 0 !important;
+                border: 2px solid var(--px-ink) !important;
+                background: #fff !important;
+                box-shadow: 2px 2px 0 rgba(16, 16, 24, 0.28) !important;
+            }
+            body[data-octo-skin="pixel"] .wk-route-box:has(.wk-userinfo) .wk-route-header-close:active {
+                transform: translate(2px, 2px);
+                box-shadow: none !important;
+            }
+            /* 头像：方形像素金框，内层图片一并去圆角 —— 方框套圆图很别扭 */
+            body[data-octo-skin="pixel"] .wk-userinfo-user-avatar,
+            body[data-octo-skin="pixel"] .wk-userinfo-user-avatar img {
+                border-radius: 0 !important;
+            }
+            body[data-octo-skin="pixel"] .wk-userinfo-user-avatar {
+                border: 4px solid var(--px-ink) !important;
+                box-shadow: 0 0 0 4px var(--px-ai-dk), 6px 6px 0 rgba(16, 16, 24, 0.3) !important;
+                image-rendering: pixelated !important;
+            }
+            /* 名字：深色实心字 + 一层硬投影。描边留给字号大、字形简单的场合，
+               中文笔画一密就糊成一片（Bot 卡上已经栽过一次）。 */
+            body[data-octo-skin="pixel"] .wk-userinfo-user-info-name {
+                color: var(--px-ink) !important;
+                -webkit-text-fill-color: var(--px-ink) !important;
+                text-shadow: 2px 2px 0 rgba(16, 16, 24, 0.18) !important;
+                background: none !important;
+                filter: none !important;
+            }
+            /* 主按钮 = 金砖。这里同样是不带 className 的 Semi <Button block>。 */
+            body[data-octo-skin="pixel"] .wk-userinfo .semi-button-block,
+            body[data-octo-skin="pixel"] .wk-userinfo-footer-sendbutton .semi-button {
+                border-radius: 0 !important;
+                border: 2px solid var(--px-ink) !important;
+                background: var(--px-ai-dk) !important;
+                color: var(--px-ink) !important;
+                box-shadow: 4px 4px 0 rgba(16, 16, 24, 0.28) !important;
+                text-shadow: none !important;
+            }
+            body[data-octo-skin="pixel"] .wk-userinfo .semi-button-block:hover,
+            body[data-octo-skin="pixel"] .wk-userinfo-footer-sendbutton .semi-button:hover {
+                background: #ffd040 !important;
+            }
+            body[data-octo-skin="pixel"] .wk-userinfo .semi-button-block:active,
+            body[data-octo-skin="pixel"] .wk-userinfo-footer-sendbutton .semi-button:active {
+                transform: translate(2px, 2px);
+                box-shadow: 2px 2px 0 rgba(16, 16, 24, 0.28) !important;
+            }
+
+            /* ---- Sections：用户卡的信息区块，与 Bot 卡的 -desc 同款处理 ---- */
+            body[data-octo-skin="pixel"] .wk-userinfo .wk-section,
+            body[data-octo-skin="pixel"] .wk-userinfo .wk-section-row {
+                border-radius: 0 !important;
+            }
+            body[data-octo-skin="pixel"] .wk-userinfo .wk-section {
+                border: 2px solid var(--px-ink) !important;
+                background: #f4f7ff !important;
+                box-shadow: 3px 3px 0 rgba(16, 16, 24, 0.14) !important;
+            }
+            body[data-octo-skin="pixel"] .wk-userinfo .wk-section-title {
+                color: var(--px-ink) !important;
+                font-weight: 700 !important;
+            }
+
+            /* ---- 四角铆钉 ------------------------------------------------
+             * 光是"直角 + 描边"还只是个方框，铆钉才是 8-bit 面板的招牌。
+             * 用四层纯色渐变当 4×4 的方点打在四角：不占伪元素（那两个位置在
+             * 别处已经排满了），也不注入任何节点。
+             * ------------------------------------------------------------ */
+            body[data-octo-skin="pixel"] .wk-userinfo .wk-section,
+            body[data-octo-skin="pixel"] .wk-bot-detail-desc,
+            body[data-octo-skin="pixel"] .wk-bot-detail-commands {
+                background-image:
+                    linear-gradient(var(--px-ink) 0 0),
+                    linear-gradient(var(--px-ink) 0 0),
+                    linear-gradient(var(--px-ink) 0 0),
+                    linear-gradient(var(--px-ink) 0 0) !important;
+                background-size: 4px 4px !important;
+                background-position:
+                    4px 4px,
+                    calc(100% - 4px) 4px,
+                    4px calc(100% - 4px),
+                    calc(100% - 4px) calc(100% - 4px) !important;
+                background-repeat: no-repeat !important;
+            }
+
+            /* ---- 滚动条：卡片内的滚动条也该是像素的 ---- */
+            body[data-octo-skin="pixel"] .wk-userinfo ::-webkit-scrollbar,
+            body[data-octo-skin="pixel"] .wk-bot-detail-content ::-webkit-scrollbar {
+                width: 12px !important;
+                height: 12px !important;
+            }
+            body[data-octo-skin="pixel"] .wk-userinfo ::-webkit-scrollbar-track,
+            body[data-octo-skin="pixel"] .wk-bot-detail-content ::-webkit-scrollbar-track {
+                background: #e4ebf7 !important;
+                border-left: 2px solid var(--px-ink) !important;
+            }
+            body[data-octo-skin="pixel"] .wk-userinfo ::-webkit-scrollbar-thumb,
+            body[data-octo-skin="pixel"] .wk-bot-detail-content ::-webkit-scrollbar-thumb {
+                border-radius: 0 !important;
+                background: var(--px-me-dk) !important;
+                border: 2px solid var(--px-ink) !important;
+            }
+
+            /* ---- 分隔线：1px 实线 → 像素点线 ---- */
+            body[data-octo-skin="pixel"] .wk-userinfo .wk-section-row + .wk-section-row,
+            body[data-octo-skin="pixel"] .wk-bot-detail-cmd + .wk-bot-detail-cmd {
+                border-top: 2px dashed rgba(16, 16, 24, 0.28) !important;
+            }
+
+            /* ---- 折叠长消息的「展开全文」蒙层 ----------------------------
+             * 渐变终点走 --octo-bg（三档气泡各自接上了自己的底色），否则蒙层会
+             * 渐变到基础层的白，在彩色气泡上压出一道色差。顺带去掉圆角、把提示
+             * 文字换成墨色 —— 紫色强调色在这套配色里是外来的。
+             * ---------------------------------------------------------- */
+            body[data-octo-skin="pixel"] .wk-markdown.octo-clamp:not(.octo-expanded)::after,
+            body[data-octo-skin="pixel"] .wk-fold-msg-text.octo-clamp:not(.octo-expanded)::after {
+                border-radius: 0 !important;
+                color: var(--px-ink) !important;
+                text-shadow: 1px 1px 0 rgba(255, 255, 255, 0.6) !important;
             }

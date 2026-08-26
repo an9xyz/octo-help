@@ -145,13 +145,13 @@ ${skin}
 
 <script>
 // 与 utils/octoBeautify.ts 的 spawnPixelHit / onPixelHover 同逻辑
-const SPRITE = 48, W = SPRITE + 8, RISE_MIN = 28, COIN_TOP = 4, LAND_MAX = 10, MS = 1550, COOLDOWN = 1700;
+const SPRITE = 48, W = SPRITE + 8, RISE_MIN = 28, RISE_MAX = 96, COIN_TOP = 4, LAND_MAX = 10, MS = 1550, COOLDOWN = 1700, HOVER_DELAY = 350, SCROLL_QUIET = 300;
 const COIN_MIN = 1, COIN_MAX = 10, COIN_INSET = 44, REACH_MAX = 420;
 const cooling = new WeakSet();
 function spawn(bubble) {
   const r = bubble.getBoundingClientRect();
   if (!r.width || !r.height) return;
-  const height = Math.round(r.height) + SPRITE;
+  const height = Math.min(Math.round(r.height) + SPRITE, SPRITE * 2 + RISE_MAX);
   let left = r.right + 8, flipped = false;
   if (left + W > window.innerWidth - 6) { left = r.left - 8 - W; flipped = true; }
   if (left < 6) return;
@@ -188,15 +188,37 @@ function spawn(bubble) {
   fx.appendChild(hero);
 
   document.body.appendChild(fx);
-  setTimeout(() => fx.remove(), MS);
+  sceneLive = true;
+  setTimeout(() => { fx.remove(); sceneLive = false; }, MS);
 }
+let hoverTimer, hoverTarget = null, sceneLive = false, scrolledAt = 0;
+// 场景是 fixed 定位、按 spawn 时的坐标钉住的，列表一滚就和消息脱节了
+let scrollFlagTimer;
+document.addEventListener('scroll', () => {
+  scrolledAt = Date.now();
+  clearTimeout(hoverTimer);
+  hoverTarget = null;
+  document.body.setAttribute('data-octo-px-scrolling', '');
+  clearTimeout(scrollFlagTimer);
+  scrollFlagTimer = setTimeout(() => document.body.removeAttribute('data-octo-px-scrolling'), SCROLL_QUIET);
+  if (!sceneLive) return;
+  sceneLive = false;
+  document.querySelectorAll('.octo-pixel-hit').forEach((el) => el.remove());
+}, true);
 document.addEventListener('pointerover', (e) => {
   const bubble = e.target instanceof Element ? e.target.closest('.wk-markdown, .wk-fold-msg-text') : null;
+  if (bubble === hoverTarget) return;
+  hoverTarget = bubble;
+  clearTimeout(hoverTimer);
   if (!bubble || cooling.has(bubble)) return;
-  if (document.querySelector('.octo-pixel-hit')) return;
-  cooling.add(bubble);
-  setTimeout(() => cooling.delete(bubble), COOLDOWN);
-  spawn(bubble);
+  hoverTimer = setTimeout(() => {
+    if (hoverTarget !== bubble) return;
+    if (Date.now() - scrolledAt < SCROLL_QUIET) return;
+    if (document.querySelector('.octo-pixel-hit')) return;
+    cooling.add(bubble);
+    setTimeout(() => cooling.delete(bubble), COOLDOWN);
+    spawn(bubble);
+  }, HOVER_DELAY);
 }, true);
 </script>
 </body>

@@ -1083,6 +1083,14 @@ const PIXEL_HIT_W = PIXEL_SPRITE_PX + 8;
  * 旁边好：宁可跳得浅，也要让人看出这套动画属于哪条消息。
  */
 const PIXEL_RISE_MIN = 28;
+/**
+ * 起跳距离的上限，两个身高。
+ * 场景本来是严格贴着气泡的（箱子压顶沿、角色站底沿），高气泡就意味着高跳：
+ * 一条折叠的长消息足有 240px，算下来要跳 192px —— 四个身高，而时长还是那
+ * 0.75s，看着就是嗖地飞出去。超过上限后箱子不再贴顶沿，改为悬在角色上方两个
+ * 身高处，仍在气泡范围内，归属一样看得出来。
+ */
+const PIXEL_RISE_MAX = PIXEL_SPRITE_PX * 2;
 /** Must match `.oph-coin { top }` in BEAUTIFY_CSS. */
 const COIN_TOP_PX = 4;
 /** Where the coin's art ends inside its 48px box (the sprite has empty rows
@@ -1122,17 +1130,46 @@ function coinArc(index: number, count: number): 'a' | 'b' | 'c' {
   return at < 0.67 ? 'a' : 'b';
 }
 
+/**
+ * 悬停多久才认为是"停在这条消息上"。
+ * 没有这段延迟时，视线沿列表往下走、鼠标顺带扫过，每条消息都会炸出一套动画 ——
+ * 正在读的东西旁边不停有东西在跳，这是最伤可读性的一点。
+ */
+const PIXEL_HOVER_DELAY_MS = 350;
+
+/**
+ * 滚动停下多久才重新允许触发。
+ * 滚动时指针虽然没动，新的气泡却会滑到它下面，pointerover 照样在报 —— 没有这个
+ * 静默期，翻记录的过程中会一路弹动画。
+ */
+const PIXEL_SCROLL_QUIET_MS = 300;
+/** 滚动期间挂在 <body> 上，让皮肤把气泡的 hover 反馈整个停掉。 */
+const PIXEL_SCROLLING_ATTR = 'data-octo-px-scrolling';
+
 let pixelHoverBound = false;
 let pixelHitCooldown = new WeakSet<Element>();
+let pixelHoverTimer: number | undefined;
+let pixelHoverTarget: Element | null = null;
+let pixelSceneLive = false;
+let pixelScrolledAt = 0;
+let pixelScrolling = false;
+let pixelScrollTimer: number | undefined;
 
 function spawnPixelHit(bubble: Element): void {
   const r = bubble.getBoundingClientRect();
   if (!r.width || !r.height) return;
-  // The scene spans the bubble exactly: the crate's bottom edge sits on the
-  // bubble's top edge, the character stands on its bottom edge. The previous
-  // fixed 144px box floated the crate ~80px above a one-line message — right
-  // next to the message above it, which is the one it appeared to belong to.
-  const height = Math.round(r.height) + PIXEL_SPRITE_PX;
+  // The scene spans the bubble: the crate's bottom edge sits on the bubble's
+  // top edge, the character stands on its bottom edge. The previous fixed 144px
+  // box floated the crate ~80px above a one-line message — right next to the
+  // message above it, which is the one it appeared to belong to.
+  //
+  // Capped, though: past PIXEL_RISE_MAX the crate stops tracking the top edge
+  // and just hangs two character-heights up. A clamped long message is 240px
+  // tall and would otherwise ask for a 192px leap in the same 0.75s.
+  const height = Math.min(
+    Math.round(r.height) + PIXEL_SPRITE_PX,
+    PIXEL_SPRITE_PX * 2 + PIXEL_RISE_MAX,
+  );
   // Prefer the gutter to the right of the bubble; fall back to the left; if
   // neither side fits, skip it.
   let left = r.right + 8;
@@ -1191,7 +1228,11 @@ function spawnPixelHit(bubble: Element): void {
   hero.className = 'oph-hero';
   fx.appendChild(hero);
   (document.body || document.documentElement).appendChild(fx);
-  window.setTimeout(() => fx.remove(), PIXEL_HIT_MS);
+  pixelSceneLive = true;
+  window.setTimeout(() => {
+    fx.remove();
+    pixelSceneLive = false;
+  }, PIXEL_HIT_MS);
 }
 
 function onPixelHover(e: Event): void {
@@ -1199,28 +1240,82 @@ function onPixelHover(e: Event): void {
   if (themeById(currentThemeId).skin !== 'pixel') return;
   if (prefersReducedMotion()) return;
   const target = e.target;
-  if (!(target instanceof Element)) return;
-  const bubble = target.closest(OCTO_SELECTORS.anyMessageBody);
-  if (!bubble || pixelHitCooldown.has(bubble)) return;
-  // One scene at a time. The per-bubble cooldown alone does not stop a pointer
-  // swept down the list from arming ten of them at once — each on a different
-  // bubble, all still on screen — which is a shower of coins, not an effect.
-  // Queried from the DOM rather than tracked in a flag so a scene removed by
-  // anything else (teardown, the user's own extension) cannot wedge it shut.
-  if (document.querySelector(`.${PIXEL_HIT_CLASS}`)) return;
-  pixelHitCooldown.add(bubble);
-  window.setTimeout(() => pixelHitCooldown.delete(bubble), PIXEL_HIT_COOLDOWN_MS);
-  try {
-    spawnPixelHit(bubble);
-  } catch {
-    /* noop — a decorative animation is never worth breaking a hover. */
+  const bubble =
+    target instanceof Element ? target.closest(OCTO_SELECTORS.anyMessageBody) : null;
+  // pointerover fires for every descendant; only a change of bubble matters.
+  if (bubble === pixelHoverTarget) return;
+  pixelHoverTarget = bubble;
+  if (pixelHoverTimer !== undefined) {
+    window.clearTimeout(pixelHoverTimer);
+    pixelHoverTimer = undefined;
   }
+  if (!bubble || pixelHitCooldown.has(bubble)) return;
+
+  pixelHoverTimer = window.setTimeout(() => {
+    pixelHoverTimer = undefined;
+    // The pointer may have moved on while we waited.
+    if (pixelHoverTarget !== bubble) return;
+    if (Date.now() - pixelScrolledAt < PIXEL_SCROLL_QUIET_MS) return;
+    // One scene at a time. The per-bubble cooldown alone does not stop a pointer
+    // swept down the list from arming ten of them at once — each on a different
+    // bubble, all still on screen — which is a shower of coins, not an effect.
+    // Queried from the DOM rather than tracked in a flag so a scene removed by
+    // anything else (teardown, the user's own extension) cannot wedge it shut.
+    if (document.querySelector(`.${PIXEL_HIT_CLASS}`)) return;
+    pixelHitCooldown.add(bubble);
+    window.setTimeout(() => pixelHitCooldown.delete(bubble), PIXEL_HIT_COOLDOWN_MS);
+    try {
+      spawnPixelHit(bubble);
+    } catch {
+      /* noop — a decorative animation is never worth breaking a hover. */
+    }
+  }, PIXEL_HOVER_DELAY_MS);
+}
+
+/**
+ * Scrolling kills the scene outright.
+ *
+ * It is `position: fixed` at coordinates taken from getBoundingClientRect() the
+ * moment it spawned, so the instant the list moves it is pinned to a spot its
+ * message has left — a crate and a fistful of coins hanging over nothing. There
+ * is no cheap fix for that: following the bubble would mean repositioning every
+ * frame. Since nobody is watching a hover flourish while scrolling anyway,
+ * dropping it is both the honest and the cheap answer.
+ */
+function onPixelScroll(): void {
+  pixelScrolledAt = Date.now();
+  // 停掉气泡的 hover 反馈。指针并没有动，是消息从它底下滑过 —— 每条经过的
+  // 都会被 hover 一次、上浮 2px 再落回，整列表跟着起伏。那不是交互，是抖动。
+  // 只在本皮肤内关：这个 hover 是基础层的，改它会波及所有主题。
+  if (!pixelScrolling) {
+    pixelScrolling = true;
+    document.body?.setAttribute(PIXEL_SCROLLING_ATTR, '');
+  }
+  if (pixelScrollTimer !== undefined) window.clearTimeout(pixelScrollTimer);
+  pixelScrollTimer = window.setTimeout(() => {
+    pixelScrollTimer = undefined;
+    pixelScrolling = false;
+    document.body?.removeAttribute(PIXEL_SCROLLING_ATTR);
+  }, PIXEL_SCROLL_QUIET_MS);
+  if (pixelHoverTimer !== undefined) {
+    window.clearTimeout(pixelHoverTimer);
+    pixelHoverTimer = undefined;
+  }
+  // Forget the hovered bubble too: after a scroll the pointer sits over
+  // whatever slid under it, and that is not a hover the user performed.
+  pixelHoverTarget = null;
+  if (!pixelSceneLive) return;
+  pixelSceneLive = false;
+  document.querySelectorAll(`.${PIXEL_HIT_CLASS}`).forEach((el) => el.remove());
 }
 
 function bindPixelHover(): void {
   if (pixelHoverBound) return;
   pixelHoverBound = true;
   document.addEventListener('pointerover', onPixelHover, true);
+  // Capture phase: scroll does not bubble, and the list scrolls in its own
+  // container rather than on the document.
+  document.addEventListener('scroll', onPixelScroll, true);
 }
 
 /** Must stay callable when the feature never started — see PAGE_FEATURES. */
@@ -1228,6 +1323,19 @@ function unbindPixelHover(): void {
   if (!pixelHoverBound) return;
   pixelHoverBound = false;
   document.removeEventListener('pointerover', onPixelHover, true);
+  document.removeEventListener('scroll', onPixelScroll, true);
+  pixelSceneLive = false;
+  if (pixelScrollTimer !== undefined) {
+    window.clearTimeout(pixelScrollTimer);
+    pixelScrollTimer = undefined;
+  }
+  pixelScrolling = false;
+  document.body?.removeAttribute(PIXEL_SCROLLING_ATTR);
+  if (pixelHoverTimer !== undefined) {
+    window.clearTimeout(pixelHoverTimer);
+    pixelHoverTimer = undefined;
+  }
+  pixelHoverTarget = null;
   pixelHitCooldown = new WeakSet<Element>();
 }
 
@@ -1433,6 +1541,7 @@ export function teardownBeautify(): void {
     body.removeAttribute('data-octo-player-watermark');
     body.removeAttribute('data-octo-player-kicking');
     body.removeAttribute('data-octo-qq-self-left');
+    body.removeAttribute('data-octo-px-scrolling');
     body.style.removeProperty('--octo-player-watermark-image');
     if (nativeThemeMode !== undefined) {
       selfWritingTheme = true;

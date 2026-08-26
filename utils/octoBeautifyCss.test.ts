@@ -3,6 +3,25 @@ import { describe, expect, it } from 'vitest';
 
 const beautifyCss = readFileSync(new URL('./octoBeautify.css', import.meta.url), 'utf8');
 
+/** Pull whole `{...}` blocks whose selector matches, brace-counted so nested
+ *  keyframe bodies come out intact. */
+function cssBlocks(selector: RegExp): string[] {
+  const out: string[] = [];
+  for (const match of beautifyCss.matchAll(selector)) {
+    const open = beautifyCss.indexOf('{', match.index);
+    if (open < 0) continue;
+    let depth = 0;
+    for (let i = open; i < beautifyCss.length; i++) {
+      if (beautifyCss[i] === '{') depth++;
+      else if (beautifyCss[i] === '}' && --depth === 0) {
+        out.push(beautifyCss.slice(match.index, i + 1));
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 const GLOBAL_THEME_SCOPE = 'body[data-octo-global-theme]:not([data-octo-global-theme="none"])';
 
 describe('global theme modal palette', () => {
@@ -58,10 +77,21 @@ describe('pixel skin', () => {
   it('never puts !important on an animated transform', () => {
     // `!important` on transform/opacity would override the keyframes themselves,
     // silently freezing the scene on its first frame.
-    const scene = beautifyCss.slice(beautifyCss.indexOf('.octo-pixel-hit {'));
-    const bumpBlock = scene.slice(0, scene.indexOf('@media (prefers-reduced-motion'));
-    expect(bumpBlock).not.toMatch(/transform:[^;]*!important/);
-    expect(bumpBlock).not.toMatch(/opacity:[^;]*!important/);
+    //
+    // Scanned by structure, not by position. This used to take everything
+    // between `.octo-pixel-hit {` and the reduced-motion query, which meant any
+    // rule later added in that stretch got swept in — the scroll-time hover
+    // suppression legitimately needs `transform: none !important` to beat the
+    // base layer, and tripped this.
+    const blocks = [
+      ...cssBlocks(/\.octo-pixel-hit[^{,]*(?=\s*\{)/g),
+      ...cssBlocks(/@keyframes oph-[\w-]+/g),
+    ];
+    expect(blocks.length).toBeGreaterThan(8);
+    for (const block of blocks) {
+      expect(block).not.toMatch(/transform:[^;]*!important/);
+      expect(block).not.toMatch(/opacity:[^;]*!important/);
+    }
   });
 
   it('reads each coin landing off the coin itself, not the scene', () => {
