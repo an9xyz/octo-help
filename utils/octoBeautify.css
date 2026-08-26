@@ -1146,7 +1146,12 @@
                 left: 0 !important;
                 right: 0 !important;
                 height: 176px !important;
-                background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 3px) !important;
+                /* 拆成 background-image 而不是 background 简写：带 !important 的简写
+                   会把 background-position 一并设成 0% 0% !important，而 !important
+                   的优先级高于 keyframes —— 任何想动画这个伪元素背景位置的皮肤都会
+                   发现动画在跑、位置却钉死。这里 position 本来就是默认值，拆开写
+                   视觉完全不变。 */
+                background-image: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 3px) !important;
                 border-radius: 16px 16px 0 0 !important;
                 pointer-events: none !important;
                 z-index: 0 !important;
@@ -3508,11 +3513,12 @@
             body[data-octo-skin="pixel"] {
                 --octo-px-stand: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAnElEQVR42sWW2w2AIAxFGdmxHM4RmmiIRgX6uK0CTfohfRwqUEhJlx1Ut5yBy4apE4Qn5kG9kq+XypB4chAyDkBEt1pJG18L8A6wIKwvCsjfKKDwnV5B9zWYs005Gzv25RzUDW74aQaSy4B61lIVodk/AfqYUQXSekFbC0H7usNeQtBLA/cRAfoO8PmJv+m3CriFti9v1B56aYTkAFdpPEDqUNArAAAAAElFTkSuQmCC");
                 --octo-px-jump: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAlElEQVR42sWW3Q2AIAyEGdmxGM4RSDRGIwpXelQpTfpAae+D8BtC2zbSu+0sXFbOO0G8MAaNEo+XyxC7OAnxA6SUbtdEq1wN8CzQIDCXBRxtFvDKnT6D4WswZ5uiPhj7cg7KC879NBPiMqActTQLAlBDckE71gHQxWAsGt+EQYBczAAM4i6AULy1GGAUZtflVzN9VXZNnhpxvM347gAAAABJRU5ErkJggg==");
-                --octo-px-crate: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAbklEQVR42mNgYGD4T2PM8P/HDtpgFAtgNlLJ0AGwgOZBNKAW4EohVLEAJG+z5w8YMxS8QcUMFFqA13AiLCHaAtyGr6DcAvyGD1kL4IbTwgIUwym0AMMSEgwfPBlteJRFoxUO7YPoRAVtMNwCWmIA6vv+5aDlZKkAAAAASUVORK5CYII=");
-                --octo-px-crate-used: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAVUlEQVR42mNgYGD4T2PM8P9EBW0wigUwG6lk6ABYQPMgGlALcKUQqlgAku8IwI6J0YvXAnyGE2PJqAWjFtAhmdIlow2Psmi0wqF9EBHKTORiuAW0xABv0UKt1T7a0AAAAABJRU5ErkJggg==");
-                --octo-px-cloud: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAAP0lEQVR42mNgGAXEgf8EMG0t/vPnD15MK4cQtBiHQ+jja1qEBkUWU+oQqllMTrTQzHJiHTHwDqATHgWjYHACAPtDF7fPW2mlAAAAAElFTkSuQmCC");
-                --octo-px-ground: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAO0lEQVR42mNgYGD4TxE+4cPzHxcGKSAkT7kBHQYM/3FhkAJC8gxUDQNinIwhRrEBpPoZi9hoOhhNB/8BXgilUGi3qVYAAAAASUVORK5CYII=");
-                --octo-px-coin: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAARElEQVR42mNgGAVUBP/RMHUN/rEDFVPLIgyDcVhEG8MptQTDkBMVEIxNbtSCUQsGgQUDltmoUlzQsiyiS2k6CkYBfgAAi5I6GLg6iwQAAAAASUVORK5CYII=");
+                --octo-px-bubble: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAXCAYAAABqBU3hAAAAXklEQVR42mNgwAT/0TDdANjCP3/+oGB6OQTZQhSA5hDaOgCXJK0dgNdyejhi1AED7oABT4SDIhsOeEE0KIriIQ8GNORwpR36Wj4QOQdnGTLyHDCQUTDgiXC0AKMIAACDwvFd9YHbDQAAAABJRU5ErkJggg==");
+                --octo-px-seabed: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAARElEQVR42mNgYGD4TxF+caLiPyUYbsCJBR4EFWNTQz0XELKJJAOIwTBLqOMFQk7GJ0+bQKSKAcTGBH1TIja1gzgQicUAWFIAdk3GhwAAAAAASUVORK5CYII=");
+                --octo-px-kelp: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAQCAYAAAArij59AAAAHklEQVR42mNgQID/DCugmAGMMQBeBQOpe9QUaoUqABgJVMGLKQyUAAAAAElFTkSuQmCC");
+                --octo-px-chest: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAW0lEQVR42mNgGCDwn0xMnMErIhTIwoQsIttgHBZht+DHDgYwJtVQZH0DawFNg4jKmHQfgNTAggKferLjAJ8FVIlk9GAYfJE8mtEGPg4yDDioggcsJ4+CUUAeAAAVy1+TLuVjewAAAABJRU5ErkJggg==");
+                --octo-px-chest-open: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAXCAYAAAARIY8tAAAAXklEQVR42mNgoCP4TyHGb/iKCAWKMCFLwIp+7GAAY2INRVZPlAW09AHN44AaFhC08H+GAQdVMF4LVpy4QREmygJyXT6CLKBZHJCTm0nJ1fSxgBp44DIarYuKUTBMAQBWLUwJmDs4/QAAAABJRU5ErkJggg==");
+                --octo-px-pearl: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAbUlEQVR42mNgGAVUAP8JYMoM/vPnD15MrkUEDcZhEWmG2+yhjSUkG77ixA2iLSDL9SALiLWE5LCnuQUww2liAbLhVLcA3XCyIppYg0kxHKcFuAwmxwIUSwgZDMNkFRcgTKTB/wdlaToKRgFxAAA0EcEV1e7mZAAAAABJRU5ErkJggg==");
                 --octo-px-frame-ai: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAMElEQVR42mNgYGBgEBCQ+I8NMyBL/vnxAAXDFcElP5xAwT92MNBVAYiDDWP4BJs3AQOdlDVDIEJmAAAAAElFTkSuQmCC");
                 --octo-px-frame-me: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAMUlEQVR42mNgYGBgEBCQ+I8NMyBLvvj2HwXDFcEkb7z5g4IZCt7QVQGIgw1j+ASbNwF7/JH1xAD0SgAAAABJRU5ErkJggg==");
                 --octo-px-frame-other: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAMklEQVR42mNgYGBgEBCQ+I8NMyBLPvn/HwXDFcEkb/z5g4IZVqygqwIQBxvG8Ak2bwIA+eqSpelDsyEAAAAASUVORK5CYII=");
@@ -3581,8 +3587,9 @@
                不是整数倍缩放，pixelated 会把源像素切成宽窄不一的块、边缘发脏；
                而 24px 太糊、48px 又盖住气泡。角色改为只在 hover 场景里露面。 */
 
-            /* 引用块 = 管道：左侧立一根像素管，引文在右侧。
-               用 ::before 承载，不往 React 管的行里插节点。 */
+            /* 引用块左侧立一株海草，引文在右侧。用 ::before 承载，不往 React
+               管的行里插节点。原先这里是一根带管口高光的绿水管 —— 形态直接来自
+               另一个人的作品，跟章鱼也不搭，换成海草才和这套场景是一路的。 */
             body[data-octo-skin="pixel"] .wk-msg-row .wk-reply-block,
             body[data-octo-skin="pixel"] .wk-msg-row .wk-message-text-reply {
                 position: relative !important;
@@ -3598,15 +3605,8 @@
                 left: 0 !important;
                 top: 0 !important;
                 bottom: 0 !important;
-                width: 10px !important;
-                background:
-                    linear-gradient(90deg,
-                        #00606f 0 2px,
-                        #00a8a8 2px 4px,
-                        #6ff0e6 4px 6px,
-                        #00a8a8 6px 8px,
-                        #00606f 8px 10px) !important;
-                box-shadow: inset 0 0 0 2px var(--px-ink) !important;
+                width: 16px !important;
+                background: var(--octo-px-kelp) left top / 16px 32px repeat-y !important;
                 image-rendering: pixelated !important;
             }
 
@@ -3638,13 +3638,13 @@
                    不加 !important：这几个节点全程在跑 keyframes。 */
                 filter: drop-shadow(2px 2px 0 rgba(16, 16, 24, 0.38));
             }
-            .octo-pixel-hit .oph-crate {
+            .octo-pixel-hit .oph-chest {
                 left: 4px;
                 top: 0;
                 width: 48px;
                 height: 48px;
-                background-image: var(--octo-px-crate);
-                animation: oph-crate-face .75s steps(1, end) 1 both, oph-crate-bump .75s steps(1, end) 1 both, oph-crate-flash .75s steps(1, end) 1 both;
+                background-image: var(--octo-px-chest);
+                animation: oph-chest-face .75s steps(1, end) 1 both, oph-chest-bump .75s steps(1, end) 1 both, oph-chest-flash .75s steps(1, end) 1 both;
             }
             .octo-pixel-hit .oph-hero {
                 left: 4px;
@@ -3656,28 +3656,28 @@
             }
             /* 48px = 24px 源精灵的 2 倍，和角色、宝箱同一个缩放级别。
                之前写的 24px 是 1x，整套皮肤里就它一个是另一种像素密度。 */
-            .octo-pixel-hit .oph-coin {
+            .octo-pixel-hit .oph-pearl {
                 left: 4px;
                 /* 与 COIN_TOP_PX 对应：起点越低，能落的余量越少，
                    而余量的上限由不得越过气泡顶沿这条硬约束决定。 */
                 top: 4px;
                 width: 48px;
                 height: 48px;
-                background-image: var(--octo-px-coin);
+                background-image: var(--octo-px-pearl);
                 opacity: 0;
             }
-            .octo-pixel-hit .oph-coin-a { animation: oph-coin-a 1.15s steps(1, end) 1 forwards; }
-            .octo-pixel-hit .oph-coin-b { animation: oph-coin-b 1.15s steps(1, end) 1 forwards; }
-            .octo-pixel-hit .oph-coin-c { animation: oph-coin-c 1.15s steps(1, end) 1 forwards; }
+            .octo-pixel-hit .oph-pearl-a { animation: oph-pearl-a 1.15s steps(1, end) 1 forwards; }
+            .octo-pixel-hit .oph-pearl-b { animation: oph-pearl-b 1.15s steps(1, end) 1 forwards; }
+            .octo-pixel-hit .oph-pearl-c { animation: oph-pearl-c 1.15s steps(1, end) 1 forwards; }
 
             /* 全部走 steps(1, end)：FC 的动作是逐帧跳变，不是亚像素插值。
                连续缓动会让精灵停在半个像素上 —— 既糊掉像素网格，也没有那个手感。
                40%~52% 三帧钉在同一位置，就是撞击的顿帧（hit stop），打击感全靠它。 */
-            @keyframes oph-crate-face {
-                0%, 39% { background-image: var(--octo-px-crate); }
-                40%, 100% { background-image: var(--octo-px-crate-used); }
+            @keyframes oph-chest-face {
+                0%, 39% { background-image: var(--octo-px-chest); }
+                40%, 100% { background-image: var(--octo-px-chest-open); }
             }
-            @keyframes oph-crate-bump {
+            @keyframes oph-chest-bump {
                 0%, 39% { transform: translateY(0); }
                 42% { transform: translateY(-12px); }
                 52% { transform: translateY(-12px); }
@@ -3687,7 +3687,7 @@
             }
             /* 撞到的那一下闪一帧白。keyframes 里要带上投影，否则会把
                .octo-pixel-hit > * 上的静态 filter 整个覆盖掉。 */
-            @keyframes oph-crate-flash {
+            @keyframes oph-chest-flash {
                 0%, 39% { filter: drop-shadow(2px 2px 0 rgba(16, 16, 24, 0.38)); }
                 42% { filter: drop-shadow(2px 2px 0 rgba(16, 16, 24, 0.38)) brightness(2.6); }
                 50%, 100% { filter: drop-shadow(2px 2px 0 rgba(16, 16, 24, 0.38)); }
@@ -3720,7 +3720,7 @@
                三条弧线（a 中抛 / b 高抛 / c 低平）形状固定，终点 --oph-x/--oph-y
                挂在每枚币自己身上、由 JS 每次重掷 —— 变量挂在币上而不是容器上，
                币数才能是随机的。 */
-            @keyframes oph-coin-a {
+            @keyframes oph-pearl-a {
                 0%, 41% { opacity: 0; transform: translate(0, 0) scaleX(1); }
                 44% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .13), -18px) scaleX(.35); }
                 50% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .33), -30px) scaleX(1); }
@@ -3732,7 +3732,7 @@
                 94% { opacity: 1; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
                 100% { opacity: 0; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
             }
-            @keyframes oph-coin-b {
+            @keyframes oph-pearl-b {
                 0%, 41% { opacity: 0; transform: translate(0, 0) scaleX(1); }
                 44% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .12), -26px) scaleX(.35); }
                 50% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .32), -46px) scaleX(1); }
@@ -3744,7 +3744,7 @@
                 94% { opacity: 1; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
                 100% { opacity: 0; transform: translate(var(--oph-x, -60px), var(--oph-y, 40px)) scaleX(1); }
             }
-            @keyframes oph-coin-c {
+            @keyframes oph-pearl-c {
                 0%, 41% { opacity: 0; transform: translate(0, 0) scaleX(1); }
                 44% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .10), -14px) scaleX(.35); }
                 50% { opacity: 1; transform: translate(calc(var(--oph-x, -60px) * .30), -24px) scaleX(1); }
@@ -3776,6 +3776,9 @@
                这里再兜一层，防止有节点因异常残留在页面上继续动。 */
             @media (prefers-reduced-motion: reduce) {
                 .octo-pixel-hit { display: none !important; }
+                body[data-octo-skin="pixel"] .wk-bot-detail-header::after {
+                    animation: none !important;
+                }
             }
 
             /* ========================================================
@@ -3813,12 +3816,16 @@
                多背景第一层在最上，所以顺序是从近到远。 */
             body[data-octo-skin="pixel"] .wk-bot-detail-header::before {
                 background:
+                    repeating-linear-gradient(180deg,
+                        rgba(16, 16, 24, 0.10) 0 1px,
+                        transparent 1px 4px),
                     var(--octo-px-stand) left 74% bottom 32px / 48px 48px no-repeat,
-                    var(--octo-px-crate) left 26% bottom 64px / 48px 48px no-repeat,
-                    var(--octo-px-cloud) left 12% top 18px / 96px 48px no-repeat,
-                    var(--octo-px-cloud) left 63% top 8px / 64px 32px no-repeat,
-                    var(--octo-px-ground) left bottom / 32px 32px repeat-x,
-                    linear-gradient(180deg, #5c94fc 0%, #7ba7fc 58%, #a8c8fc 100%) !important;
+                    var(--octo-px-chest) left 26% bottom 64px / 48px 48px no-repeat,
+                    var(--octo-px-seabed) left bottom / 32px 32px repeat-x,
+                    repeating-linear-gradient(105deg,
+                        transparent 0 20px,
+                        rgba(255, 255, 255, 0.05) 20px 30px),
+                    linear-gradient(180deg, #3cbcfc 0%, #0058f8 58%, #0038a8 100%) !important;
                 image-rendering: pixelated !important;
                 border-radius: 0 !important;
                 box-shadow: inset 0 -4px 0 0 var(--px-ink) !important;
@@ -3826,18 +3833,32 @@
             }
             /* CRT 扫描线：FC 本来就是在 CRT 上看的，但改成硬边 1px，
                基础层那版是半透明渐变，糊在像素上会脏。 */
+            /* 气泡持续上浮。海底的气泡不动就不像水里。
+               ::before 已经被整幅场景占满，所以扫描线并进了它的背景层，
+               把 ::after 整个腾出来给气泡 —— header 只有两个伪元素。
+               两层竖向平铺，一个循环正好走一个 tile 高度，所以首尾无缝；
+               两层位移量不同（72 / 48），于是自然错开成远近两层。 */
             body[data-octo-skin="pixel"] .wk-bot-detail-header::after {
-                background: repeating-linear-gradient(
-                    180deg,
-                    rgba(16, 16, 24, 0.10) 0 1px,
-                    transparent 1px 4px) !important;
+                background-image: var(--octo-px-bubble), var(--octo-px-bubble) !important;
+                background-size: 96px 72px, 64px 48px !important;
+                background-repeat: repeat-y, repeat-y !important;
+                background-color: transparent !important;
+                /* 这一行不带 !important，是留给 keyframes 的。写成 background 简写
+                   或给它加 !important，动画就会停在第一帧。 */
+                background-position: left 14% top 0, left 68% top 0;
+                image-rendering: pixelated !important;
                 mix-blend-mode: normal !important;
                 border-radius: 0 !important;
-                animation: none !important;
+                opacity: 0.9 !important;
+                animation: octo-px-bubble-rise 7s linear infinite !important;
+            }
+            @keyframes octo-px-bubble-rise {
+                from { background-position: left 14% top 0, left 68% top 0; }
+                to { background-position: left 14% top -72px, left 68% top -48px; }
             }
 
             /* 卡壳与面板：直角 + 硬投影，去掉一切圆角和模糊阴影 */
-            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-shell,
+            body[data-octo-skin="pixel"] .wk-modal-shell,
             body[data-octo-skin="pixel"] .wk-bot-detail-content {
                 border-radius: 0 !important;
                 box-shadow: 6px 6px 0 rgba(16, 16, 24, 0.28) !important;
@@ -3931,18 +3952,18 @@
             /* 关闭键：圆形 → 方形像素键。类名来自 WKModal 自己渲染的
                .wk-modal-custom-close-btn（既不是 Semi 的，也不是基础层注释里
                写的 .wk-bot-detail-route-close）。 */
-            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-custom-close-btn {
+            body[data-octo-skin="pixel"] .wk-modal-custom-close-btn {
                 border-radius: 0 !important;
                 border: 2px solid var(--px-ink) !important;
                 background: #fff !important;
                 box-shadow: 2px 2px 0 rgba(16, 16, 24, 0.28) !important;
                 backdrop-filter: none !important;
             }
-            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-custom-close-btn:active {
+            body[data-octo-skin="pixel"] .wk-modal-custom-close-btn:active {
                 transform: translate(2px, 2px);
                 box-shadow: none !important;
             }
-            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-custom-close-btn .semi-icon {
+            body[data-octo-skin="pixel"] .wk-modal-custom-close-btn .semi-icon {
                 color: var(--px-ink) !important;
                 filter: none !important;
             }
@@ -3960,9 +3981,9 @@
 
             /* 卡壳与它内层的滚动容器：圆角一路清到底，
                只清最外层的话，内层一裁又把圆角露出来。 */
-            body[data-octo-skin="pixel"] .wk-bot-detail-modal .semi-modal-content,
-            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-shell,
-            body[data-octo-skin="pixel"] .wk-bot-detail-modal .wk-modal-body,
+            body[data-octo-skin="pixel"] .wk-modal-content,
+            body[data-octo-skin="pixel"] .wk-modal-shell,
+            body[data-octo-skin="pixel"] .wk-modal-body,
             body[data-octo-skin="pixel"] .wk-bot-detail-content,
             body[data-octo-skin="pixel"] .wk-bot-detail-header {
                 border-radius: 0 !important;

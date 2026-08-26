@@ -44,7 +44,7 @@ describe('pixel skin', () => {
   const SKIN = 'body[data-octo-skin="pixel"]';
 
   it('inlines every sprite the skin references', () => {
-    for (const name of ['stand', 'jump', 'crate', 'crate-used', 'coin']) {
+    for (const name of ['stand', 'jump', 'chest', 'chest-open', 'pearl', 'bubble', 'seabed', 'kelp']) {
       expect(beautifyCss).toContain(`--octo-px-${name}: url("data:image/png;base64,`);
     }
   });
@@ -69,7 +69,7 @@ describe('pixel skin', () => {
   });
 
   it('drives the bump scene entirely from keyframes', () => {
-    for (const kf of ['oph-crate-face', 'oph-crate-bump', 'oph-hero-pose', 'oph-hero-jump', 'oph-coin-a', 'oph-coin-b', 'oph-coin-c']) {
+    for (const kf of ['oph-chest-face', 'oph-chest-bump', 'oph-hero-pose', 'oph-hero-jump', 'oph-pearl-a', 'oph-pearl-b', 'oph-pearl-c']) {
       expect(beautifyCss).toContain(`@keyframes ${kf} {`);
     }
   });
@@ -94,9 +94,9 @@ describe('pixel skin', () => {
     }
   });
 
-  it('reads each coin landing off the coin itself, not the scene', () => {
-    // The coin count is rolled per hit, so the landing vars cannot live on the
-    // container — a fixed --oph-x1..xN set would cap how many coins can fly.
+  it('reads each pearl landing off the pearl itself, not the scene', () => {
+    // The pearl count is rolled per hit, so the landing vars cannot live on the
+    // container — a fixed --oph-x1..xN set would cap how many pearls can fly.
     expect(beautifyCss).not.toMatch(/--oph-x\d/);
     expect(beautifyCss).toContain('var(--oph-x, -60px)');
     expect(beautifyCss).toContain('var(--oph-y, 40px)');
@@ -106,14 +106,39 @@ describe('pixel skin', () => {
     const banner = beautifyCss.slice(
       beautifyCss.indexOf(`${SKIN} .wk-bot-detail-header::before`),
     ).slice(0, 700);
-    for (const sprite of ['stand', 'crate', 'cloud', 'ground']) {
+    for (const sprite of ['stand', 'chest', 'seabed']) {
       expect(banner).toContain(`var(--octo-px-${sprite})`);
     }
     // 24px 与 16px 的源精灵只能按整数倍放；1.83 倍那种会把一个源像素
     // 切成宽窄不一的块，边缘立刻发脏。
     for (const [, size] of banner.matchAll(/\/ (\d+)px \d+px/g)) {
-      expect([32, 48, 64, 96]).toContain(Number(size));
+      expect([32, 48, 64, 72, 96]).toContain(Number(size));
     }
+  });
+
+  it('drifts the banner bubbles, and stops them under reduced motion', () => {
+    // 气泡竖向平铺，一个循环走满一个 tile 高度，首尾才接得上；两层位移量不同
+    // 才会错开成远近两层。改动画就要一起改这两个数。
+    expect(beautifyCss).toContain('@keyframes octo-px-bubble-rise {');
+    expect(beautifyCss).toContain('to { background-position: left 14% top -72px, left 68% top -48px; }');
+    const reduced = beautifyCss.slice(beautifyCss.indexOf('@media (prefers-reduced-motion'));
+    expect(reduced).toContain('.wk-bot-detail-header::after');
+  });
+
+  it('leaves the animated background-position free of !important', () => {
+    // `background: … !important` 的简写会连 background-position 一起设成
+    // !important，而 !important 压过 keyframes —— 动画照跑，位置却钉死。
+    // 这条规则和它在基础层的对应规则都必须拆成 background-image 写。
+    // 同一个选择器出现两次（另一处在 reduced-motion 查询里，只有 animation: none），
+    // 要的是带背景声明的那条。
+    const rule = cssBlocks(/body\[data-octo-skin="pixel"\] \.wk-bot-detail-header::after/g)
+      .find((block) => block.includes('background-image'));
+    expect(rule).toBeDefined();
+    expect(rule).not.toMatch(/(^|[^-])background:/);
+    expect(rule).toMatch(/background-position:[^;!]*;/);
+
+    const [base] = cssBlocks(/(?<!\] )\.wk-bot-detail-header::after/g);
+    expect(base).not.toMatch(/(^|[^-])background:/);
   });
 
   it('ships a whole-site palette that only sets --octo-global-* vars', () => {
