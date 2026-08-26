@@ -1058,6 +1058,287 @@ function syncBalls(): void {
   else if (ballsMounted) unmountBalls();
 }
 
+// ---- pixel skin: hover-to-bump ------------------------------------------
+// The scene is injected into <body> — outside the message's React tree, so
+// reconciliation cannot wipe it mid-animation — and removes itself when done.
+//
+// Delegation on document rather than a node per bubble is deliberate: this pass
+// must not get more expensive as a conversation grows. Mounting a sprite per
+// message (the way the worldcup ball does) costs nothing at 20 messages and
+// wrecks sync at 3000.
+
+const PIXEL_HIT_CLASS = 'octo-pixel-hit';
+/** Must outlast the slowest coin: 1.15s base + up to 0.13s duration jitter +
+ *  up to 0.09s start delay. The coins outlast the jump on purpose — they have to
+ *  sit on the bubble for a beat, otherwise they read as flying past. */
+const PIXEL_HIT_MS = 1550;
+const PIXEL_HIT_COOLDOWN_MS = 1700;
+/** 48 = 24px 精灵的 2 倍。整数倍是硬要求：1.33 倍这种会让 pixelated
+ *  把一个源像素切成宽窄不一的块，边缘立刻变脏。 */
+const PIXEL_SPRITE_PX = 48;
+const PIXEL_HIT_W = PIXEL_SPRITE_PX + 8;
+/**
+ * 起跳距离的下限。气泡矮到装不下一次完整起跳时（48px 的角色 + 48px 的箱子
+ * 本就比一条单行消息高），角色会顶穿箱子一点 —— 这比让箱子飘到上一条消息
+ * 旁边好：宁可跳得浅，也要让人看出这套动画属于哪条消息。
+ */
+const PIXEL_RISE_MIN = 28;
+/**
+ * 起跳距离的上限，两个身高。
+ * 场景本来是严格贴着气泡的（箱子压顶沿、角色站底沿），高气泡就意味着高跳：
+ * 一条折叠的长消息足有 240px，算下来要跳 192px —— 四个身高，而时长还是那
+ * 0.75s，看着就是嗖地飞出去。超过上限后箱子不再贴顶沿，改为悬在角色上方两个
+ * 身高处，仍在气泡范围内，归属一样看得出来。
+ */
+const PIXEL_RISE_MAX = PIXEL_SPRITE_PX * 2;
+/** Must match `.oph-coin { top }` in BEAUTIFY_CSS. */
+const COIN_TOP_PX = 4;
+/** Where the coin's art ends inside its 48px box (the sprite has empty rows
+ *  below it), i.e. how far down its visible bottom edge sits. */
+const COIN_ART_BOTTOM_PX = 34;
+/**
+ * How far a coin may fall. The crate occupies the scene's top PIXEL_SPRITE_PX,
+ * so that line is also the bubble's top edge — and a coin must never cross it.
+ * Coins are opaque sprites: landing one *on* the bubble means covering the
+ * message with decoration, and a message being obscured while someone reads it
+ * matters far more than how the animation looks. So they pile up along the
+ * bubble's top edge instead of scattering across its face.
+ */
+const COIN_LAND_MAX_PX = PIXEL_SPRITE_PX - COIN_ART_BOTTOM_PX - COIN_TOP_PX;
+/** How many coins a bump can throw. Rolled per hit. */
+const COIN_MIN = 1;
+const COIN_MAX = 10;
+/**
+ * Distance from the scene to where the nearest coin may land, in px.
+ * The scene sits 8px off the bubble and a coin's art is centred in its 48px box,
+ * so anything closer than this drops into the gap between the two instead of
+ * onto the message.
+ */
+const COIN_INSET_PX = 44;
+/** Cap on how far a coin is thrown, so a very wide bubble does not fling one
+ *  across the whole conversation. */
+const COIN_REACH_MAX_PX = 420;
+
+/**
+ * Arc shape per coin: low lob for the ones landing short, high lob for the ones
+ * thrown far. Tying the arc to the distance is what keeps a ten-coin burst from
+ * looking like ten copies of the same throw.
+ */
+function coinArc(index: number, count: number): 'a' | 'b' | 'c' {
+  const at = count <= 1 ? 0.5 : index / (count - 1);
+  if (at < 0.34) return 'c';
+  return at < 0.67 ? 'a' : 'b';
+}
+
+/**
+ * 悬停多久才认为是"停在这条消息上"。
+ * 没有这段延迟时，视线沿列表往下走、鼠标顺带扫过，每条消息都会炸出一套动画 ——
+ * 正在读的东西旁边不停有东西在跳，这是最伤可读性的一点。
+ */
+const PIXEL_HOVER_DELAY_MS = 350;
+
+/**
+ * 滚动停下多久才重新允许触发。
+ * 滚动时指针虽然没动，新的气泡却会滑到它下面，pointerover 照样在报 —— 没有这个
+ * 静默期，翻记录的过程中会一路弹动画。
+ */
+const PIXEL_SCROLL_QUIET_MS = 300;
+/** 滚动期间挂在 <body> 上，让皮肤把气泡的 hover 反馈整个停掉。 */
+const PIXEL_SCROLLING_ATTR = 'data-octo-px-scrolling';
+
+let pixelHoverBound = false;
+let pixelHitCooldown = new WeakSet<Element>();
+let pixelHoverTimer: number | undefined;
+let pixelHoverTarget: Element | null = null;
+let pixelSceneLive = false;
+let pixelScrolledAt = 0;
+let pixelScrolling = false;
+let pixelScrollTimer: number | undefined;
+
+function spawnPixelHit(bubble: Element): void {
+  const r = bubble.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  // The scene spans the bubble: the crate's bottom edge sits on the bubble's
+  // top edge, the character stands on its bottom edge. The previous fixed 144px
+  // box floated the crate ~80px above a one-line message — right next to the
+  // message above it, which is the one it appeared to belong to.
+  //
+  // Capped, though: past PIXEL_RISE_MAX the crate stops tracking the top edge
+  // and just hangs two character-heights up. A clamped long message is 240px
+  // tall and would otherwise ask for a 192px leap in the same 0.75s.
+  const height = Math.min(
+    Math.round(r.height) + PIXEL_SPRITE_PX,
+    PIXEL_SPRITE_PX * 2 + PIXEL_RISE_MAX,
+  );
+  // Prefer the gutter to the right of the bubble; fall back to the left; if
+  // neither side fits, skip it.
+  let left = r.right + 8;
+  let flipped = false;
+  if (left + PIXEL_HIT_W > window.innerWidth - 6) {
+    left = r.left - 8 - PIXEL_HIT_W;
+    flipped = true;
+  }
+  if (left < 6) return;
+  const top = Math.max(6, Math.min(Math.round(r.bottom) - height, window.innerHeight - height - 6));
+
+  const fx = document.createElement('div');
+  fx.className = PIXEL_HIT_CLASS;
+  fx.setAttribute('aria-hidden', 'true');
+  fx.style.left = `${Math.round(left)}px`;
+  fx.style.top = `${Math.round(top)}px`;
+  fx.style.height = `${height}px`;
+  // Character sits at the bottom, crate at the top — the rise is whatever is
+  // left between them, so the jump always lands on the crate's underside.
+  fx.style.setProperty('--oph-rise', `${Math.max(PIXEL_RISE_MIN, height - PIXEL_SPRITE_PX * 2)}px`);
+  // Coins are thrown *at the bubble* and settle on it, rather than looping
+  // inside the gutter: signed so they fly toward the message whichever side the
+  // scene ended up on, capped so a very wide bubble does not fling them across
+  // the whole conversation.
+  // Coins are spread from the bubble's near edge to its far edge. The reach is
+  // measured from COIN_INSET_PX, not from the scene, so ratio 0 already lands
+  // inside the bubble rather than in the 8px gap beside it.
+  const span = Math.min(Math.round(r.width) + 8, COIN_REACH_MAX_PX);
+  const reach = Math.max(48, span - COIN_INSET_PX);
+
+  const coinCount = COIN_MIN + Math.floor(Math.random() * (COIN_MAX - COIN_MIN + 1));
+  // Built node by node rather than with innerHTML: this runs in the page MAIN
+  // world, where an innerHTML template becomes an injection sink the moment any
+  // part of it stops being a literal (same reasoning as playGachaReveal).
+  const crate = document.createElement('div');
+  crate.className = 'oph-crate';
+  fx.appendChild(crate);
+
+  // Each coin gets its own slice of the spread and rolls inside it. Pure
+  // randomness would let them pile onto one spot; fixed positions gave the
+  // trick away after two bumps.
+  for (let i = 0; i < coinCount; i++) {
+    const coin = document.createElement('div');
+    coin.className = `oph-coin oph-coin-${coinArc(i, coinCount)}`;
+    const ratio = (i + Math.random()) / coinCount;
+    const dist = COIN_INSET_PX + reach * ratio;
+    coin.style.setProperty('--oph-x', `${Math.round(flipped ? dist : -dist)}px`);
+    coin.style.setProperty('--oph-y', `${Math.round(Math.random() * COIN_LAND_MAX_PX)}px`);
+    // Stagger duration and start so a burst scatters instead of marching in step.
+    coin.style.animationDuration = `${(1.02 + Math.random() * 0.26).toFixed(2)}s`;
+    coin.style.animationDelay = `${Math.round(Math.random() * 90)}ms`;
+    fx.appendChild(coin);
+  }
+
+  const hero = document.createElement('div');
+  hero.className = 'oph-hero';
+  fx.appendChild(hero);
+  (document.body || document.documentElement).appendChild(fx);
+  pixelSceneLive = true;
+  window.setTimeout(() => {
+    fx.remove();
+    pixelSceneLive = false;
+  }, PIXEL_HIT_MS);
+}
+
+function onPixelHover(e: Event): void {
+  if (!started) return;
+  if (themeById(currentThemeId).skin !== 'pixel') return;
+  if (prefersReducedMotion()) return;
+  const target = e.target;
+  const bubble =
+    target instanceof Element ? target.closest(OCTO_SELECTORS.anyMessageBody) : null;
+  // pointerover fires for every descendant; only a change of bubble matters.
+  if (bubble === pixelHoverTarget) return;
+  pixelHoverTarget = bubble;
+  if (pixelHoverTimer !== undefined) {
+    window.clearTimeout(pixelHoverTimer);
+    pixelHoverTimer = undefined;
+  }
+  if (!bubble || pixelHitCooldown.has(bubble)) return;
+
+  pixelHoverTimer = window.setTimeout(() => {
+    pixelHoverTimer = undefined;
+    // The pointer may have moved on while we waited.
+    if (pixelHoverTarget !== bubble) return;
+    if (Date.now() - pixelScrolledAt < PIXEL_SCROLL_QUIET_MS) return;
+    // One scene at a time. The per-bubble cooldown alone does not stop a pointer
+    // swept down the list from arming ten of them at once — each on a different
+    // bubble, all still on screen — which is a shower of coins, not an effect.
+    // Queried from the DOM rather than tracked in a flag so a scene removed by
+    // anything else (teardown, the user's own extension) cannot wedge it shut.
+    if (document.querySelector(`.${PIXEL_HIT_CLASS}`)) return;
+    pixelHitCooldown.add(bubble);
+    window.setTimeout(() => pixelHitCooldown.delete(bubble), PIXEL_HIT_COOLDOWN_MS);
+    try {
+      spawnPixelHit(bubble);
+    } catch {
+      /* noop — a decorative animation is never worth breaking a hover. */
+    }
+  }, PIXEL_HOVER_DELAY_MS);
+}
+
+/**
+ * Scrolling kills the scene outright.
+ *
+ * It is `position: fixed` at coordinates taken from getBoundingClientRect() the
+ * moment it spawned, so the instant the list moves it is pinned to a spot its
+ * message has left — a crate and a fistful of coins hanging over nothing. There
+ * is no cheap fix for that: following the bubble would mean repositioning every
+ * frame. Since nobody is watching a hover flourish while scrolling anyway,
+ * dropping it is both the honest and the cheap answer.
+ */
+function onPixelScroll(): void {
+  pixelScrolledAt = Date.now();
+  // 停掉气泡的 hover 反馈。指针并没有动，是消息从它底下滑过 —— 每条经过的
+  // 都会被 hover 一次、上浮 2px 再落回，整列表跟着起伏。那不是交互，是抖动。
+  // 只在本皮肤内关：这个 hover 是基础层的，改它会波及所有主题。
+  if (!pixelScrolling) {
+    pixelScrolling = true;
+    document.body?.setAttribute(PIXEL_SCROLLING_ATTR, '');
+  }
+  if (pixelScrollTimer !== undefined) window.clearTimeout(pixelScrollTimer);
+  pixelScrollTimer = window.setTimeout(() => {
+    pixelScrollTimer = undefined;
+    pixelScrolling = false;
+    document.body?.removeAttribute(PIXEL_SCROLLING_ATTR);
+  }, PIXEL_SCROLL_QUIET_MS);
+  if (pixelHoverTimer !== undefined) {
+    window.clearTimeout(pixelHoverTimer);
+    pixelHoverTimer = undefined;
+  }
+  // Forget the hovered bubble too: after a scroll the pointer sits over
+  // whatever slid under it, and that is not a hover the user performed.
+  pixelHoverTarget = null;
+  if (!pixelSceneLive) return;
+  pixelSceneLive = false;
+  document.querySelectorAll(`.${PIXEL_HIT_CLASS}`).forEach((el) => el.remove());
+}
+
+function bindPixelHover(): void {
+  if (pixelHoverBound) return;
+  pixelHoverBound = true;
+  document.addEventListener('pointerover', onPixelHover, true);
+  // Capture phase: scroll does not bubble, and the list scrolls in its own
+  // container rather than on the document.
+  document.addEventListener('scroll', onPixelScroll, true);
+}
+
+/** Must stay callable when the feature never started — see PAGE_FEATURES. */
+function unbindPixelHover(): void {
+  if (!pixelHoverBound) return;
+  pixelHoverBound = false;
+  document.removeEventListener('pointerover', onPixelHover, true);
+  document.removeEventListener('scroll', onPixelScroll, true);
+  pixelSceneLive = false;
+  if (pixelScrollTimer !== undefined) {
+    window.clearTimeout(pixelScrollTimer);
+    pixelScrollTimer = undefined;
+  }
+  pixelScrolling = false;
+  document.body?.removeAttribute(PIXEL_SCROLLING_ATTR);
+  if (pixelHoverTimer !== undefined) {
+    window.clearTimeout(pixelHoverTimer);
+    pixelHoverTimer = undefined;
+  }
+  pixelHoverTarget = null;
+  pixelHitCooldown = new WeakSet<Element>();
+}
+
 // ---- unified debounced DOM sync ------------------------------------------
 
 function debounce(fn: () => void, wait: number): () => void {
@@ -1196,6 +1477,7 @@ export function initBeautify(initialThemeId: string): void {
     watchThemeAttr();
     bindClicks();
     bindWecomCardClicks();
+    bindPixelHover();
     bodyObserver = new MutationObserver(onBodyMutations);
     bodyObserver.observe(document.body, { childList: true, subtree: true });
     sync();
@@ -1245,6 +1527,7 @@ export function teardownBeautify(): void {
   // Stop listening for page-side interactions.
   removeClicks();
   removeWecomCardClicks();
+  unbindPixelHover();
 
   // Put the original TeX source back when the enhancement is turned off.
   restoreMessageMath();
@@ -1258,6 +1541,7 @@ export function teardownBeautify(): void {
     body.removeAttribute('data-octo-player-watermark');
     body.removeAttribute('data-octo-player-kicking');
     body.removeAttribute('data-octo-qq-self-left');
+    body.removeAttribute('data-octo-px-scrolling');
     body.style.removeProperty('--octo-player-watermark-image');
     if (nativeThemeMode !== undefined) {
       selfWritingTheme = true;
@@ -1280,6 +1564,7 @@ export function teardownBeautify(): void {
     .querySelectorAll<HTMLAnchorElement>('[data-octo-wecom]')
     .forEach(clearWecomLinkState);
   document.querySelectorAll('.octo-gacha-fx').forEach((el) => el.remove());
+  document.querySelectorAll('.octo-pixel-hit').forEach((el) => el.remove());
   document.querySelectorAll<HTMLElement>('[data-octo-rarity]').forEach((el) => {
     el.removeAttribute('data-octo-rarity');
     el.style.removeProperty('--octo-card-rx');
